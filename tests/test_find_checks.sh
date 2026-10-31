@@ -99,3 +99,35 @@ printf 'jobs:\n  a:\n    steps:\n      - run: pytest\n      - run: echo done\n' 
 run_capturing bash "$find_checks" "$tail_ci"
 assert_eq "$captured_exit_code" "0"
 assert_contains "$captured_output" "pytest"
+
+# Best-effort parsing: CRLF and trailing comments are stripped; a justfile variable is not a recipe.
+messy=$(fresh messy)
+mkdir -p "$messy/.github/workflows"
+printf 'jobs:\r\n  a:\r\n    steps:\r\n      - run: pytest -q  # unit tests\r\n' > "$messy/.github/workflows/ci.yml"
+printf 'test := "x"\ncheck:\n  true\n' > "$messy/justfile"
+run_capturing bash "$find_checks" "$messy"
+assert_contains "$captured_output" "$(printf 'pytest -q\t.github/workflows/ci.yml')"
+assert_not_contains "$captured_output" "just test"
+assert_contains "$captured_output" "just check"
+
+# An unreadable CI file is skipped and the files after it are still read (not as root, which reads everything).
+if [[ "$(id -u)" != 0 ]]; then
+  unreadable=$(fresh unreadable)
+  mkdir -p "$unreadable/.github/workflows"
+  printf 'jobs:\n  a:\n    steps:\n      - run: pytest\n' > "$unreadable/.github/workflows/a.yml"
+  printf 'jobs:\n  a:\n    steps:\n      - run: ruff check .\n' > "$unreadable/.github/workflows/b.yml"
+  chmod 000 "$unreadable/.github/workflows/a.yml"
+  run_capturing bash "$find_checks" "$unreadable"
+  chmod 644 "$unreadable/.github/workflows/a.yml"
+  assert_eq "$captured_exit_code" "0"
+  assert_contains "$captured_output" "ruff check ."
+fi
+
+# The same command named in two files is listed once for each.
+two=$(fresh two)
+mkdir -p "$two/.github/workflows"
+printf 'test:\n\tpytest\n' > "$two/Makefile"
+printf 'jobs:\n  a:\n    steps:\n      - run: make test\n' > "$two/.github/workflows/ci.yml"
+run_capturing bash "$find_checks" "$two"
+assert_contains "$captured_output" "$(printf 'make test\tMakefile')"
+assert_contains "$captured_output" "$(printf 'make test\t.github/workflows/ci.yml')"

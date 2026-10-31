@@ -7,11 +7,11 @@ A plugin marketplace for Claude Code (support for GitHub Copilot CLI and other c
 | Plugin | What it does |
 |---|---|
 | [`mash-workbench`](plugins/mash-workbench) | notes repeated work as tooling candidates during a session (`scout`), then turns the approved ones into hooks, scripts, skills, agents or MCP servers (`/forge`) |
-| [`review-routing`](plugins/review-routing) | sends each change to the reviewers it needs, from a per-project list of specialists, and lands it only on a clean verdict |
+| [`review-routing`](plugins/review-routing) | sends each change to the reviewers it needs, from a per-project list of specialists, and tells you when your branch is ready to open as a PR |
 
 ## Requirements
 
-Claude Code, with `git`, `bash` and `python3` 3.11 or newer on your PATH (the scripts and hooks use the standard library only). `review-routing` also needs GitHub and the `gh` CLI; see its README.
+Claude Code, with `git`, `bash` and `python3` 3.11 or newer on your PATH (the scripts and hooks use the standard library only).
 
 ## Install
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """PreToolUse hook for Bash: keep reviewer subagents from changing a real git checkout or writing to GitHub.
 
-Why: reviewers declare Bash (they need `git show`, `git diff`, `gh pr diff`), so "reviewers are read-only"
+Why: reviewers declare Bash (they need `git show`, `git diff`), so "reviewers are read-only"
 otherwise rests on one prompt sentence. A reviewer once ran `git checkout origin/<branch>` inside the builder's
 worktree and left it on a detached HEAD; others switched the shared checkout to a PR branch, overwrote its index with
 `git --work-tree=... checkout FETCH_HEAD -- src`, or left ~25 `pr<N>` branches behind.

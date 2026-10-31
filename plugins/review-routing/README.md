@@ -1,6 +1,6 @@
 # review-routing
 
-A Claude Code plugin that sends each change to the reviewers it needs. A project lists its specialist reviewer agents and the paths each one covers in `.claude/reviewers.toml`; a general `change-reviewer` covers every path no specialist claims. Reviewers are read-only and end with a verdict line (`SAFE TO LAND` or not), which the landing step checks.
+A Claude Code plugin that sends each change to the reviewers it needs. A project lists its specialist reviewer agents and the paths each one covers in `.claude/reviewers.toml`; a general `change-reviewer` covers every path no specialist claims. Reviewers are read-only and end with a verdict line (`SAFE TO LAND` or not), which the `review-changes` summary checks.
 
 ## Install
 

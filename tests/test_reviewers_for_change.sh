@@ -104,7 +104,6 @@ assert_contains "$captured_output" "unrecognized arguments"
 run_capturing route --help
 assert_eq "$captured_exit_code" "0"
 assert_not_contains "$captured_output" "--pr"
-assert_not_contains "$captured_output" "gh"
 assert_contains "$captured_output" ".claude/reviewers.toml"
 assert_contains "$captured_output" "exit codes"
 

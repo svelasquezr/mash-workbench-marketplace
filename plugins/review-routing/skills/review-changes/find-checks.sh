@@ -13,7 +13,7 @@ names='test|lint|format|typecheck|check'
 emit() { printf '%s\t%s\n' "$1" "$2"; }
 
 if [[ -f "$root/package.json" ]]; then
-  python3 - "$root/package.json" <<'PY' || true
+  python3 -I - "$root/package.json" <<'PY' || true
 import json, sys
 try:
     scripts = json.load(open(sys.argv[1])).get("scripts", {})
@@ -27,14 +27,14 @@ fi
 
 for build_file in Makefile makefile GNUmakefile; do
   [[ -f "$root/$build_file" ]] || continue
-  for target in $(grep -oE "^($names):" "$root/$build_file" 2>/dev/null | tr -d ':' | sort -u || true); do
+  for target in $(grep -E "^($names)[[:space:]]*:([^=]|$)" "$root/$build_file" 2>/dev/null | grep -oE "^($names)" | sort -u || true); do
     emit "make $target" "$build_file"
   done
   break
 done
 for just_file in justfile Justfile; do
   [[ -f "$root/$just_file" ]] || continue
-  for recipe in $(grep -oE "^($names)\b" "$root/$just_file" 2>/dev/null | sort -u || true); do
+  for recipe in $(grep -E "^($names)[[:space:]]*:([^=]|$)" "$root/$just_file" 2>/dev/null | grep -oE "^($names)" | sort -u || true); do
     emit "just $recipe" "$just_file"
   done
   break
@@ -51,7 +51,9 @@ fi
 looks_like_check='(^|[^[:alnum:]_-])(test|tests|lint|format|typecheck|check|mypy|ruff|pytest|eslint|tsc|vet|golangci-lint|clippy|rubocop)([^[:alnum:]_-]|$)'
 ci_commands() {
   local file="$1" in_script=0 line command
+  [[ -r "$file" ]] || return 0
   while IFS= read -r line || [[ -n "$line" ]]; do
+    line="${line%$'\r'}"
     command=""
     if [[ "$line" =~ ^[[:space:]-]*run:[[:space:]]+(.+)$ ]]; then
       command="${BASH_REMATCH[1]}"; in_script=0
@@ -64,6 +66,7 @@ ci_commands() {
     fi
     [[ -n "$command" ]] || continue
     [[ "$command" != "|"* && "$command" != ">"* ]] || continue
+    command="$(printf '%s' "$command" | sed -E 's/[[:space:]]+#.*$//')"
     command="${command%\"}"; command="${command#\"}"
     [[ "$command" =~ (npm\ ci|install|apt-get|checkout|setup-) ]] && continue
     if [[ "$command" =~ $looks_like_check ]]; then emit "$command" "${file#"$root"/}"; fi
