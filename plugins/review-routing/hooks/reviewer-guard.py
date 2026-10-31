@@ -39,7 +39,7 @@ Blocks (exit 2, reason on stderr, which Claude Code shows to Claude):
 Known gaps (this catches honest mistakes; it is not a security boundary): scripts run from disk, eval, `xargs git`,
 paths held in variables or computed by $(...) (an unresolvable target is allowed, which is also what keeps
 `cd "$tmp" && git commit` working), GraphQL mutations, gh aliases (`gh alias set` is refused, but an alias set earlier runs),
-file writes by `sed -i`, redirects or `tee`, `--output=` options of read subcommands, and review-pr's
+file writes by `sed -i`, redirects or `tee`, `--output=` options of read subcommands, and review-changes's
 `general-purpose` fallback reviewer (a built-in agent), any reviewer the routing config does not name, gh write
 actions not listed above, and `git submodule foreach` / `git difftool`, which are refused though they can be reads.
 Pros: the commands that already hurt are refused with the read-only way shown. Cons: a creative reviewer gets past.

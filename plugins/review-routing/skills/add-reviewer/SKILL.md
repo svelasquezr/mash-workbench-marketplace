@@ -11,7 +11,7 @@ A specialist reviewer earns its place. Add one when:
 
 Don't add one for a rule a test, linter, formatter, type checker or hook can enforce: make it that instead (hook > script/test > skill > agent), because a tool is exact, free to run and never tired, and a reviewer is none of these. Style, formatting, naming, import order, a banned call, a required file or header: automate. A reviewer's checklist keeps only what needs judgment. Don't add one for an area a general review already covers well either. One area per agent.
 
-Below, `route` means `python3 <this skill's base directory>/../review-pr/reviewers-for-change.py`, run from the repository.
+Below, `route` means `python3 <this skill's base directory>/../review-changes/reviewers-for-change.py`, run from the repository.
 
 ## Reference
 
@@ -30,5 +30,5 @@ Below, `route` means `python3 <this skill's base directory>/../review-pr/reviewe
    Details: "Routing details" in the reference.
 4. **Add routing test cases:** for each new route, an `[[expect]]` for a path it must claim, one for a near miss it must not (for `^src/payments/`, `src/app/payments_page.py`), and one for a test file through the mirror.
 5. **Check:** `route --check` until it passes; preview with `route --paths <file>... --explain`. Never add a pattern just to quiet `--check` for a path that belongs to a specialist; list in `allow_default` only the paths a general review is enough for, each with a comment. What it fails on: "Checking" in the reference.
-6. **CLAUDE.md:** if it isn't there yet, add one rule: "Review every change with the agents `.claude/reviewers.toml` routes it to (the review-pr skill); pass them the test and lint results."
-7. **Ship** the agent, the config and its test cases as one change, reviewed with the review-pr skill.
+6. **CLAUDE.md:** if it isn't there yet, add one rule: "Review every change with the agents `.claude/reviewers.toml` routes it to (the review-changes skill); pass them the test and lint results."
+7. **Ship** the agent, the config and its test cases as one change, reviewed with the review-changes skill.

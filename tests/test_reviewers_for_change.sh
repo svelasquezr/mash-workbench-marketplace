@@ -2,29 +2,13 @@
 set -euo pipefail
 source tests/lib.sh
 source tests/git_fixtures.sh
-script="$PWD/plugins/review-routing/skills/review-pr/reviewers-for-change.py"
+script="$PWD/plugins/review-routing/skills/review-changes/reviewers-for-change.py"
 skill_directory="$PWD/plugins/review-routing/skills"
 temporary_directory=$(mktemp -d); trap 'rm -rf "$temporary_directory"' EXIT
 isolate_git_config
 
 route() { python3 "$script" "$@"; }
 
-# A fake `gh` for --pr: `gh api ...` logs its arguments, prints $fake_gh_directory/pr_files.json (the
-# files listing) or $fake_gh_directory/pr.json (the pull request itself) and exits with
-# $fake_gh_directory/api_exit (default 0).
-fake_gh_directory="$temporary_directory/fake-gh"
-mkdir -p "$fake_gh_directory/bin"
-cat > "$fake_gh_directory/bin/gh" <<'EOF'
-#!/usr/bin/env bash
-state_directory="$(cd "$(dirname "$0")/.." && pwd)"
-echo "$*" >> "$state_directory/calls"
-[[ "$1" == api ]] || { echo "fake gh: unexpected call: $*" >&2; exit 99; }
-api_exit=$(cat "$state_directory/api_exit" 2>/dev/null || echo 0)
-(( api_exit == 0 )) || { echo "fake gh: HTTP 404" >&2; exit "$api_exit"; }
-if [[ "$*" == */files ]]; then cat "$state_directory/pr_files.json"; else cat "$state_directory/pr.json"; fi
-EOF
-chmod +x "$fake_gh_directory/bin/gh"
-pr_files() { rm -f "$fake_gh_directory/calls" "$fake_gh_directory/api_exit"; printf '%s' "$1" > "$fake_gh_directory/pr_files.json"; }
 
 write_config() {
   mkdir -p "$repository/.claude"
@@ -113,10 +97,14 @@ assert_eq "$captured_exit_code" "2"
 run_capturing route HEAD
 assert_eq "$captured_exit_code" "2"
 assert_contains "$captured_output" "not a range"
-run_capturing route "$base...HEAD" --pr 3
+# The script reads git only: --pr (it needed gh) is gone.
+run_capturing route --pr 3
 assert_eq "$captured_exit_code" "2"
+assert_contains "$captured_output" "unrecognized arguments"
 run_capturing route --help
 assert_eq "$captured_exit_code" "0"
+assert_not_contains "$captured_output" "--pr"
+assert_not_contains "$captured_output" "gh"
 assert_contains "$captured_output" ".claude/reviewers.toml"
 assert_contains "$captured_output" "exit codes"
 
@@ -337,60 +325,6 @@ run_capturing route --config "$temporary_directory/elsewhere/routes.toml" "$base
 assert_eq "$captured_exit_code" "0"
 assert_eq "$captured_output" "outside-reviewer"
 
-# --- Pull requests (--pr) ---------------------------------------------------------------------------
-new_repository pull-request
-export PATH="$fake_gh_directory/bin:$PATH"
-# Every page is read, and a rename's previous path counts (moving code out of billing keeps its reviewer).
-pr_files '[[{"filename": "src/ui/charge.py", "previous_filename": "src/billing/charge.py"}], [{"filename": "docs/guide.md"}]]'
-run_capturing route --pr 7
-assert_eq "$captured_exit_code" "0"
-assert_eq "$captured_output" "$(printf 'billing-reviewer\ndocs-reviewer\nreview-routing:change-reviewer')"
-assert_contains "$(cat "$fake_gh_directory/calls")" "api --paginate --slurp repos/{owner}/{repo}/pulls/7/files"
-# A matching changed line in the patch adds reviewers; a missing patch (GitHub omits large ones) errs
-# towards more review; another line does not.
-pr_files '[[{"filename": "pyproject.toml", "patch": "@@ -1 +1 @@\n-\"payments-sdk==1.0\"\n+\"payments-sdk==1.1\""}]]'
-run_capturing route --pr 7
-assert_eq "$captured_output" "$(printf 'billing-reviewer\nreview-routing:change-reviewer')"
-pr_files '[[{"filename": "pyproject.toml"}]]'
-run_capturing route --pr 7
-assert_eq "$captured_output" "$(printf 'billing-reviewer\nreview-routing:change-reviewer')"
-pr_files '[[{"filename": "pyproject.toml", "patch": "@@ -1 +1 @@\n-\"colors==2.0\"\n+\"colors==2.1\"\n payments-sdk context"}]]'
-run_capturing route --pr 7
-assert_eq "$captured_output" "review-routing:change-reviewer"
-# An anchored pattern sees the line without its +/- prefix.
-gnu_sed -i "s|^line_pattern = .*|line_pattern = '^\"payments'|" .claude/reviewers.toml
-pr_files '[[{"filename": "pyproject.toml", "patch": "@@ -1 +1 @@\n-\"payments-sdk==1.0\"\n+\"payments-sdk==1.1\""}]]'
-run_capturing route --pr 7
-assert_eq "$captured_output" "$(printf 'billing-reviewer\nreview-routing:change-reviewer')"
-# A blank line in a patch is context, not a changed line (even for a pattern that matches empty text).
-gnu_sed -i "s|^line_pattern = .*|line_pattern = '^\$'|" .claude/reviewers.toml
-pr_files '[[{"filename": "pyproject.toml", "patch": "@@ -1,3 +1,3 @@\n context\n\n context"}]]'
-run_capturing route --pr 7
-assert_eq "$captured_output" "review-routing:change-reviewer"
-# Errors: gh fails, no files, not JSON, the wrong shape, gh missing.
-pr_files '[]'
-echo 1 > "$fake_gh_directory/api_exit"
-run_capturing route --pr 7
-assert_eq "$captured_exit_code" "1"
-assert_contains "$captured_output" "HTTP 404"
-pr_files '[[]]'
-run_capturing route --pr 7
-assert_eq "$captured_exit_code" "1"
-assert_contains "$captured_output" "no changed files"
-pr_files 'not json'
-run_capturing route --pr 7
-assert_eq "$captured_exit_code" "1"
-assert_contains "$captured_output" "JSON"
-pr_files '[{"filename": "a"}]'
-run_capturing route --pr 7
-assert_eq "$captured_exit_code" "1"
-assert_contains "$captured_output" "unexpected"
-mkdir -p "$temporary_directory/no-gh"
-ln -sf "$(command -v git)" "$temporary_directory/no-gh/git"
-python_path=$(command -v python3)
-PATH="$temporary_directory/no-gh" run_capturing "$python_path" "$script" --pr 7
-assert_eq "$captured_exit_code" "1"
-assert_contains "$captured_output" "gh is not installed"
 
 # --- --check: the config's own tests ----------------------------------------------------------------
 new_repository check
@@ -507,7 +441,7 @@ assert_contains "$captured_output" "mirror of src/billing/charge_refund.py: rout
 # Without --explain the output is unchanged: the names alone.
 run_capturing route "$base...HEAD"
 assert_eq "$captured_output" "$(printf 'billing-reviewer\ndocs-reviewer\nreview-routing:change-reviewer\nsecurity-reviewer')"
-# Markdown for a PR comment: one table row per reviewer of a path; a | in a pattern is escaped.
+# Markdown table: one table row per reviewer of a path; a | in a pattern is escaped.
 run_capturing route "$base...HEAD" --explain --format markdown
 assert_eq "$captured_exit_code" "0"
 assert_contains "$captured_output" "| Path | Reviewer | Why |"
@@ -557,14 +491,6 @@ assert_eq "$captured_exit_code" "0"
 assert_contains "$captured_output" "changed line in app/i.toml matching"
 assert_not_contains "$captured_output" "changed line in other.toml"
 assert_not_contains "$captured_output" "changed line in app/[id].toml"
-# A pull request: a patch that matches, a missing patch (said so, not claimed as a matching line), and a
-# rename whose previous path is the one path_pattern claims (PATH already holds the fake gh).
-pr_files '[[{"filename": "a.toml", "patch": "@@ -1 +1 @@\n-x\n+payments-sdk = 2"}, {"filename": "big.toml"}, {"filename": "notes.txt", "previous_filename": "old.toml", "patch": "@@ -1 +1 @@\n-y\n+payments_sdk = 3"}]]'
-run_capturing route --pr 7 --explain
-assert_eq "$captured_exit_code" "0"
-assert_contains "$captured_output" "changed line in a.toml matching 'payments[-_]sdk'"
-assert_contains "$captured_output" "no patch from GitHub for big.toml (large diff); assumed to match 'payments[-_]sdk'"
-assert_contains "$captured_output" "changed line in old.toml matching 'payments[-_]sdk'"
 cd "$repository"
 # --format needs --explain; --explain doesn't combine with --check.
 run_capturing route --paths a.py --format markdown
@@ -622,7 +548,7 @@ small_base=$(git rev-parse HEAD)
 printf 'a\nb\nc\nd\ne\nf\ng\nh\n' > src/billing/charge.py; git add -A; git commit --quiet -m "feat: one more line"
 run_capturing route "$small_base...HEAD" --models
 assert_eq "$captured_output" "$(printf 'billing-reviewer\t-')"
-# A fix round (<old>..<new>) sees only the fix's commits, so a feat rule doesn't hold there: the review-pr
+# A fix round (<old>..<new>) sees only the fix's commits, so a feat rule doesn't hold there: the review-changes
 # skill keeps each reviewer's first-round model instead of asking again.
 run_capturing route "$base..HEAD" --models
 assert_eq "$captured_output" "$(printf 'billing-reviewer\tfable\nreview-routing:change-reviewer\topus')"
@@ -656,17 +582,6 @@ assert_eq "$captured_output" "$(printf 'billing-reviewer\t-')"
 # --title only means something with --models or --explain.
 run_capturing route --paths src/billing/charge.py --title "feat: x"
 assert_eq "$captured_exit_code" "2"
-# A pull request: the title from the PR, the added lines from the files listing.
-printf 'min_added_lines = 3\n' >> .claude/reviewers.toml
-export PATH="$fake_gh_directory/bin:$PATH"
-pr_files '[[{"filename": "src/billing/charge.py", "additions": 5}]]'
-printf '{"title": "feat(billing): refunds"}' > "$fake_gh_directory/pr.json"
-run_capturing route --pr 7 --models
-assert_eq "$captured_output" "$(printf 'billing-reviewer\tfable')"
-assert_contains "$(cat "$fake_gh_directory/calls")" "api repos/{owner}/{repo}/pulls/7"
-pr_files '[[{"filename": "src/billing/charge.py", "additions": 2}]]'
-run_capturing route --pr 7 --models
-assert_eq "$captured_output" "$(printf 'billing-reviewer\t-')"
 # The plugin's own agent: review-routing:change-reviewer's model comes from the plugin's agent file.
 new_repository plugin-agent-model
 run_capturing route --paths src/ui/page.js --models
@@ -674,8 +589,7 @@ assert_eq "$captured_output" "$(printf 'review-routing:change-reviewer\t-')"
 run_capturing route --paths src/ui/page.js --explain
 assert_contains "$captured_output" "review-routing:change-reviewer: sonnet (agent file)"
 
-# The first rule that holds wins; --title overrides a range's commit subjects; a PR rename's added lines
-# count for the path its rule matches; an unreadable pull request is an error; an agent is found by its
+# The first rule that holds wins; --title overrides a range's commit subjects; an agent is found by its
 # frontmatter name:, never by a name: line in its body.
 new_repository models-more
 printf -- '---\nname: money-reviewer\nmodel: opus\n---\n' > .claude/agents/money.md
@@ -713,15 +627,6 @@ run_capturing route "$base...HEAD" --title "feat: money" --models
 assert_contains "$captured_output" "$(printf 'security-reviewer\tfable')"
 run_capturing route "$base...HEAD" --explain
 assert_contains "$captured_output" "money-reviewer: opus (agent file)"
-pr_files '[[{"filename": "src/ui/money.py", "previous_filename": "src/core/money.py", "additions": 5}]]'
-printf '{"title": "feat: move money"}' > "$fake_gh_directory/pr.json"
-run_capturing route --pr 8 --models
-assert_contains "$captured_output" "$(printf 'security-reviewer\tfable')"
-printf 'not json' > "$fake_gh_directory/pr.json"
-run_capturing route --pr 8 --models
-assert_eq "$captured_exit_code" "1"
-assert_contains "$captured_output" "pull request 8"
-assert_not_contains "$captured_output" "Traceback"
 cat >> .claude/reviewers.toml <<'EOF'
 
 [[routes]]
@@ -946,7 +851,7 @@ assert_eq "$captured_exit_code" "0"
 template=$(cat "$skill_directory/add-reviewer/reviewer-template.md")
 # shellcheck disable=SC2016  # the backticks are literal Markdown
 for needle in "tools: Read, Grep, Glob, Bash" "model: sonnet" "effort: high" "read-only" "Do not re-run" "**Critical**" "**Important**" \
-    "**Minor**" "Pre-existing (file as issues)" "gh issue create" '`SAFE TO LAND`' '`NOT SAFE: <why>`'; do
+    "**Minor**" "Pre-existing (to file as issues)" "ready to file as an issue" '`SAFE TO LAND`' '`NOT SAFE: <why>`'; do
   assert_contains "$template" "$needle"
 done
 # The plugin's own default reviewer follows the same contract as the template.
@@ -954,7 +859,7 @@ change_reviewer=$(cat "$skill_directory/../agents/change-reviewer.md")
 # shellcheck disable=SC2016  # the backticks are literal Markdown
 for needle in "name: change-reviewer" "tools: Read, Grep, Glob, Bash" "model: sonnet" "effort: high" \
     "read-only" "Do not re-run" "**Critical**" "**Important**" "**Minor**" \
-    "Pre-existing (file as issues)" '`SAFE TO LAND`' '`NOT SAFE: <why>`'; do
+    "Pre-existing (to file as issues)" '`SAFE TO LAND`' '`NOT SAFE: <why>`'; do
   assert_contains "$change_reviewer" "$needle"
 done
 

@@ -16,7 +16,9 @@ def explanation_rows(
         for hit in hits:
             if hit.path == path:
                 rule = config.changed_lines[hit.rule_index]
-                why = Why(f"changed line in {path} matching", rule.line_pattern.pattern, rule.reason)
+                why = Why(
+                    f"changed line in {path} matching", rule.line_pattern.pattern, rule.reason
+                )
                 rows += [(path, reviewer, why) for reviewer in rule.reviewers]
     return rows
 

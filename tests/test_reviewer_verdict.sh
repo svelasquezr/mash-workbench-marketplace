@@ -13,7 +13,7 @@ assert_not_contains "$verdict_rule" "(the first three groups)"
 template=$(cat plugins/review-routing/skills/add-reviewer/reviewer-template.md)
 assert_contains "$template" "only when there are no Critical and no Important findings"
 assert_contains "$template" "Minor findings are suggestions and do not block"
-fallback=$(cat plugins/review-routing/skills/review-pr/SKILL.md)
+fallback=$(cat plugins/review-routing/skills/review-changes/reference.md)
 assert_contains "$fallback" "only when there are no Critical and no Important findings"
 
 # Every place states the clause that a promised later fix does not make a finding safe, and the fallback states the Minor rule too.

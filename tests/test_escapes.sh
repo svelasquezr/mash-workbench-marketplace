@@ -116,8 +116,8 @@ for file in plugins/review-routing/agents/change-reviewer.md plugins/review-rout
   assert_contains "$(cat "$file")" "escape: no"
 done
 assert_contains "$(cat plugins/review-routing/skills/add-reviewer/SKILL.md)" "one line per bug, keyed by its issue"
-assert_contains "$(cat plugins/review-routing/skills/review-pr/reference.md)" "-> add a reviewer for"
-assert_contains "$(cat plugins/review-routing/skills/review-pr/SKILL.md)" "issue link"
+assert_contains "$(cat plugins/review-routing/skills/review-changes/reference.md)" "-> add a reviewer for"
+assert_contains "$(cat plugins/review-routing/skills/review-changes/SKILL.md)" "issue link"
 assert_not_contains "$(cat plugins/review-routing/skills/add-reviewer/escape-add.sh)" "repeats count"
 
 # Links are normalised before the duplicate check and the write: every spelling of one GitHub issue is one entry.
@@ -178,7 +178,6 @@ done
 assert_eq "$(grep -c '^- ' "$case_dir/docs/review-escapes.md")" "1"
 # Bash 3.2 (macOS) has no ${var,,} lowercasing: the scripts lowercase with tr.
 if grep -q ',,}' "$add" "$report"; then echo "FAIL: bash-4-only \${var,,} in the escape scripts" >&2; exit 1; fi
-assert_contains "$(cat plugins/review-routing/skills/review-pr/SKILL.md)" "or the ledger-only commit after it"
 
 # --- hostile or awkward input must not corrupt the ledger --------------------------------------------------------
 fresh_ledger_dir() { local d; d=$(mktemp -d "$temporary_directory/h.XXXXXX"); mkdir -p "$d/docs"; printf '%s' "$d"; }

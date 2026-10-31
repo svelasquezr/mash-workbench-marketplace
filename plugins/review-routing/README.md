@@ -15,7 +15,7 @@ To try it without installing: `claude --plugin-dir <path-to>/plugins/review-rout
 
 | Part | What it does |
 |---|---|
-| `review-pr` skill | after a pull request is pushed: picks the reviewers and their models for the change, dispatches them, triages findings and lands only when every verdict is `SAFE TO LAND` and every check passed |
+| `review-changes` skill | before you open a pull request: picks the reviewers and their models for your committed changes, runs your checks first, dispatches the reviewers, triages findings and fixes what the change introduced; prints a summary in the terminal and writes nothing to a PR |
 | `add-reviewer` skill | adds a specialist reviewer when the same class of bug slips through review twice, and records each missed bug in `docs/review-escapes.md` |
 | `inspect` skill (`/review-routing:inspect`) | for a project that already has review habits: finds instructions in `CLAUDE.md`, `AGENTS.md`, memory or plans that would override the routing, and areas you already brief reviewers on by hand; proposes rewrites and applies only the ones you approve |
 | `change-reviewer` agent | the default, read-only reviewer: correctness, tests for new branches, stale docs, unsupported claims, secrets |
@@ -24,17 +24,16 @@ To try it without installing: `claude --plugin-dir <path-to>/plugins/review-rout
 
 ## Requirements
 
-`git`, `bash` and `python3` 3.11 or newer, and GitHub with the `gh` CLI signed in: the skills open, read and merge pull requests with `gh`, and ledger links are normalised for github.com only. Other hosts are not supported. `gh` 2.51 or newer for `route --pr`. Built for Claude Code and developed against 2.1.289; older versions are untested. `inspect` reads the project's `CLAUDE.md` and `AGENTS.md` and, where they exist, `.claude/memory/`, `.claude/plans/` and the auto-memory folder under `~/.claude/projects/`.
+`git`, `bash` and `python3` 3.11 or newer. Nothing needs `gh` or GitHub: the review works on a git range, whatever hosts the repository. Escape-ledger links from github.com are normalised; any other http(s) link is kept as given. Built for Claude Code and developed against 2.1.289; older versions are untested. `inspect` reads the project's `CLAUDE.md` and `AGENTS.md` and, where they exist, `.claude/memory/`, `.claude/plans/` and the auto-memory folder under `~/.claude/projects/`.
 
 ## Opinionated defaults
 
 - Reviewers never run on Haiku: the hook refuses it and the routing config rejects it. There is no opt-out other than disabling the plugin (see the hooks section below).
 - Models in `.claude/reviewers.toml` are the aliases `sonnet`, `opus` and `fable`, the ones Claude Code's agent tool accepted when this plugin was written. If your Claude Code accepts other aliases, the config check rejects them until the list in `route_types.py` is updated. Pin only models your plan can start: a reviewer pinned to a model you cannot use fails when it is dispatched.
-- `review-pr` follows a squash-merge flow: fixes go in new commits (no amend), nothing merges before every check has passed, and never with `--admin`. Treat it as the default workflow. A project that works differently says so in its `CLAUDE.md`, which wins over the skill; `inspect` leaves merge-flow rules alone.
 
 ## Verdict format
 
-Every reviewer this plugin runs, including the ones `add-reviewer` writes from its template, ends its review with exactly one line: `SAFE TO LAND` when it found no Critical and no Important problems, or `NOT SAFE: <why>` otherwise. Minor findings never block. `review-pr` lands a change only when every reviewer's last verdict is `SAFE TO LAND`, and posts a "Review verdicts" comment listing them. The `haiku-reviewer-guard` hook also reads the phrase in an agent's prompt as a sign that the agent is a reviewer. A reviewer you write by hand should end the same way, or `review-pr` cannot read its verdict.
+Every reviewer this plugin runs, including the ones `add-reviewer` writes from its template, ends its review with exactly one line: `SAFE TO LAND` when it found no Critical and no Important problems, or `NOT SAFE: <why>` otherwise. Minor findings never block. `review-changes` calls the branch ready to open as a PR only when every reviewer's last verdict is `SAFE TO LAND`. The `haiku-reviewer-guard` hook also reads the phrase in an agent's prompt as a sign that the agent is a reviewer. A reviewer you write by hand should end the same way, or `review-changes` cannot read its verdict. Reviewer files copied from an older version of the template may still say "ready for `gh issue create`" under Pre-existing; they keep working, and the new wording is "ready to file as an issue".
 
 ## What the hooks do to your session
 
@@ -49,7 +48,7 @@ Both hooks apply in every project once the plugin is enabled, not only in projec
 
 ## What it writes
 
-Only when you or Claude run the matching skill: `docs/review-escapes.md` (`add-reviewer`, one line per missed bug), `.claude/reviewers.toml` and `.claude/agents/<name>.md` (`add-reviewer`, new reviewers), pull request comments, issues and merges through `gh` (`review-pr`, merging only when you asked to land), and edits to `CLAUDE.md` or memory files that you approve (`inspect`).
+Only when you or Claude run the matching skill: `docs/review-escapes.md` (`add-reviewer` and `review-changes`, one line per missed bug), `.claude/reviewers.toml` and `.claude/agents/<name>.md` (`add-reviewer`, new reviewers), fix commits for what a review finds (`review-changes`; it never pushes, opens a PR or merges), and edits to `CLAUDE.md` or memory files that you approve (`inspect`).
 
 ## Why reviewers are routed
 
