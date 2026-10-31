@@ -1,0 +1,4 @@
+# Lint and format for the plugins' Python scripts (run by pre-commit and CI), so a reviewer never
+# spends attention on style. Standard library only, Python 3.11+ (the scripts use tomllib).
+line-length = 100
+target-version = "py311"

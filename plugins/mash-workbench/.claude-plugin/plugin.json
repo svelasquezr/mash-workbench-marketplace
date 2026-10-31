@@ -1,0 +1,18 @@
+{
+  "name": "mash-workbench",
+  "description": "Tooling loop: capture repeatable work as tooling candidates during sessions and promote them with /forge",
+  "version": "0.1.0",
+  "author": {
+    "name": "Sergio Velasquez"
+  },
+  "license": "MIT",
+  "keywords": [
+    "automation",
+    "hooks",
+    "skills",
+    "backlog",
+    "self-improvement"
+  ],
+  "homepage": "https://github.com/svelasquezr/mash-workbench-marketplace",
+  "repository": "https://github.com/svelasquezr/mash-workbench-marketplace"
+}

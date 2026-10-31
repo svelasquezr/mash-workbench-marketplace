@@ -1,0 +1,2 @@
+# Let shellcheck follow `source tests/lib.sh` even when only one test file is checked.
+external-sources=true

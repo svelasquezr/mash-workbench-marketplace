@@ -1,0 +1,27 @@
+{
+  "description": "haiku-reviewer-guard: refuse a reviewer agent launched on Haiku; reviewer-guard: refuse a reviewer's Bash git commands that change a real checkout and gh commands that write to GitHub",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Agent|Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "command -v python3 >/dev/null 2>&1 || exit 0; exec python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/haiku-reviewer-guard.py\"",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "command -v python3 >/dev/null 2>&1 || exit 0; exec python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/reviewer-guard.py\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

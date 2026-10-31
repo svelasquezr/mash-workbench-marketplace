@@ -1,0 +1,11 @@
+{
+  "name": "review-routing",
+  "description": "Specialist reviewer agents per project: route each change to its reviewers from .claude/reviewers.toml, review and triage a pull request, add a reviewer, ready an existing project (inspect)",
+  "version": "0.1.0",
+  "author": {
+    "name": "Sergio Velasquez"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/svelasquezr/mash-workbench-marketplace",
+  "repository": "https://github.com/svelasquezr/mash-workbench-marketplace"
+}

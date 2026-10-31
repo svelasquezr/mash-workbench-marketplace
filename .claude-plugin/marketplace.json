@@ -1,0 +1,21 @@
+{
+  "name": "mash-workbench-marketplace",
+  "description": "MASH (Memories, Agents, Skills, Hooks): plugins that turn repeated work into tooling and route code review to the right reviewer",
+  "owner": {
+    "name": "Sergio Velasquez"
+  },
+  "plugins": [
+    {
+      "name": "mash-workbench",
+      "description": "Tooling loop: capture repeatable work as tooling candidates during sessions and promote them with /forge",
+      "source": "./plugins/mash-workbench",
+      "category": "development"
+    },
+    {
+      "name": "review-routing",
+      "description": "Specialist reviewer agents per project: route each change to its reviewers from .claude/reviewers.toml, review and triage a pull request, add a reviewer, ready an existing project (inspect)",
+      "source": "./plugins/review-routing",
+      "category": "development"
+    }
+  ]
+}
