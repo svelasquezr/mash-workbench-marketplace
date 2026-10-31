@@ -80,8 +80,9 @@ if [[ -n "$explicit" ]]; then
   # A second ledger would split the evidence the report counts: refuse when the project already uses another one.
   status=0
   current=$(bash "$(dirname "${BASH_SOURCE[0]}")/escapes-path.sh" "$root" 2>/dev/null) || status=$?
-  if (( status == 0 )) && [[ -f "$current" && "$current" != "$ledger" ]]; then
-    refuse "a ledger already exists at ${current#"$root"/}: use it (move it with git mv, or pass --file ${current#"$root"/}) instead of starting another"
+  if (( status == 0 )) && [[ -f "$current" && ! "$current" -ef "$ledger" ]]; then
+    echo "escape-add: a ledger already exists at ${current#"$root"/}: use it (move it with git mv, or pass --file ${current#"$root"/}) instead of starting another" >&2
+    exit 2
   fi
 else
   status=0

@@ -111,9 +111,23 @@ run_capturing bash "$script" --create "$root" hook "Second home" "why"
 assert_eq "$captured_exit_code" "2"
 assert_contains "$captured_output" "docs/tooling-backlog.md"
 [[ ! -e "$root/docs/mash" ]] || { echo "  --create started a second backlog"; exit 1; }
+run_capturing bash "$script" --file other.md "$root" hook "Second home" "why"
+assert_eq "$captured_exit_code" "2"
+# Naming the backlog in use is fine, spelled any way (./ prefix included).
+bash "$script" --file docs/tooling-backlog.md "$root" hook "Same home" "why" >/dev/null
+bash "$script" --file ./docs/tooling-backlog.md "$root" hook "Same home dot" "why" >/dev/null
+assert_contains "$(cat "$root/docs/tooling-backlog.md")" "Same home dot"
+# With a named setting that does not exist yet beside a default backlog, the path script warns.
+# shellcheck disable=SC2016
+run_capturing env MASH_WORKBENCH_BACKLOG=elsewhere.md bash -c 'bash "$1" "$2" 2>&1 >/dev/null' _ "$path_script" "$root"
+assert_contains "$captured_output" "docs/tooling-backlog.md"
 # When both exist, the grouped one wins.
 mkdir -p "$root/docs/mash"; printf '# Tooling backlog\n\n' > "$root/docs/mash/tooling-backlog.md"
 assert_eq "$(bash "$path_script" "$root")" "$(cd "$root" && pwd -P)/docs/mash/tooling-backlog.md"
+# ... and the path script warns on stderr that two exist (stdout stays the path).
+# shellcheck disable=SC2016
+run_capturing bash -c 'bash "$1" "$2" 2>&1 >/dev/null' _ "$path_script" "$root"
+assert_contains "$captured_output" "both"
 
 # --file: another file, created there and nowhere else.
 root=$(mktemp -d "$temporary_directory/choice.XXXXXX")

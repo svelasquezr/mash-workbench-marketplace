@@ -37,7 +37,7 @@ if [[ -n "$explicit" ]]; then
   # A second backlog would split the open items /forge reads: refuse when the project already uses another one.
   status=0
   current=$(bash "$(dirname "${BASH_SOURCE[0]}")/backlog-path.sh" "$root" 2>/dev/null) || status=$?
-  if (( status == 0 )) && [[ -f "$current" && "$current" != "$backlog_file" ]]; then
+  if (( status == 0 )) && [[ -f "$current" && ! "$current" -ef "$backlog_file" ]]; then
     echo "a backlog already exists at ${current#"$root"/}: use it (move it with git mv, or pass --file ${current#"$root"/}) instead of starting another" >&2
     exit 2
   fi

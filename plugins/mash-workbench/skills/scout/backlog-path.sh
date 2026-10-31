@@ -12,6 +12,12 @@ choice="${MASH_WORKBENCH_BACKLOG:-}"
 if [[ "$choice" == off ]]; then exit 4; fi
 if [[ -n "$choice" ]]; then
   [[ "$choice" == /* ]] || choice="$root/$choice"
+  for other in docs/mash/tooling-backlog.md docs/tooling-backlog.md; do
+    if [[ ! -f "$choice" && -f "$root/$other" ]]; then
+      echo "backlog-path: MASH_WORKBENCH_BACKLOG names a new file, but $other already holds a backlog; /forge will not read it. Move it there with git mv, or point the setting at it." >&2
+      break
+    fi
+  done
   printf '%s\n' "$choice"
   exit 0
 fi

@@ -13,6 +13,12 @@ choice="${REVIEW_ROUTING_ESCAPES:-}"
 if [[ "$choice" == off ]]; then exit 4; fi
 if [[ -n "$choice" ]]; then
   [[ "$choice" == /* ]] || choice="$root/$choice"
+  for other in docs/mash/review-escapes.md docs/review-escapes.md; do
+    if [[ ! -f "$choice" && -f "$root/$other" ]]; then
+      echo "escapes-path: REVIEW_ROUTING_ESCAPES names a new file, but $other already holds escapes; the report will not count them. Move it there with git mv, or point the setting at it." >&2
+      break
+    fi
+  done
   printf '%s\n' "$choice"
   exit 0
 fi

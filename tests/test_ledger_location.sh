@@ -82,9 +82,16 @@ assert_contains "$captured_output" "docs/review-escapes.md"
 [[ ! -e "$root/docs/mash" ]] || { echo "  --create started a second ledger"; exit 1; }
 run_capturing bash "$add" --file other.md "$root" src/a missing-test "https://example.test/issues/2"
 assert_eq "$captured_exit_code" "2"
-# Naming the ledger already in use is fine.
+# Naming the ledger already in use is fine, spelled any way (./ prefix included).
+bash "$add" --file ./docs/review-escapes.md "$root" src/a missing-test "https://example.test/issues/11" >/dev/null
+# The refusal is a plain message, not a usage error.
+assert_not_contains "$captured_output" "usage:"
+# With a named setting that does not exist yet beside a default ledger, the path script warns.
+# shellcheck disable=SC2016
+run_capturing env REVIEW_ROUTING_ESCAPES=elsewhere.md bash -c 'bash "$1" "$2" 2>&1 >/dev/null' _ "$path_script" "$root"
+assert_contains "$captured_output" "docs/review-escapes.md"
 bash "$add" --file docs/review-escapes.md "$root" src/a missing-test "https://example.test/issues/2" >/dev/null
-assert_eq "$(grep -c '^- ' "$root/docs/review-escapes.md")" "2"
+assert_eq "$(grep -c '^- ' "$root/docs/review-escapes.md")" "3"
 # When both default files exist, the path script warns on stderr (stdout stays the path).
 mkdir -p "$root/docs/mash"; printf '# Review escapes\n\n' > "$root/docs/mash/review-escapes.md"
 # shellcheck disable=SC2016  # the single quotes are meant: $1 and $2 expand in the inner bash
