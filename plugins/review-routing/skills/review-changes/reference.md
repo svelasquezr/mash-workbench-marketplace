@@ -9,7 +9,7 @@ Only when `route` printed `general-purpose` (a project config that still names i
 1. Note `git rev-parse HEAD`.
 2. Fix in a new commit, rerun the checks.
 3. Send `git diff <noted head> HEAD` to every reviewer that `route <noted head>..HEAD` prints, plus every reviewer that found something; not the whole change again. When the default branch (and only it) was merged in since the noted head, use `git log -p --first-parent --no-merges <noted head>..HEAD` plus `git show` of each merge that `git log --first-parent --merges <noted head>..HEAD` lists, so the base's commits don't pose as the fix. When the merge took in commits from the branch's own remote (`git merge origin/<feature>`), those sit on the merge's second parent and `--first-parent` hides them: send the plain `git diff <noted head> HEAD`.
-4. Start each reviewer on the model step 1 gave it (a reviewer new in this round: run `route <range> --models` again). Never take models from the `..` range: it sees only the fix's commits, so a model rule for new features wouldn't hold.
+4. Start each reviewer on the model SKILL.md step 1 gave it (a reviewer new in this round: run `route <range> --models` again). Never take models from the `..` range: it sees only the fix's commits, so a model rule for new features wouldn't hold.
 
 ## Recording escapes
 
@@ -37,8 +37,8 @@ An existing ledger keeps its old header, and old entries keyed by PR links stay 
 | Running a check command `find-checks.sh` listed without asking | It lists candidates; the user confirms |
 | A clean verdict reported with no checks having run | Say **Unchecked** in the summary |
 | A reviewer flags formatting, style or a convention and the fix stops there | Automate it (test, lint rule, formatter, hook) |
-| Re-reviewing the whole change after a small fix | Send the fix's diff to the reviewers step 4 names |
-| Starting a fix-round reviewer without a model | Use the model step 1 gave it |
+| Re-reviewing the whole change after a small fix | Send the fix's diff to the reviewers Fix rounds step 3 names |
+| Starting a fix-round reviewer without a model | Use the model SKILL.md step 1 (`route <range> --models`) gave it |
 | Fixing an old bug a reviewer spotted inside this change | List it as Pre-existing; one concern per change |
 | Counting a reviewer that crashed or gave no verdict as safe | Dispatch it again |
 | Calling the branch ready while a reviewer said `NOT SAFE` | Every last verdict must be `SAFE TO LAND` |

@@ -67,12 +67,13 @@ ci_commands() {
     fi
     [[ -n "$command" ]] || continue
     [[ "$command" != "|"* && "$command" != ">"* ]] || continue
-    command="$(printf '%s' "$command" | sed -E 's/[[:space:]]+#.*$//')"
     case "$command" in
       \"*\") command="${command#\"}"; command="${command%\"}" ;;
       \'*\') command="${command#\'}"; command="${command%\'}" ;;
+      *) command="$(printf '%s' "$command" | sed -E 's/[[:space:]]+#.*$//')" ;;
     esac
-    [[ "$command" =~ (npm\ ci|install|apt-get|checkout|setup-) ]] && continue
+    [[ "$command" =~ (^|[[:space:]])(npm\ ci|(pip3?|npm|yarn|pnpm|apt|apt-get|brew|gem|bundle|poetry|uv|uv\ pip)\ install|apt-get\ update)([[:space:]]|$) ]] && continue
+    [[ "$command" =~ (actions/checkout|setup-) ]] && continue
     if [[ "$command" =~ $looks_like_check ]]; then emit "$command" "${file#"$root"/}"; fi
   done < "$file"
   return 0

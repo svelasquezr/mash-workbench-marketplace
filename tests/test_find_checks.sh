@@ -149,3 +149,21 @@ run_capturing bash "$find_checks" "$quotes"
 assert_contains "$captured_output" "$(printf 'pytest -m "not integration"\t.github/workflows/c.yml')"
 assert_contains "$captured_output" "$(printf 'npm test\t.github/workflows/c.yml')"
 assert_eq "$(printf '%s\n' "$captured_output" | grep -c 'not integration')" "1"
+
+# A quoted command keeps its inside (even a " #"); only a bare trailing comment is dropped; "install" in a path is not an install step.
+edge=$(fresh edge)
+mkdir -p "$edge/.github/workflows"
+cat > "$edge/.github/workflows/e.yml" <<'YAML'
+jobs:
+  a:
+    steps:
+      - run: "pytest # unit"
+      - run: pytest tests/test_install.py
+      - run: pip install -r requirements.txt
+      - run: npm install
+YAML
+run_capturing bash "$find_checks" "$edge"
+assert_contains "$captured_output" "$(printf 'pytest # unit\t.github/workflows/e.yml')"
+assert_contains "$captured_output" "$(printf 'pytest tests/test_install.py\t.github/workflows/e.yml')"
+assert_not_contains "$captured_output" "pip install"
+assert_not_contains "$captured_output" "npm install"
