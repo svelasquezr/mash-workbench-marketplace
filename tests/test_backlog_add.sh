@@ -84,16 +84,30 @@ assert_eq "$captured_exit_code" "3"
 assert_contains "$captured_output" "--create"
 assert_contains "$captured_output" "--file"
 assert_contains "$captured_output" "MASH_WORKBENCH_BACKLOG"
+assert_contains "$captured_output" "docs/mash/tooling-backlog.md"
+assert_contains "$captured_output" ".gitignore"
 assert_contains "$captured_output" ".claude/settings.local.json"
 [[ ! -e "$root/docs" ]] || { echo "  created docs/ before the user chose"; exit 1; }
 
-# --create: the default file.
+# --create: the default file, grouped with the other MASH ledgers under docs/mash/.
 bash "$script" --create "$root" script "A title" "why" >/dev/null
-assert_contains "$(cat "$root/docs/tooling-backlog.md")" "· script · A title — why"
+assert_contains "$(cat "$root/docs/mash/tooling-backlog.md")" "· script · A title — why"
+[[ ! -e "$root/docs/tooling-backlog.md" ]] || { echo "  created the old docs/tooling-backlog.md"; exit 1; }
 # Once it exists it is used without asking, and backlog-path.sh prints it.
 bash "$script" "$root" hook "Another title" "why" >/dev/null
-assert_eq "$(grep -c '^- \[ \]' "$root/docs/tooling-backlog.md")" "2"
+assert_eq "$(grep -c '^- \[ \]' "$root/docs/mash/tooling-backlog.md")" "2"
+assert_eq "$(bash "$path_script" "$root")" "$(cd "$root" && pwd -P)/docs/mash/tooling-backlog.md"
+
+# A project that already keeps docs/tooling-backlog.md keeps using it; nothing is moved.
+root=$(mktemp -d "$temporary_directory/legacy.XXXXXX")
+mkdir -p "$root/docs"; printf '# Tooling backlog\n\n' > "$root/docs/tooling-backlog.md"
 assert_eq "$(bash "$path_script" "$root")" "$(cd "$root" && pwd -P)/docs/tooling-backlog.md"
+bash "$script" "$root" hook "Old home" "why" >/dev/null
+assert_contains "$(cat "$root/docs/tooling-backlog.md")" "Old home"
+[[ ! -e "$root/docs/mash" ]] || { echo "  created docs/mash next to a legacy backlog"; exit 1; }
+# When both exist, the grouped one wins.
+mkdir -p "$root/docs/mash"; printf '# Tooling backlog\n\n' > "$root/docs/mash/tooling-backlog.md"
+assert_eq "$(bash "$path_script" "$root")" "$(cd "$root" && pwd -P)/docs/mash/tooling-backlog.md"
 
 # --file: another file, created there and nowhere else.
 root=$(mktemp -d "$temporary_directory/choice.XXXXXX")
@@ -118,7 +132,7 @@ assert_eq "$captured_exit_code" "4"
 # A flag works in any position (a session that appends it still gets what it asked for).
 root=$(mktemp -d "$temporary_directory/choice.XXXXXX")
 bash "$script" "$root" script "Flag last" "why" --create >/dev/null
-assert_contains "$(cat "$root/docs/tooling-backlog.md")" "Flag last"
+assert_contains "$(cat "$root/docs/mash/tooling-backlog.md")" "Flag last"
 # The exit-3 message shows the whole command to re-run.
 root=$(mktemp -d "$temporary_directory/choice.XXXXXX")
 run_capturing bash "$script" "$root" script "A title" "why"
@@ -138,7 +152,7 @@ assert_eq "$captured_exit_code" "2"
 # After --, everything is positional: a title that reads like a flag stays a title.
 root=$(mktemp -d "$temporary_directory/choice.XXXXXX")
 bash "$script" --create "$root" script -- "--file" "why" >/dev/null
-assert_contains "$(cat "$root/docs/tooling-backlog.md")" "· script · --file — why"
+assert_contains "$(cat "$root/docs/mash/tooling-backlog.md")" "· script · --file — why"
 
 # --file with no value, and an unknown option, stop with the usage line.
 run_capturing bash "$script" "$root" script "A title" "why" --file

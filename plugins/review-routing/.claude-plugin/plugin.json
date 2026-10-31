@@ -1,7 +1,7 @@
 {
   "name": "review-routing",
   "description": "Specialist reviewer agents per project: route each change to its reviewers from .claude/reviewers.toml, review your changes before opening a PR, add a reviewer, ready an existing project (inspect)",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "author": {
     "name": "Sergio Velasquez"
   },

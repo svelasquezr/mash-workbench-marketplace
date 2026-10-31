@@ -13,7 +13,7 @@ To try it without installing: `claude --plugin-dir <path-to>/plugins/mash-workbe
 
 ## The loop
 
-1. **Capture**: the `scout` skill fires when Claude repeats a multi-step procedure, when you correct the same thing twice, when a manual check could be automated, or when a memory it is about to save describes a procedure. It appends one line to the project's tooling backlog (`docs/tooling-backlog.md` unless you chose another file; the first time, it asks) and returns to the task:
+1. **Capture**: the `scout` skill fires when Claude repeats a multi-step procedure, when you correct the same thing twice, when a manual check could be automated, or when a memory it is about to save describes a procedure. It appends one line to the project's tooling backlog (`docs/mash/tooling-backlog.md` unless you chose another file; the first time, it asks) and returns to the task:
 
    ```
    - [ ] 2026-10-14 · script · Check the lockfile matches CI's Python version — CI failed twice on a version the lockfile didn't pin
@@ -42,12 +42,12 @@ When the form is unclear at capture time, the entry says `unsure` and `/forge` d
 
 - `git`, `bash` and `python3` 3.11 or newer on your PATH. The scripts use the standard library only and need no network.
 - Built for Claude Code and developed against 2.1.289; older versions are untested.
-- `scout` writes only the project's tooling backlog, and only once you chose where it lives: the first time it has something to note, it asks whether to create `docs/tooling-backlog.md`, use another file, or keep none. To answer once for later sessions, set `MASH_WORKBENCH_BACKLOG` (a path relative to the repository, or `off`) in the `env` block of `.claude/settings.local.json` (only you) or `.claude/settings.json` (everyone). `forge` writes only what you approve it to build.
+- `scout` writes only the project's tooling backlog, and only once you chose where it lives: the first time it has something to note, it asks whether to create `docs/mash/tooling-backlog.md`, use another file, or keep none; a backlog already at `docs/tooling-backlog.md` keeps working where it is (move it with `git mv` when you like), and when it creates the file it offers to add it to `.gitignore` (an ignored backlog holds only your entries; committing it is the default and shares them). To answer once for later sessions, set `MASH_WORKBENCH_BACKLOG` (a path relative to the repository, or `off`) in the `env` block of `.claude/settings.local.json` (only you) or `.claude/settings.json` (everyone). `forge` writes only what you approve it to build.
 - `scripts/past-friction.py` reads your Claude Code session transcripts for the current project (`~/.claude/projects/<project-folder>/*.jsonl`, and the folders of its worktrees) to find corrections and command sequences that recur across sessions. It makes no model call and no network call, never writes to the transcripts, and prints only counts, dates and one example per pattern. A correction's example shows only the wording that two or more sessions share; every other word is replaced by "…", so something you typed once (a name, a path, a secret) is not printed, though a phrase you repeat across sessions would be. A command sequence shows only program, subcommand and script names. It does not follow symbolic links out of the transcripts folder, and uses `$CLAUDE_CONFIG_DIR/projects` when that is set. Run it yourself first if you want to see exactly what `forge` is shown: `python3 plugins/mash-workbench/scripts/past-friction.py --project <path>`.
 
 ## Optional integrations
 
-- **review-routing** plugin: when `docs/review-escapes.md` exists, `/forge` counts bugs reviews missed per area and proposes a specialist reviewer for an area with two or more.
+- **review-routing** plugin: when the project keeps a review-escape ledger (`docs/mash/review-escapes.md`), `/forge` counts bugs reviews missed per area and proposes a specialist reviewer for an area with two or more.
 - **superpowers** plugin: new skills follow its `writing-skills` method when installed.
 
 Neither is required.
