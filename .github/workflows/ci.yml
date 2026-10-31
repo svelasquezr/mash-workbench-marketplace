@@ -38,5 +38,5 @@ jobs:
             range="$HEAD_SHA"  # the repository's first commit has no parent
           fi
           echo "checking $range"
-          uvx --from commitizen==4.19.1 cz check --rev-range "$range"
+          uvx --from commitizen==4.19.3 cz check --rev-range "$range"
       - run: uvx pre-commit@4.6.2 run --all-files --show-diff-on-failure
