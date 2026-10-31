@@ -70,12 +70,10 @@ class AllowDefault:
 
 @dataclass(frozen=True)
 class ChangedLineHit:
-    """A changed line matched [[changed_lines]] rule `rule_index` (0-based) in `path`, or the
-    pull request listing had no patch for it (GitHub omits large ones), which counts as a match."""
+    """A changed line matched [[changed_lines]] rule `rule_index` (0-based) in `path`."""
 
     rule_index: int
     path: str
-    patch_missing: bool = False
 
 
 @dataclass(frozen=True)
@@ -92,7 +90,7 @@ class ModelRule:
 
 @dataclass(frozen=True)
 class ChangeFacts:
-    """What model rules look at: the pull request title (or a range's commit subjects, or
+    """What model rules look at: a range's commit subjects (or
     --title), and the lines each changed file added: (its paths, the count), or None when unknown."""
 
     titles: tuple[str, ...] = ()

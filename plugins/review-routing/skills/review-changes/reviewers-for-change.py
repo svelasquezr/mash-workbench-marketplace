@@ -7,19 +7,18 @@ each path gets every reviewer whose route matches it; a test also counts as the 
 a path no route claims gets its fallback, else the default reviewer (this plugin's
 review-routing:change-reviewer), so no change goes unreviewed. An empty or unreadable change is an error, never "no reviewers".
 
-  reviewers-for-change.py --pr <number>       a pull request (needs gh)
   reviewers-for-change.py <base>...<head>     a branch since it left base
   reviewers-for-change.py <old>..<new>        between two heads (a fix round)
   reviewers-for-change.py --paths PATH...     preview the routing of some paths
   ... --explain [--format text|markdown]      with any of the three above: which rule gave each
-                                              path its reviewers (markdown: a table for a PR comment;
+                                              path its reviewers (markdown: a table;
                                               --paths has no diff, so it shows no changed-line rules)
   ... --models                                with any of the three above: "agent<TAB>model" lines,
                                               the model to pass when starting each reviewer ("-":
                                               pass none, the agent file's model: applies)
-  ... --title TEXT                            with --models or --explain: the PR title that
-                                              [[model_rules]] title_pattern checks (a range uses
-                                              its commit subjects, any one matching)
+  ... --title TEXT                            with --models or --explain: a title that
+                                              [[model_rules]] title_pattern checks instead of
+                                              the range's commit subjects (any one matching)
   reviewers-for-change.py --check             test the config: [[expect]] cases, stale routes,
                                               missing agent files, allow_default coverage,
                                               routed agent files on haiku, stale model rules,
@@ -45,9 +44,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from route_change import (
-    change_in_pull_request,
     change_in_range,
-    pull_request_title,
     range_facts,
 )
 from route_check import check_config
@@ -95,7 +92,6 @@ def main() -> None:
         nargs="?",
         help="<base>...<head> for a branch since it left base; <old>..<new> between two heads",
     )
-    parser.add_argument("--pr", type=int, metavar="NUMBER", help="a pull request number (needs gh)")
     parser.add_argument("--paths", nargs="+", metavar="PATH", help="route these paths (a preview)")
     parser.add_argument(
         "--check",
@@ -108,14 +104,14 @@ def main() -> None:
     parser.add_argument(
         "--explain",
         action="store_true",
-        help="with a range, --pr or --paths: show which rule gave each path its reviewers, each"
+        help="with a range or --paths: show which rule gave each path its reviewers, each"
         " reviewer's model, and the import guards a changed path is on",
     )
     parser.add_argument(
         "--format",
         choices=("text", "markdown"),
         default=None,
-        help="with --explain: text (default) or a markdown table for a PR comment",
+        help="with --explain: text (default) or a markdown table",
     )
     parser.add_argument(
         "--models",
@@ -126,18 +122,17 @@ def main() -> None:
     parser.add_argument(
         "--title",
         metavar="TEXT",
-        help="the pull request title for [[model_rules]] title_pattern (a --paths preview has none)",
+        help="a title for [[model_rules]] title_pattern, instead of the range's commit subjects (a --paths preview has none)",
     )
     options = parser.parse_args()
     modes = [
         options.commit_range is not None,
-        options.pr is not None,
         options.paths is not None,
         options.check,
     ]
     if sum(modes) != 1:
         parser.error(
-            "give exactly one of: a range (<base>...<head> or <old>..<new>), --pr, --paths, --check"
+            "give exactly one of: a range (<base>...<head> or <old>..<new>), --paths, --check"
         )
     if options.commit_range is not None and ".." not in options.commit_range:
         parser.error(
@@ -178,7 +173,7 @@ def main() -> None:
     root = repository_root()
     config_path = options.config or root / CONFIG_PATH
     if options.config is None and not config_path.exists():
-        # No routing yet is a normal state (review-pr then sends everything to the default
+        # No routing yet is a normal state (review-changes then sends everything to the default
         # reviewer), so it is a note, not an error; --check and an explicit --config stay strict.
         print(
             f"{PROGRAM}: no {CONFIG_PATH} in {root}, so every path gets {DEFAULT_REVIEWER};"
@@ -190,17 +185,13 @@ def main() -> None:
     else:
         config = load_config(config_path)
     hits: list[ChangedLineHit] = []
-    added_lines: tuple[tuple[tuple[str, ...], int], ...] | None = None
     if options.paths is not None:
         source, changed_paths = "the given paths", options.paths
-    elif options.pr is not None:
-        source = f"pull request {options.pr}"
-        changed_paths, hits, added_lines = change_in_pull_request(options.pr, config)
     else:
         source = f"range {options.commit_range}"
         changed_paths, hits = change_in_range(options.commit_range, config)
     if not changed_paths:
-        fail(f"no changed files in {source}; check the range or pull request number")
+        fail(f"no changed files in {source}; check the range")
     extra_reviewers = {
         reviewer for hit in hits for reviewer in config.changed_lines[hit.rule_index].reviewers
     }
@@ -212,16 +203,10 @@ def main() -> None:
         return
 
     # The facts model rules look at, read only when a rule needs them.
-    facts = ChangeFacts((options.title,) if options.title else (), added_lines)
+    facts = ChangeFacts((options.title,) if options.title else (), None)
     if config.model_rules and options.commit_range is not None:
         range_facts_found = range_facts(options.commit_range)
         facts = ChangeFacts(facts.titles or range_facts_found.titles, range_facts_found.added_lines)
-    elif (
-        options.pr is not None
-        and not options.title
-        and any(rule.title_pattern is not None for rule in config.model_rules)
-    ):
-        facts = ChangeFacts((pull_request_title(options.pr),), added_lines)
     resolved = [
         (reviewer, *reviewer_model(reviewer, changed_paths, facts, config, root))
         for reviewer in reviewers

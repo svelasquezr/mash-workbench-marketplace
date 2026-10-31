@@ -1,12 +1,12 @@
 # .claude/reviewers.toml: which reviewer agents review which paths of this project.
-# Read by the review-routing plugin's reviewers-for-change.py (the review-pr skill runs it);
+# Read by the review-routing plugin's reviewers-for-change.py (the review-changes skill runs it);
 # `reviewers-for-change.py --check` tests this file. Patterns are Python regular expressions,
 # searched in repository-relative paths (forward slashes): anchor them with ^ and escape dots.
 # Top-level keys come first: TOML puts every key after a [[table]] header into that table.
 
 # Optional: who reviews a path no route and no fallback claims. The default is this plugin's
 # read-only change-reviewer (Sonnet); "general-purpose" still works but can edit files and has no
-# model of its own (review-pr starts it on sonnet when --models prints "-").
+# model of its own (review-changes starts it on sonnet when --models prints "-").
 # default_reviewer = "review-routing:change-reviewer"
 
 # Optional: the model the default reviewer runs on here: sonnet, opus or fable (never haiku).
@@ -60,8 +60,8 @@ pattern = '\.md$'
 reviewers = ["docs-reviewer"]
 
 # Optional: a stronger model for one reviewer when a change is risky; every condition given must
-# hold (title_pattern checks the PR title; a range uses its commit subjects, any one matching;
-# --title sets it for a preview). The first matching rule wins; without one, default_model applies
+# hold (title_pattern checks the range's commit subjects, any one matching;
+# --title sets one for a preview). The first matching rule wins; without one, default_model applies
 # (default reviewer only), else the agent file's model. A --paths preview has no line counts, so a
 # rule with min_added_lines never holds there.
 # Sizing policy: reviewers run on Sonnet by default (their agent file); Opus for substantial logic;
