@@ -16,7 +16,7 @@ To try it without installing: `claude --plugin-dir <path-to>/plugins/review-rout
 | Part | What it does |
 |---|---|
 | `review-changes` skill | before you open a pull request: picks the reviewers and their models for your committed changes, runs your checks first, dispatches the reviewers, triages findings and fixes what the change introduced; prints a summary in the terminal and writes nothing to a PR |
-| `add-reviewer` skill | adds a specialist reviewer when the same class of bug slips through review twice, and records each missed bug in `docs/review-escapes.md` |
+| `add-reviewer` skill | adds a specialist reviewer when the same class of bug slips through review twice, and records each missed bug in `docs/mash/review-escapes.md` |
 | `inspect` skill (`/review-routing:inspect`) | for a project that already has review habits: finds instructions in `CLAUDE.md`, `AGENTS.md`, memory or plans that would override the routing, and areas you already brief reviewers on by hand; proposes rewrites and applies only the ones you approve |
 | `change-reviewer` agent | the default, read-only reviewer: correctness, tests for new branches, stale docs, unsupported claims, secrets |
 | `reviewer-guard` hook | refuses the plugin's reviewers (its own agents and the ones your `.claude/reviewers.toml` names) their non-read git commands (in a real repository, not a scratch one) and their GitHub-writing `gh` commands (a guard against accidents, not a security boundary; the gaps are listed in the hook's docstring) |
@@ -48,11 +48,15 @@ Both hooks apply in every project once the plugin is enabled, not only in projec
 
 ## What it writes
 
-Only when you or Claude run the matching skill: `docs/review-escapes.md` (`add-reviewer` and `review-changes`, one line per missed bug), `.claude/reviewers.toml` and `.claude/agents/<name>.md` (`add-reviewer`, new reviewers), fix commits for what a review finds (`review-changes`; it never pushes, opens a PR or merges), a line in `CLAUDE.md` naming your check commands when you accept it (`review-changes`), and edits to `CLAUDE.md` or memory files that you approve (`inspect`).
+Only when you or Claude run the matching skill: `docs/mash/review-escapes.md` (`add-reviewer` and `review-changes`, one line per missed bug; only after you chose where it lives), `.claude/reviewers.toml` and `.claude/agents/<name>.md` (`add-reviewer`, new reviewers), fix commits for what a review finds (`review-changes`; it never pushes, opens a PR or merges), a line in `CLAUDE.md` naming your check commands when you accept it (`review-changes`), and edits to `CLAUDE.md` or memory files that you approve (`inspect`).
 
 ## Upgrading from 0.1.0
 
 `review-pr` is now `review-changes` and no longer opens, comments on or merges pull requests, so nothing needs `gh`. Text in your `CLAUDE.md` or memory that names `review-pr` (add-reviewer used to suggest such a rule) should name `review-changes`; `/review-routing:inspect` finds and proposes those rewrites. The routing script's `--pr` option is gone: pass a range.
+
+## Where the escape ledger lives
+
+The first time a bug needs recording, the skill asks whether to create `docs/mash/review-escapes.md`, use another file, or keep none. To answer once, set `REVIEW_ROUTING_ESCAPES` (a path relative to the repository, or `off`) in the `env` block of `.claude/settings.local.json` (only you) or `.claude/settings.json` (everyone). A ledger already at `docs/review-escapes.md` keeps working where it is; move it with `git mv` when you like. It offers to add a new ledger to `.gitignore`; an ignored ledger counts only your own escapes, so the default is to commit it and let the whole team's misses add up.
 
 ## Why reviewers are routed
 

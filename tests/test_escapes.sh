@@ -5,6 +5,8 @@ add=plugins/review-routing/skills/add-reviewer/escape-add.sh
 report=plugins/review-routing/skills/add-reviewer/escapes-report.sh
 temporary_directory=$(mktemp -d); trap 'rm -rf "$temporary_directory"' EXIT
 ledger="$temporary_directory/docs/review-escapes.md"
+# These tests name the ledger file; tests/test_ledger_location.sh covers choosing and finding it.
+export REVIEW_ROUTING_ESCAPES=docs/review-escapes.md
 
 # No ledger yet: the report says so and exits 0.
 run_capturing bash "$report" "$temporary_directory"

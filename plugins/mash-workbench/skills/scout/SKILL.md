@@ -16,7 +16,7 @@ Capture, don't build. The current task comes first.
 
    Use `unsure` if it's unclear.
 2. Run `bash <this skill's base directory>/backlog-add.sh "<repo-root>" <form> "<short title>" "<why: what repeated or what went wrong>"`, where `<repo-root>` is the literal path `git rev-parse --show-toplevel` prints (run it on its own, not inside `$( )`, which some permission setups refuse). Outside a git repository use the project folder.
-   - Exit 3 means the project has no backlog yet, and nothing was written. Ask the user, in one question, where to keep it: `docs/tooling-backlog.md`, another file, or nowhere. Re-run with `--create` or `--file <path>`. For another file or nowhere, offer to add `{"env": {"MASH_WORKBENCH_BACKLOG": "<path, or off>"}}` to `.claude/settings.local.json` (only this user) or `.claude/settings.json` (the whole project), so later sessions don't ask again.
+   - Exit 3 means the project has no backlog yet, and nothing was written. Ask the user, in one question, where to keep it: `docs/mash/tooling-backlog.md`, another file, or nowhere. Re-run with `--create` or `--file <path>`, and offer to add the new file to `.gitignore` (recommend committing it: an ignored backlog holds only this user's entries). For another file or nowhere, offer to add `{"env": {"MASH_WORKBENCH_BACKLOG": "<path, or off>"}}` to `.claude/settings.local.json` (only this user) or `.claude/settings.json` (the whole project), so later sessions don't ask again.
    - A message that the backlog is off: say nothing and continue the task.
 3. Tell the user in one line (`"Noted for /forge: <title>"`), then continue the task. If the script also printed `near duplicate of: <title>`, add `"(similar to <title>)"` to that line; `/forge` merges the two.
 

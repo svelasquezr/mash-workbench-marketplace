@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Append a tooling candidate to the project's tooling backlog (backlog-path.sh says which file; --create starts
-# docs/tooling-backlog.md, --file <path> another file, when the project has none yet). Skips duplicate titles; warns on stderr, and still adds, when
+# docs/mash/tooling-backlog.md, --file <path> another file, when the project has none yet). Skips duplicate titles; warns on stderr, and still adds, when
 # an open entry's title is a near duplicate: at least 2 shared words of 3+ characters, covering 60% of the shorter
 # title's. Words are runs of ASCII letters and digits, so a non-ASCII letter splits a word (a looser match, no more).
 # Pros of warning rather than skipping: a loose match never drops a candidate. Cons: /forge has to merge the pair.
@@ -10,7 +10,7 @@ explicit=""; positional=()
 while (( $# > 0 )); do  # the flags may come anywhere before a --; after it everything is positional
   case "$1" in
     --) shift; positional+=("$@"); break ;;
-    --create) explicit="docs/tooling-backlog.md"; shift ;;
+    --create) explicit="docs/mash/tooling-backlog.md"; shift ;;
     --file) if (( $# < 2 )); then echo "$usage" >&2; exit 2; fi; explicit="$2"; shift 2 ;;
     -?*) echo "unknown option: $1 (a title or reason that starts with - goes after --)" >&2; echo "$usage" >&2; exit 2 ;;
     *) positional+=("$1"); shift ;;
@@ -34,6 +34,13 @@ if [[ "${MASH_WORKBENCH_BACKLOG:-}" == off ]]; then
 fi
 if [[ -n "$explicit" ]]; then
   if [[ "$explicit" == /* ]]; then backlog_file="$explicit"; else backlog_file="$root/$explicit"; fi
+  # A second backlog would split the open items /forge reads: refuse when the project already uses another one.
+  status=0
+  current=$(bash "$(dirname "${BASH_SOURCE[0]}")/backlog-path.sh" "$root" 2>/dev/null) || status=$?
+  if (( status == 0 )) && [[ -f "$current" && ! "$current" -ef "$backlog_file" ]]; then
+    echo "a backlog already exists at ${current#"$root"/}: use it (move it with git mv, or pass --file ${current#"$root"/}) instead of starting another" >&2
+    exit 2
+  fi
 else
   status=0
   backlog_file=$(bash "$(dirname "${BASH_SOURCE[0]}")/backlog-path.sh" "$root") || status=$?
@@ -43,8 +50,9 @@ else
     3)
       {
         echo "no tooling backlog in this project yet: ask the user before creating one. Then re-run as"
-        echo "  backlog-add.sh --create <repo-root> <form> <title> <why>        to start docs/tooling-backlog.md, or"
+        echo "  backlog-add.sh --create <repo-root> <form> <title> <why>        to start docs/mash/tooling-backlog.md, or"
         echo "  backlog-add.sh --file <path> <repo-root> <form> <title> <why>   to keep it in another file."
+        echo "A ledger the team shares counts everyone's entries; one in .gitignore holds only yours: offer to add it to .gitignore, and recommend committing it."
         echo "To keep another file, or none, for later sessions, add to .claude/settings.local.json (only you) or"
         echo "  .claude/settings.json (everyone):  {\"env\": {\"MASH_WORKBENCH_BACKLOG\": \"<path, or off>\"}}"
       } >&2

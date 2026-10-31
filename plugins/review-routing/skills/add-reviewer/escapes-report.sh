@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Count the review escapes in <repo-root>/docs/review-escapes.md by area, most first, and name each
+# Count the review escapes in the project's ledger (escapes-path.sh) by area, most first, and name each
 # area that reached the threshold (default 2): it has earned a specialist reviewer (the add-reviewer
 # skill). Each distinct link counts once per area, so a duplicated line does not inflate a count. Only
 # entry lines count ("- YYYY-MM-DD · area · class · link"); prose in the file is ignored.
@@ -18,7 +18,10 @@ while (( $# > 0 )); do
 done
 threshold="${threshold:-2}"
 if ! [[ "$threshold" =~ ^[1-9][0-9]*$ ]]; then echo "$usage" >&2; exit 2; fi
-ledger="$root/docs/review-escapes.md"
+status=0
+ledger=$(bash "$(dirname "${BASH_SOURCE[0]}")/escapes-path.sh" "$root") || status=$?
+if (( status == 3 || status == 4 )); then echo "no escapes recorded"; exit 0; fi  # none chosen yet, or off
+if (( status != 0 )); then exit "$status"; fi
 if [[ -e "$ledger" && ! -r "$ledger" ]]; then echo "escapes-report: cannot read $ledger" >&2; exit 2; fi
 entry_pattern='^- [0-9]{4}-[0-9]{2}-[0-9]{2} · '
 if [[ ! -f "$ledger" ]] || ! grep -qE "$entry_pattern" "$ledger"; then

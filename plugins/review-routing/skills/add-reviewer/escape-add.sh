@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Record a review escape: a bug in code a review passed, found later by anyone (a person, CI or a later
-# reviewer). One line per bug, keyed by its issue link, in <repo-root>/docs/review-escapes.md; a link the
+# reviewer). One line per bug, keyed by its issue link, in the project's ledger (escapes-path.sh says which file;
+# --create starts docs/mash/review-escapes.md, --file <path> another file, when the project has none yet); a link the
 # ledger already holds is not added again (exit 0, "already recorded"). A GitHub issue or PR URL, owner/repo#N
 # and #N (owner/repo from the origin remote) are all written as https://github.com/<owner>/<repo>/issues/N,
 # so one bug has one spelling; owner and repo are lowercased, and www., a #fragment and a ?query are dropped from GitHub URLs; any other link only loses a trailing slash. The lines are the evidence
@@ -8,8 +9,17 @@
 # the threshold (default 2) after this entry, that area's report line is printed too.
 # The area is the directory a [[routes]] pattern would claim (src/payments), never a file.
 set -euo pipefail
-usage="usage: escape-add.sh <repo-root> <area-directory> <class> <issue link>"
+usage="usage: escape-add.sh [--create | --file <path>] <repo-root> <area-directory> <class> <issue link>"
 refuse() { echo "escape-add: $*" >&2; echo "$usage" >&2; exit 2; }
+explicit=""; positional=()
+while (( $# > 0 )); do
+  case "$1" in
+    --create) explicit="docs/mash/review-escapes.md"; shift ;;
+    --file) if (( $# < 2 )); then refuse "--file needs a path"; fi; explicit="$2"; shift 2 ;;
+    *) positional+=("$1"); shift ;;
+  esac
+done
+set -- ${positional[@]+"${positional[@]}"}
 if [[ $# -ne 4 ]]; then refuse "four arguments needed"; fi
 [[ -d "$1" ]] || refuse "no such repository root: $1"
 root="$(cd "$1" && pwd -P)"
@@ -62,20 +72,51 @@ elif [[ "$link" =~ ^#([0-9]+)$ ]]; then
   fi
 fi
 [[ "$link" =~ ^https?://[^[:space:]]+$ ]] || refuse "the link must be a GitHub issue or pull request, owner/repo#N, #N, or an http(s) URL: $link"
-ledger="$root/docs/review-escapes.md"
-mkdir -p "$root/docs"
+if [[ "${REVIEW_ROUTING_ESCAPES:-}" == off ]]; then
+  echo "the escape ledger is off for this project (REVIEW_ROUTING_ESCAPES=off): nothing recorded"; exit 0
+fi
+if [[ -n "$explicit" ]]; then
+  if [[ "$explicit" == /* ]]; then ledger="$explicit"; else ledger="$root/$explicit"; fi
+  # A second ledger would split the evidence the report counts: refuse when the project already uses another one.
+  status=0
+  current=$(bash "$(dirname "${BASH_SOURCE[0]}")/escapes-path.sh" "$root" 2>/dev/null) || status=$?
+  if (( status == 0 )) && [[ -f "$current" && ! "$current" -ef "$ledger" ]]; then
+    echo "escape-add: a ledger already exists at ${current#"$root"/}: use it (move it with git mv, or pass --file ${current#"$root"/}) instead of starting another" >&2
+    exit 2
+  fi
+else
+  status=0
+  ledger=$(bash "$(dirname "${BASH_SOURCE[0]}")/escapes-path.sh" "$root") || status=$?
+  case "$status" in
+    0) ;;
+    4) echo "the escape ledger is off for this project (REVIEW_ROUTING_ESCAPES=off): nothing recorded"; exit 0 ;;
+    3)
+      {
+        echo "no escape ledger in this project yet: ask the user before creating one. Then re-run as"
+        echo "  escape-add.sh --create <repo-root> <area> <class> <issue link>        to start docs/mash/review-escapes.md, or"
+        echo "  escape-add.sh --file <path> <repo-root> <area> <class> <issue link>   to keep it in another file."
+        echo "A ledger the team shares counts everyone's entries; one in .gitignore holds only yours: offer to add it to .gitignore, and recommend committing it."
+        echo "To keep another file, or none, for later sessions, add to .claude/settings.local.json (only you) or"
+        echo "  .claude/settings.json (everyone):  {\"env\": {\"REVIEW_ROUTING_ESCAPES\": \"<path, or off>\"}}"
+      } >&2
+      exit 3 ;;
+    *) exit "$status" ;;
+  esac
+fi
+ledger_name="${ledger#"$root"/}"
+mkdir -p "$(dirname "$ledger")"
 if [[ ! -f "$ledger" ]]; then
   printf '%s\n\n%s\n%s\n\n' "# Review escapes" \
     "Bugs in code a review passed, found later by anyone (a person, CI or a later reviewer); one line per bug, keyed by its issue: date · area · class · link." \
     "The add-reviewer skill reads them through escapes-report.sh." > "$ledger"
 fi
 if [[ -f "$ledger" ]] && LINK="$link" awk -F ' · ' '{ field = $4; sub(/\r$/, "", field) } $1 ~ /^- [0-9][0-9][0-9][0-9]-/ && field == ENVIRON["LINK"] { found = 1 } END { exit !found }' "$ledger"; then
-  echo "already recorded in docs/review-escapes.md: $link"
+  echo "already recorded in $ledger_name: $link"
   exit 0
 fi
 if [[ -s "$ledger" && -n "$(tail -c1 "$ledger")" ]]; then printf '\n' >> "$ledger"; fi  # a file without a final newline
 printf -- '- %s · %s · %s · %s\n' "$entry_date" "$area" "$class" "$link" >> "$ledger"
-echo "recorded in docs/review-escapes.md: $area · $class"
-report_line=$(bash "$(dirname "${BASH_SOURCE[0]}")/escapes-report.sh" "$root" --threshold 2 \
+echo "recorded in $ledger_name: $area · $class"
+report_line=$(REVIEW_ROUTING_ESCAPES="$ledger" bash "$(dirname "${BASH_SOURCE[0]}")/escapes-report.sh" "$root" --threshold 2 \
   | PREFIX="$area: " awk 'index($0, ENVIRON["PREFIX"]) == 1 && /-> add a reviewer for/')
 if [[ -n "$report_line" ]]; then echo "$report_line"; fi

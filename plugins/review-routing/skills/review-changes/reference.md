@@ -13,13 +13,15 @@ Only when `route` printed `general-purpose` (a project config that still names i
 
 ## Recording escapes
 
-An escape is a bug in code a review passed, found later by anyone: a person, CI or a later reviewer. The ledger (`docs/review-escapes.md`) holds one line per bug, keyed by its issue link. Pros of the issue link as the key: every path (a fix, a Pre-existing finding, a bug a person found) has one, and re-running a step cannot count a bug twice. Con: a bug with no issue has to get one first; the user files it on their host and gives you the link.
+An escape is a bug in code a review passed, found later by anyone: a person, CI or a later reviewer. The ledger (`docs/mash/review-escapes.md` by default; `escapes-path.sh` says which file the project uses) holds one line per bug, keyed by its issue link. Pros of the issue link as the key: every path (a fix, a Pre-existing finding, a bug a person found) has one, and re-running a step cannot count a bug twice. Con: a bug with no issue has to get one first; the user files it on their host and gives you the link.
 
 Run `bash <this skill's base directory>/../add-reviewer/escape-add.sh <repo-root> <area-directory> <class> <issue link>`. The area is the directory a route claims (`src/payments`), never a file.
 
 - **Step 0, a fix:** record the issue the fix closes; ask the user for the link.
 - **Step 4, a Pre-existing finding:** reviewers mark each one `escape: yes` (a behaviour bug with a failure scenario: a wrong result, data lost, a guard bypassed, in code an earlier review passed) or `escape: no` (drift, hygiene, testability, perf, and code no review covered: it predates any review, a direct push, vendored code). A finding in a change still under review is a finding for that change, not an escape. Record each `escape: yes` once the user gives the issue link. A wrong `yes` costs one ledger line, and the issue it links is visible.
 - **A bug a person or CI found:** record the issue for it.
+
+Ledger off (`escape-add.sh` says so and exits 0): say nothing more and continue. No ledger chosen yet: `escape-add.sh` exits 3 and writes nothing. Ask the user, in one question, where to keep it (`docs/mash/review-escapes.md`, another file, or nowhere), re-run with `--create` or `--file <path>`, and offer to add `{"env": {"REVIEW_ROUTING_ESCAPES": "<path, or off>"}}` to `.claude/settings.local.json` (only this user) or `.claude/settings.json` (the project). Offer to add a new ledger to `.gitignore` and recommend committing it: an ignored ledger counts only this user's escapes.
 
 A link the ledger already holds prints "already recorded" and exits 0, so a repeat is safe. When the area is at or over the threshold (default 2) after the new entry, the script also prints that area's report line, ending "-> add a reviewer for <area> (add-reviewer skill)". Tell the user, who decides whether to run add-reviewer. Commit the ledger change with the fix (a ledger the project gitignores is updated but not committed). The link is normalised: a GitHub issue or PR URL, `owner/repo#N` and `#N` (owner and repo from the origin remote) all become `https://github.com/<owner>/<repo>/issues/N`; any other http(s) link is kept as given; `#N` with no GitHub origin is refused.
 
