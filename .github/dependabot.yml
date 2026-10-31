@@ -1,0 +1,22 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: ci
+      include: scope  # "ci(deps): bump ..." passes the Conventional Commits check
+    groups:
+      actions:  # one PR per week, not one per action
+        patterns: ["*"]
+  - package-ecosystem: pre-commit
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore
+      include: scope  # "chore(deps): bump ..."
+    groups:
+      pre-commit-hooks:
+        patterns: ["*"]
