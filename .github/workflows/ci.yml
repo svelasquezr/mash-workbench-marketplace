@@ -3,6 +3,8 @@ on:
   pull_request:
   push:
     branches: [main]  # branch pushes are covered by their pull request; avoids a duplicate run
+permissions:
+  contents: read  # the job only checks out and tests; it writes nothing back
 jobs:
   test:
     runs-on: ubuntu-latest
