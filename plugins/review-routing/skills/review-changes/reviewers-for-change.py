@@ -185,7 +185,6 @@ def main() -> None:
     else:
         config = load_config(config_path)
     hits: list[ChangedLineHit] = []
-    added_lines: tuple[tuple[tuple[str, ...], int], ...] | None = None
     if options.paths is not None:
         source, changed_paths = "the given paths", options.paths
     else:
@@ -204,7 +203,7 @@ def main() -> None:
         return
 
     # The facts model rules look at, read only when a rule needs them.
-    facts = ChangeFacts((options.title,) if options.title else (), added_lines)
+    facts = ChangeFacts((options.title,) if options.title else (), None)
     if config.model_rules and options.commit_range is not None:
         range_facts_found = range_facts(options.commit_range)
         facts = ChangeFacts(facts.titles or range_facts_found.titles, range_facts_found.added_lines)

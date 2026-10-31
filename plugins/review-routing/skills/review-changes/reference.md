@@ -8,7 +8,7 @@ Only when `route` printed `general-purpose` (a project config that still names i
 
 1. Note `git rev-parse HEAD`.
 2. Fix in a new commit, rerun the checks.
-3. Send `git diff <noted head> HEAD` to every reviewer that `route <noted head>..HEAD --models` prints, plus every reviewer that found something; not the whole change again. When the default branch (and only it) was merged in since the noted head, use `git log -p --first-parent --no-merges <noted head>..HEAD` plus `git show` of each merge that `git log --first-parent --merges <noted head>..HEAD` lists, so the base's commits don't pose as the fix. When the merge took in commits from the branch's own remote (`git merge origin/<feature>`), those sit on the merge's second parent and `--first-parent` hides them: send the plain `git diff <noted head> HEAD`.
+3. Send `git diff <noted head> HEAD` to every reviewer that `route <noted head>..HEAD` prints, plus every reviewer that found something; not the whole change again. When the default branch (and only it) was merged in since the noted head, use `git log -p --first-parent --no-merges <noted head>..HEAD` plus `git show` of each merge that `git log --first-parent --merges <noted head>..HEAD` lists, so the base's commits don't pose as the fix. When the merge took in commits from the branch's own remote (`git merge origin/<feature>`), those sit on the merge's second parent and `--first-parent` hides them: send the plain `git diff <noted head> HEAD`.
 4. Start each reviewer on the model step 1 gave it (a reviewer new in this round: run `route <range> --models` again). Never take models from the `..` range: it sees only the fix's commits, so a model rule for new features wouldn't hold.
 
 ## Recording escapes

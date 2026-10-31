@@ -48,7 +48,11 @@ Both hooks apply in every project once the plugin is enabled, not only in projec
 
 ## What it writes
 
-Only when you or Claude run the matching skill: `docs/review-escapes.md` (`add-reviewer` and `review-changes`, one line per missed bug), `.claude/reviewers.toml` and `.claude/agents/<name>.md` (`add-reviewer`, new reviewers), fix commits for what a review finds (`review-changes`; it never pushes, opens a PR or merges), and edits to `CLAUDE.md` or memory files that you approve (`inspect`).
+Only when you or Claude run the matching skill: `docs/review-escapes.md` (`add-reviewer` and `review-changes`, one line per missed bug), `.claude/reviewers.toml` and `.claude/agents/<name>.md` (`add-reviewer`, new reviewers), fix commits for what a review finds (`review-changes`; it never pushes, opens a PR or merges), a line in `CLAUDE.md` naming your check commands when you accept it (`review-changes`), and edits to `CLAUDE.md` or memory files that you approve (`inspect`).
+
+## Upgrading from 0.1.0
+
+`review-pr` is now `review-changes` and no longer opens, comments on or merges pull requests, so nothing needs `gh`. Text in your `CLAUDE.md` or memory that names `review-pr` (add-reviewer used to suggest such a rule) should name `review-changes`; `/review-routing:inspect` finds and proposes those rewrites. The routing script's `--pr` option is gone: pass a range.
 
 ## Why reviewers are routed
 

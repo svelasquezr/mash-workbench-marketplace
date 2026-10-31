@@ -84,7 +84,7 @@ assert_contains "$captured_output" "$(printf 'pytest -q\t.gitlab-ci.yml')"
 assert_not_contains "$captured_output" "npm ci"
 assert_not_contains "$captured_output" "pip install"
 
-# The same command from two files is listed once per file, never twice for one file; the script never runs anything.
+# Running the script twice lists a Makefile target once each time; the script never runs anything.
 dup=$(fresh dup)
 printf 'test:\n\techo ran > ran.txt\n' > "$dup/Makefile"
 run_capturing bash "$find_checks" "$dup"
@@ -131,3 +131,21 @@ printf 'jobs:\n  a:\n    steps:\n      - run: make test\n' > "$two/.github/workf
 run_capturing bash "$find_checks" "$two"
 assert_contains "$captured_output" "$(printf 'make test\tMakefile')"
 assert_contains "$captured_output" "$(printf 'make test\t.github/workflows/ci.yml')"
+
+# Quotes are stripped only when they pair up around the whole command; the same CI line twice is listed once.
+quotes=$(fresh quotes)
+mkdir -p "$quotes/.github/workflows"
+cat > "$quotes/.github/workflows/c.yml" <<'YAML'
+jobs:
+  a:
+    steps:
+      - run: pytest -m "not integration"
+      - run: 'npm test'
+  b:
+    steps:
+      - run: pytest -m "not integration"
+YAML
+run_capturing bash "$find_checks" "$quotes"
+assert_contains "$captured_output" "$(printf 'pytest -m "not integration"\t.github/workflows/c.yml')"
+assert_contains "$captured_output" "$(printf 'npm test\t.github/workflows/c.yml')"
+assert_eq "$(printf '%s\n' "$captured_output" | grep -c 'not integration')" "1"

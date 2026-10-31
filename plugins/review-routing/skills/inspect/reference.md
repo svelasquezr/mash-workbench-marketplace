@@ -9,7 +9,7 @@ Project text that contradicts one of these is a conflict. A session reads CLAUDE
 | Rule | A conflict | Not a conflict |
 |---|---|---|
 | Reviewers are never Haiku, fix-round re-checks included | text that puts a re-check, a quick review or a fix-round verification on Haiku | Haiku for a builder session or a research agent that judges nothing |
-| A code change is reviewed through the review-changes skill | text that sends a session straight to a reviewer agent (a named reviewer, or a general-purpose agent asked to review the change) | design reviews of specs or plans: they are outside review-changes's scope |
+| A code change is reviewed through the review-changes skill (text naming the removed `review-pr` skill is stale: rewrite it to review-changes) | text that sends a session straight to a reviewer agent (a named reviewer, or a general-purpose agent asked to review the change) | design reviews of specs or plans: they are outside review-changes's scope |
 | A reviewer's model comes from `route --models` (or the agent file), never from project text | sizing text the session applies instead of `route --models` | sizing that agrees with the `model_rules` policy (Fable for design, Opus for substantial logic, Sonnet otherwise) and defers to `route --models` |
 | Reviewer agent files are read-only and keep the verdict line | a reviewer agent file with Edit or Write in `tools:`, with no `tools:` line (it then gets every tool), or without the `SAFE TO LAND` verdict line | agents that are not reviewers |
 | CLAUDE.md names the test, lint and format commands (review-changes's deterministic gate runs them) | a missing command: a gap, so propose the line to add rather than a rewrite | commands named in a doc CLAUDE.md links to |

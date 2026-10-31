@@ -5,6 +5,7 @@
 # nothing; best-effort, so an unreadable or malformed file is skipped. Exit 2 on a usage error.
 #   Read: package.json scripts, Makefile/justfile targets, pyproject.toml tool sections,
 #   .pre-commit-config.yaml, and check-like lines of CI files (.github/workflows, .gitlab-ci.yml).
+#   Not read: a target with several names (`test lint:`), recipe parameters, a leading `@`, `${{ }}` expressions.
 set -euo pipefail
 usage="usage: find-checks.sh <repo-root>"
 [[ $# -eq 1 && -d "$1" ]] || { echo "$usage" >&2; exit 2; }
@@ -67,13 +68,16 @@ ci_commands() {
     [[ -n "$command" ]] || continue
     [[ "$command" != "|"* && "$command" != ">"* ]] || continue
     command="$(printf '%s' "$command" | sed -E 's/[[:space:]]+#.*$//')"
-    command="${command%\"}"; command="${command#\"}"
+    case "$command" in
+      \"*\") command="${command#\"}"; command="${command%\"}" ;;
+      \'*\') command="${command#\'}"; command="${command%\'}" ;;
+    esac
     [[ "$command" =~ (npm\ ci|install|apt-get|checkout|setup-) ]] && continue
     if [[ "$command" =~ $looks_like_check ]]; then emit "$command" "${file#"$root"/}"; fi
   done < "$file"
   return 0
 }
 for ci_file in "$root"/.github/workflows/*.yml "$root"/.github/workflows/*.yaml "$root/.gitlab-ci.yml"; do
-  [[ -f "$ci_file" ]] && ci_commands "$ci_file"
+  if [[ -f "$ci_file" ]]; then ci_commands "$ci_file" | awk '!seen[$0]++'; fi
 done
 exit 0
