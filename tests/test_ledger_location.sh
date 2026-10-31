@@ -72,3 +72,30 @@ root=$(fresh filereport)
 bash "$add" --file notes/escapes.md "$root" src/a wrong-result "https://example.test/issues/7" >/dev/null
 run_capturing bash "$add" --file notes/escapes.md "$root" src/a missing-test "https://example.test/issues/8"
 assert_contains "$captured_output" "add a reviewer for src/a"
+
+# --create or --file beside a ledger the project already uses is refused: two ledgers would split the evidence.
+root=$(fresh split)
+mkdir -p "$root/docs"; printf '# Review escapes\n\n- 2026-01-01 · src/a · wrong-result · https://example.test/issues/1\n' > "$root/docs/review-escapes.md"
+run_capturing bash "$add" --create "$root" src/a missing-test "https://example.test/issues/2"
+assert_eq "$captured_exit_code" "2"
+assert_contains "$captured_output" "docs/review-escapes.md"
+[[ ! -e "$root/docs/mash" ]] || { echo "  --create started a second ledger"; exit 1; }
+run_capturing bash "$add" --file other.md "$root" src/a missing-test "https://example.test/issues/2"
+assert_eq "$captured_exit_code" "2"
+# Naming the ledger already in use is fine.
+bash "$add" --file docs/review-escapes.md "$root" src/a missing-test "https://example.test/issues/2" >/dev/null
+assert_eq "$(grep -c '^- ' "$root/docs/review-escapes.md")" "2"
+# When both default files exist, the path script warns on stderr (stdout stays the path).
+mkdir -p "$root/docs/mash"; printf '# Review escapes\n\n' > "$root/docs/mash/review-escapes.md"
+# shellcheck disable=SC2016  # the single quotes are meant: $1 and $2 expand in the inner bash
+run_capturing bash -c 'bash "$1" "$2" 2>&1 >/dev/null' _ "$path_script" "$root"
+assert_contains "$captured_output" "both"
+
+# Usage errors and absolute paths.
+run_capturing bash "$path_script" "$temporary_directory/missing"
+assert_eq "$captured_exit_code" "2"
+run_capturing bash "$add" "$root" src/a wrong-result "https://example.test/issues/9" --file
+assert_eq "$captured_exit_code" "2"
+root=$(fresh absolute)
+bash "$add" --file "$root/elsewhere/e.md" "$root" src/a wrong-result "https://example.test/issues/10" >/dev/null
+assert_contains "$(cat "$root/elsewhere/e.md")" "src/a"

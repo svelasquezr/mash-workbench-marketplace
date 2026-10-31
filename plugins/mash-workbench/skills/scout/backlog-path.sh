@@ -15,6 +15,9 @@ if [[ -n "$choice" ]]; then
   printf '%s\n' "$choice"
   exit 0
 fi
+if [[ -f "$root/docs/mash/tooling-backlog.md" && -f "$root/docs/tooling-backlog.md" ]]; then
+  echo "backlog-path: both docs/mash/tooling-backlog.md and docs/tooling-backlog.md exist; using the first. Merge the entries and remove the other." >&2
+fi
 for candidate in docs/mash/tooling-backlog.md docs/tooling-backlog.md; do
   if [[ -f "$root/$candidate" ]]; then
     printf '%s\n' "$root/$candidate"

@@ -105,6 +105,12 @@ assert_eq "$(bash "$path_script" "$root")" "$(cd "$root" && pwd -P)/docs/tooling
 bash "$script" "$root" hook "Old home" "why" >/dev/null
 assert_contains "$(cat "$root/docs/tooling-backlog.md")" "Old home"
 [[ ! -e "$root/docs/mash" ]] || { echo "  created docs/mash next to a legacy backlog"; exit 1; }
+# --create beside the legacy backlog is refused: two backlogs would split the open items.
+rm -rf "$root/docs/mash"
+run_capturing bash "$script" --create "$root" hook "Second home" "why"
+assert_eq "$captured_exit_code" "2"
+assert_contains "$captured_output" "docs/tooling-backlog.md"
+[[ ! -e "$root/docs/mash" ]] || { echo "  --create started a second backlog"; exit 1; }
 # When both exist, the grouped one wins.
 mkdir -p "$root/docs/mash"; printf '# Tooling backlog\n\n' > "$root/docs/mash/tooling-backlog.md"
 assert_eq "$(bash "$path_script" "$root")" "$(cd "$root" && pwd -P)/docs/mash/tooling-backlog.md"

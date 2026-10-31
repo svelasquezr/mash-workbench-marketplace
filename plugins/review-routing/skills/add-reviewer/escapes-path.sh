@@ -7,13 +7,17 @@
 # settings file: .claude/settings.local.json for yourself, .claude/settings.json for everyone in the project.
 set -euo pipefail
 usage="usage: escapes-path.sh <repo-root>"
-root="$(cd "${1:?$usage}" && pwd -P)"
+[[ $# -eq 1 && -d "$1" ]] || { echo "$usage" >&2; exit 2; }
+root="$(cd "$1" && pwd -P)"
 choice="${REVIEW_ROUTING_ESCAPES:-}"
 if [[ "$choice" == off ]]; then exit 4; fi
 if [[ -n "$choice" ]]; then
   [[ "$choice" == /* ]] || choice="$root/$choice"
   printf '%s\n' "$choice"
   exit 0
+fi
+if [[ -f "$root/docs/mash/review-escapes.md" && -f "$root/docs/review-escapes.md" ]]; then
+  echo "escapes-path: both docs/mash/review-escapes.md and docs/review-escapes.md exist; using the first. Merge the entries and remove the other so the report counts them all." >&2
 fi
 for candidate in docs/mash/review-escapes.md docs/review-escapes.md; do
   if [[ -f "$root/$candidate" ]]; then
