@@ -243,8 +243,7 @@ def segments(command: str) -> list[list[str]]:
     lexer.whitespace_split = True
     tokens = []
     try:
-        for token in lexer:
-            tokens.append(token)
+        tokens.extend(lexer)  # keeps the tokens read before an error
     except ValueError:
         pass  # an open quote or a trailing backslash (a heredoc or a continued line): keep what came before it
     result, current, skip_next = [], [], False
@@ -321,7 +320,7 @@ def main() -> None:
     parser.add_argument(
         "--today",
         type=datetime.date.fromisoformat,
-        default=datetime.datetime.now(datetime.timezone.utc).date(),
+        default=datetime.datetime.now(datetime.UTC).date(),
     )
     args = parser.parse_args()
 

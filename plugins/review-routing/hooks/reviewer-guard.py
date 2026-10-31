@@ -489,6 +489,7 @@ class Repositories:
                 capture_output=True,
                 text=True,
                 timeout=5,
+                check=False,
             )
         except (OSError, subprocess.SubprocessError):
             return None

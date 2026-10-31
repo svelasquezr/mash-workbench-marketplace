@@ -2,3 +2,7 @@
 # spends attention on style. Standard library only, Python 3.11+ (the scripts use tomllib).
 line-length = 100
 target-version = "py311"
+
+[lint]
+# SIM905 would turn the readable `"a b c".split()` word lists into long quoted lists.
+ignore = ["SIM905"]
