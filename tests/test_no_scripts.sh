@@ -46,14 +46,18 @@ for line in listing.splitlines():
         if host not in allowed_hosts:
             problems.append(f"{path}: links outside github.com and code.claude.com: {match.group(0)}")
     if path.endswith(".md"):
-        # Claude Code runs !`command` (a code span opened right after "!") and a fence opened as ```! when a skill
-        # loads. Walk the code spans, so a span that merely contains "!" (such as `:!`) is not mistaken for one.
-        inline = any(text[m.start() - 1:m.start()] == "!" for m in re.finditer(r"`[^`\n]+`", text))
-        if inline or re.search(r"^\s*(?:```|~~~)\s*!", text, re.M):
+        # Claude Code runs !`command` and ```! fenced blocks when a skill loads. Flag everything its own patterns match
+        # (as of 2.1.318: an inline !`...` after a line start or whitespace, possibly across lines, and ```! anywhere),
+        # and, stricter, any code span that opens right after "!" wherever it sits. A span that merely contains "!"
+        # (such as `:!`) is not flagged.
+        claude_inline = re.search(r"(?:^|\s)!`[^`]+`", text, re.M)
+        span_after_bang = any(text[m.start() - 1:m.start()] == "!" for m in re.finditer(r"`[^`\n]+`", text))
+        if claude_inline or span_after_bang or "```!" in text:
             problems.append(f"{path}: uses the !`command` syntax, which runs a shell command when the file loads")
     if name == "SKILL.md":
         frontmatter = text.split("---", 2)[1] if text.startswith("---") else ""
-        keys = re.findall(r"^[\"']?([A-Za-z_-]+)[\"']?\s*:", frontmatter, re.M)
+        # Every top-level key, quoted or escaped spellings included: anything but plain name and description fails.
+        keys = [key.strip() for key in re.findall(r"^(?![\s#-])([^:\n]+):", frontmatter, re.M)]
         if sorted(keys) != ["description", "name"]:
             problems.append(f"{path}: frontmatter holds only name and description (found {', '.join(keys)})")
     if name == ".mcp.json":
@@ -130,15 +134,20 @@ assert_contains "$(shipped_content_problems "$repository")" "exactly one PreTool
 
 repository=$(fixture inline-shell); printf 'Status: !`git status`\n' > "$repository/plugins/p/skills/s/z.md"; git -C "$repository" add -A
 assert_contains "$(shipped_content_problems "$repository")" "runs a shell command when the file loads"
-for form in '(!`curl x`)' '```!\ncurl x\n```' '~~~ !\ncurl x\n~~~'; do
+for form in '(!`curl x`)' '```!\ncurl x\n```' '- ```!\n  curl x\n  ```' '> ```!\n> curl x' 'Text ```!curl x``` here' \
+  'Use a ` tick, then !`curl x`.' 'Run !`curl x\nmore`'; do
   repository=$(fixture "inline-$RANDOM"); printf -- "Text\n%b\n" "$form" > "$repository/plugins/p/skills/s/z.md"; git -C "$repository" add -A
   assert_contains "$(shipped_content_problems "$repository")" "runs a shell command when the file loads"
 done
-# A code span that only contains "!" is fine.
+# A code span that only contains "!" is fine; so is `a!`b`, which Claude Code does not run (it needs a line start or
+# whitespace before the "!").
 repository=$(fixture bang-in-span); printf 'Refuse a leading `:` other than `:!`, keep `a!b`.\n' > "$repository/plugins/p/skills/s/z.md"; git -C "$repository" add -A
 assert_eq "$(shipped_content_problems "$repository")" ""
 repository=$(fixture quoted-key)
 printf -- '---\nname: s\ndescription: d\n"hooks": {}\n---\nBody.\n' > "$repository/plugins/p/skills/s/SKILL.md"; git -C "$repository" add -A
+assert_contains "$(shipped_content_problems "$repository")" "frontmatter holds only name and description"
+repository=$(fixture escaped-key)
+printf -- '---\nname: s\ndescription: d\n"\\x68ooks": {}\n---\nBody.\n' > "$repository/plugins/p/skills/s/SKILL.md"; git -C "$repository" add -A
 assert_contains "$(shipped_content_problems "$repository")" "frontmatter holds only name and description"
 repository=$(fixture skill-hooks)
 printf -- '---\nname: s\ndescription: d\nhooks: {}\n---\nBody.\n' > "$repository/plugins/p/skills/s/SKILL.md"; git -C "$repository" add -A
