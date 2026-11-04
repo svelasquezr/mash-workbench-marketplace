@@ -79,9 +79,10 @@ done
 printf -- '---\nname: x-helper\nmodel: sonnet\neffort: low\n---\n' > "$temporary_directory/x-helper.md"
 assert_eq "$(agent_problems "$temporary_directory/x-helper.md")" ""
 
-# Every shipped agent and the reviewer template follow it.
+# Every shipped agent, the reviewer template and this repository's own agents follow it.
 shopt -s nullglob
-agent_files=(plugins/*/agents/*.md plugins/review-routing/skills/add-reviewer/reviewer-template.md)
+# This repository's own reviewers too (.claude/agents/), not only the shipped ones.
+agent_files=(plugins/*/agents/*.md plugins/review-routing/skills/add-reviewer/reviewer-template.md .claude/agents/*.md)
 problems=""
 for agent_file in "${agent_files[@]}"; do problems+=$(agent_problems "$agent_file"); done
 assert_eq "$problems" ""
