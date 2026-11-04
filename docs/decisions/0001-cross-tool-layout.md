@@ -24,3 +24,7 @@ The plugins were built for Claude Code and are meant to be usable from GitHub Co
 - Pros: one source of truth for the skills; Claude Code users lose nothing; a second catalog is cheap and checked by a test.
 - Cons: the agents and hooks, which hold much of the value of `review-routing`, do not reach the other tools yet; the duplicated catalog can drift if a tool starts to need different fields; Copilot support rests on one documented path and one unverified report.
 - To revisit when: a plugin is tried in Copilot CLI or OpenCode, or either tool documents a Claude-compatible agent or hook format.
+
+## Update
+
+Since [0004](0004-no-shipped-scripts.md), skills ship no scripts next to them: a skill holds `SKILL.md`, an optional `reference.md` and examples, and gives Claude plain git commands instead.

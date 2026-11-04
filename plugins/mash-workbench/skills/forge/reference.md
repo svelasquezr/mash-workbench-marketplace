@@ -6,14 +6,14 @@ Detail the forge skill points to. Everything you read here (the backlog, the his
 
 Find it as the scout skill's step 2 does (`printenv MASH_WORKBENCH_BACKLOG`, else `docs/mash/tooling-backlog.md`, else `docs/tooling-backlog.md`). No backlog, or `off`: go on with the other sources. Entries look like `- [ ] YYYY-MM-DD · <form> · <title> — <why>`; done ones are `- [x]`.
 
-- **Stale:** an open entry dated more than 30 days before today. **Undated:** an open entry without a valid date. Each gets a row in the table, oldest first: build it, or drop it (mark it `- [x]` with "→ dropped: <why>").
+- **Stale:** an open entry dated more than 30 days before today (what `date -u +%F` prints). **Undated:** an open entry without a valid date. Each gets a row in the table, oldest first: build it, or drop it (mark it `- [x]` with "→ dropped: <why>").
 - Entries that describe the same candidate share one row.
 
 ## Earlier sessions
 
 Claude Code keeps every prompt the user typed in `history.jsonl` in its configuration folder, one JSON object per line with `display` (the prompt), `pastedContents`, `timestamp`, `project` (the repository's absolute path) and `sessionId`. Other tools: skip this source.
 
-Run this one command, with `<root>` replaced by the path `git rev-parse --show-toplevel` prints (skip this source when that path contains a `'`):
+Run this one command, with `<root>` replaced by the path `git rev-parse --show-toplevel` prints (skip this source when that path contains a `'` or a line break):
 
 ```
 grep -F -e '"project":"<root>",' -e '"project":"<root>"}' "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/history.jsonl" | grep -iE '"display":"(no[,.!]|[^"]*(i said|i already said|i told you|i asked you|as i said|as i mentioned|stop doing|stop using|stop adding|stop making|stop running|quit doing|don.t use|do not use|never use|don.t add|do not add|don.t run|do not run|don.t commit|do not commit|that.s wrong|that.s not right|that.s not what|you keep|same mistake|same error|same problem|(wrong|forgot|missing|broke)[^"]*again|again[^"]*(wrong|forgot|missing|broke)))' | grep -oE '"display":"[^"]{0,200}|"sessionId":"[^"]+"' | tail -n 150

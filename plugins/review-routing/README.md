@@ -25,7 +25,7 @@ To try it without installing: `claude --plugin-dir <path-to>/plugins/review-rout
 
 ## Requirements
 
-`git`. Nothing needs `gh`, GitHub, Python or Node: the review works on a git range, whatever hosts the repository. Escape-ledger links from github.com are normalised; any other http(s) link is kept as given. Built for Claude Code and developed against 2.1.318; older versions are untested. `inspect` reads the project's `CLAUDE.md` and `AGENTS.md` and, where they exist, `.claude/memory/`, `.claude/plans/` and the auto-memory folder under `~/.claude/projects/`.
+`git` and `grep` (plus `mkdir`, `rm` and `date`, which every shell has). Nothing needs `gh`, GitHub, Python or Node: the review works on a git range, whatever hosts the repository. Escape-ledger links from github.com are normalised; any other `https://` link is kept as given, unless it carries credentials or a token, which is refused. Built for Claude Code and developed against 2.1.318; older versions are untested. `inspect` reads the project's `CLAUDE.md` and `AGENTS.md` and, where they exist, `.claude/memory/`, `.claude/plans/` and the auto-memory folder under `~/.claude/projects/`.
 
 ## Opinionated defaults
 
@@ -42,15 +42,17 @@ Every reviewer this plugin runs, including the ones `add-reviewer` writes from i
 
 The hook applies in every project once the plugin is enabled. It runs on every Agent call (a few milliseconds), writes nothing and reads only the call's input. It denies the call when the model is Haiku and the call looks like a review: the agent's name contains `reviewer`, or the prompt contains `SAFE TO LAND` or `Critical / Important / Minor`. Anything else passes, and so does everything when `grep` is missing. The only way to switch it off is to disable the plugin.
 
-For a hard stop on every Haiku subagent, not only reviewers, add `"Agent(model:haiku)"` to `permissions.deny` in your own settings; a plugin cannot ship permission rules.
+You can also add `"Agent(model:haiku)"` to `permissions.deny` in your own settings (a plugin cannot ship permission rules). Per Claude Code's [permissions docs](https://code.claude.com/docs/en/permissions), such a rule matches the model an Agent call passes, so it stops an explicit Haiku dispatch of any agent; it does not see a model set only in an agent file.
 
 ## Fewer permission prompts
 
-`review-changes` runs one plain git command per Bash call: `git diff`, `git --glob-pathspecs diff`, `git log`, `git rev-parse`, and for the check `git --glob-pathspecs ls-files`, `git hash-object` and `git update-index` on a throwaway index; `git log … | grep -E -c` for commit-title rules. To stop being asked for each one, allow them in your settings, for example `"Bash(git diff:*)"`, `"Bash(git --glob-pathspecs:*)"`, `"Bash(git log:*)"` and `"Bash(git rev-parse:*)"`. None of them changes your repository.
+`review-changes` runs one plain git command per Bash call. The routing commands start with `git diff --name-only`, `git --glob-pathspecs diff --name-only`, `git --glob-pathspecs diff --shortstat`, `git log --format=%s --right-only` and `git rev-parse`; the check adds `git --glob-pathspecs ls-files` and `git hash-object`. To stop being asked for those, you can allow exactly these prefixes, for example `"Bash(git --glob-pathspecs diff --name-only:*)"`, `"Bash(git diff --name-only:*)"` and `"Bash(git rev-parse:*)"`.
+
+Keep the rules that narrow. A prefix rule also allows whatever follows the prefix: a broad rule such as `Bash(git log:*)` or `Bash(git --glob-pathspecs:*)` would also allow `--output=<file>` (writes a file anywhere) or any git subcommand, including ones that change your repository. Commands that write (`mkdir -p`, `rm -f`, the redirects that write the diff file, and `git update-index` on the throwaway index) still ask, and that is on purpose.
 
 ## What it writes
 
-Only when you or Claude run the matching skill: the diff file for reviewers under `.git/review-routing/` (`review-changes`), `docs/mash/review-escapes.md` (`add-reviewer` and `review-changes`, one line per missed bug; only after you chose where it lives), `.claude/reviewers.toml` and `.claude/agents/<name>.md` (`add-reviewer`, new reviewers), fix commits for what a review finds (`review-changes`; it never pushes, opens a PR or merges), a line in `CLAUDE.md` naming your check commands when you accept it (`review-changes`), and edits to `CLAUDE.md` or memory files that you approve (`inspect`).
+Only when you or Claude run the matching skill: the diff file for reviewers and, for the check, a throwaway index and its input list (`expect.index`, `expect.list`), all under `.git/review-routing/` and never committed (`review-changes`, `add-reviewer`), `docs/mash/review-escapes.md` (`add-reviewer` and `review-changes`, one line per missed bug; only after you chose where it lives), `.claude/reviewers.toml` and `.claude/agents/<name>.md` (`add-reviewer`, new reviewers), fix commits for what a review finds (`review-changes`; it never pushes, opens a PR or merges), a line in `CLAUDE.md` naming your check commands when you accept it (`review-changes`), and edits to `CLAUDE.md` or memory files that you approve (`inspect`).
 
 ## Upgrading from 0.3
 

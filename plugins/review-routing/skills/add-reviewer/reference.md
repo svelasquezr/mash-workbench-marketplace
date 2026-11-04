@@ -15,7 +15,7 @@ Detail the add-reviewer skill points to. `reviewers.example.toml` shows the keys
 | `[[model_rules]]` `reviewer`, `model`, `commit_regex`, `paths`, `min_added_lines`, `reason` | run `reviewer` on `model` when every condition given holds: `commit_regex` (POSIX extended) matches one of the range's commit subjects, `paths` claims a changed file, at least `min_added_lines` lines were added under `paths` (a moved file's lines count as added). The first matching rule wins; else `default_model` (default reviewer only), else the agent file's `model:` |
 | `[[expect]]` `path`, `reviewers`                                                            | a routing test case: the exact set of reviewers `path` gets; the path need not exist                                                                                                                                                                                                                                                                                               |
 
-`paths` are git glob pathspecs: a folder claims everything under it, `*` stays inside one folder, `**` crosses folders, `*.md` is top-level only, and a `:!<path>` entry leaves paths out of that one rule. Write values in single quotes; the value check refuses `'`, line breaks, a leading `-`, and a leading `:` other than `:!`. Top-level keys go before the first `[[table]]`.
+`paths` are git glob pathspecs: a folder claims everything under it, `*` stays inside one folder, `**` crosses folders, `*.md` is top-level only, and a `:!<path>` entry leaves paths out of that one rule. Write values in single quotes (TOML literal strings), `[[expect]] path` too; the value check refuses `'`, line breaks, a NUL, a leading `-`, and a leading `:` other than `:!`. Top-level keys go before the first `[[table]]`.
 
 ## Writing the agent
 
@@ -35,9 +35,12 @@ Detail the add-reviewer skill points to. `reviewers.example.toml` shows the keys
 Run it after every edit to `.claude/reviewers.toml` or a reviewer agent. First the value check (step 2 of "Routing with git"). Then each item below; report every failure, with the fix, and fix only what the user approves.
 
 1. **Expectations.** Put every `[[expect]]` path into a throwaway index, so paths that don't exist yet can be tested:
-   - `git rev-parse --path-format=absolute --git-path review-routing` prints `<folder>`; `mkdir -p '<folder>'`; `rm -f '<folder>/expect.index'`;
+   - `git rev-parse --path-format=absolute --git-path review-routing` prints `<folder>` (stop if it contains `'` or a line break); `mkdir -p '<folder>'`; `rm -f '<folder>/expect.index'`;
    - `git hash-object -t blob /dev/null` prints `<blob>`;
-   - `printf '100644 <blob>\t%s\n' '<path 1>' '<path 2>' … | GIT_INDEX_FILE='<folder>/expect.index' git update-index --index-info`.
+   - with the Write tool (the paths never go through a shell), write `<folder>/expect.list`: one line per expect path, `100644 <blob>`, a tab (not spaces), the path;
+   - `GIT_INDEX_FILE='<folder>/expect.index' git update-index --index-info < '<folder>/expect.list'`.
+
+   The `GIT_INDEX_FILE=` prefix is mandatory on every command that uses the throwaway index: without it, git writes the empty test files into the real index. Afterwards `git status --short` must show nothing staged that wasn't before.
 
    For each route, `GIT_INDEX_FILE='<folder>/expect.index' git --glob-pathspecs ls-files -- <paths>` prints the expect paths it claims. A path no route claims gets the default reviewer. Each expect passes only when its reviewer set is exactly the one listed (`[[changed_lines]]` don't apply here: there is no diff).
 

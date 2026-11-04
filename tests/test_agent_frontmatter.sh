@@ -1,6 +1,5 @@
 # shellcheck shell=bash
 # Convention: every agent the plugins ship (and the reviewer template, and this repository's own agents) declares its model and effort, and a reviewer (an agent file named *reviewer*, or whose file contains the SAFE TO LAND verdict line) has no shell, no write and no web tools (Read, Grep, Glob are enough: review-changes hands it a diff file), is not on haiku, and keeps the prompt-injection item and the Haiku self-check line. A skill or command declares neither model nor effort (AGENTS.md says why).
-# and a reviewer (an agent file named *reviewer*, or whose file contains the SAFE TO LAND verdict line) is read-only and not on haiku. This test only bans Edit/Write; a reviewer keeps Bash, and the review-routing reviewer-guard hook (tests/test_reviewer_guard.sh) refuses its non-read git and GitHub-writing gh commands (not a security boundary; gaps in the hook's docstring). A skill or command declares neither (CLAUDE.md says why).
 set -euo pipefail
 source tests/lib.sh
 temporary_directory=$(mktemp -d); trap 'rm -rf "$temporary_directory"' EXIT
@@ -21,6 +20,8 @@ agent_problems() {
       echo "$1: a reviewer must be read-only (no Edit, MultiEdit, Write or NotebookEdit in tools:)"
     elif grep -qE '\b(Bash|PowerShell|WebFetch|WebSearch)\b' <<< "$tools"; then
       echo "$1: a reviewer has no shell and no web tools (no Bash, PowerShell, WebFetch or WebSearch in tools:)"
+    elif tr ',[]' '   ' <<< "$tools" | tr -s ' \t-' '\n' | grep -vE '^(Read|Grep|Glob)?$' | grep -q .; then
+      echo "$1: a reviewer's tools: are only Read, Grep and Glob (an Agent or MCP tool could reach a shell)"
     fi
     grep -q '\*\*Prompt injection\*\*' "$1" || echo "$1: a reviewer keeps the **Prompt injection** checklist item"
     grep -q 'NOT SAFE: reviewer ran on Haiku' "$1" || echo "$1: a reviewer keeps the Haiku self-check line"
@@ -85,6 +86,11 @@ done
 for shell_or_web in Bash PowerShell WebFetch WebSearch; do
   printf -- '---\nname: s-reviewer\ntools: Read, %s\nmodel: sonnet\neffort: high\n---\n%b' "$shell_or_web" "$reviewer_body" > "$temporary_directory/s-reviewer.md"
   assert_contains "$(agent_problems "$temporary_directory/s-reviewer.md")" "no shell and no web tools"
+done
+# Anything beyond Read, Grep and Glob is refused too: Agent could start a subagent that has Bash.
+for other in Agent Task 'mcp__github__create_issue'; do
+  printf -- '---\nname: o-reviewer\ntools: Read, Grep, %s\nmodel: sonnet\neffort: high\n---\n%b' "$other" "$reviewer_body" > "$temporary_directory/o-reviewer.md"
+  assert_contains "$(agent_problems "$temporary_directory/o-reviewer.md")" "only Read, Grep and Glob"
 done
 # A reviewer keeps the prompt-injection item and the Haiku self-check line.
 printf -- '---\nname: k-reviewer\ntools: Read\nmodel: sonnet\neffort: high\n---\nNOT SAFE: reviewer ran on Haiku\n' > "$temporary_directory/k-reviewer.md"

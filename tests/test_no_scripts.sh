@@ -45,6 +45,13 @@ for line in listing.splitlines():
         host = match.group(0).split("/")[2].lower()
         if host not in allowed_hosts:
             problems.append(f"{path}: links outside github.com and code.claude.com: {match.group(0)}")
+    if path.endswith(".md") and re.search(r"(?:^|\s)!`[^`\n]+`", text, re.M):
+        problems.append(f"{path}: uses the !`command` syntax, which runs a shell command when the file loads")
+    if name == "SKILL.md":
+        frontmatter = text.split("---", 2)[1] if text.startswith("---") else ""
+        keys = re.findall(r"^([A-Za-z_-]+):", frontmatter, re.M)
+        if sorted(keys) != ["description", "name"]:
+            problems.append(f"{path}: frontmatter holds only name and description (found {', '.join(keys)})")
     if name == ".mcp.json":
         problems.append(f"{path}: an MCP server runs a program")
     if name == "plugin.json":
@@ -72,7 +79,7 @@ PY
 fixture() {
   local repository="$temporary_directory/$1"
   mkdir -p "$repository/plugins/p/skills/s" "$repository/plugins/p/.claude-plugin"
-  printf '# Skill\n\nRun `git diff`. See https://github.com/o/r and https://code.claude.com/docs.\n' > "$repository/plugins/p/skills/s/SKILL.md"
+  printf -- '---\nname: s\ndescription: d\n---\n# Skill\n\nRun `git diff`. See https://github.com/o/r and https://code.claude.com/docs.\n' > "$repository/plugins/p/skills/s/SKILL.md"
   printf '{"name": "p"}\n' > "$repository/plugins/p/.claude-plugin/plugin.json"
   git -C "$repository" init -q && git -C "$repository" add -A
   echo "$repository"
@@ -116,6 +123,12 @@ repository=$(fixture two-hooks); mkdir -p "$repository/plugins/review-routing/ho
 printf '{"hooks": {"PreToolUse": [{"matcher": "Agent", "hooks": [{"type": "command", "command": "exit 0"}, {"type": "prompt", "prompt": "x"}]}]}}\n' > "$repository/plugins/review-routing/hooks/hooks.json"
 git -C "$repository" add -A
 assert_contains "$(shipped_content_problems "$repository")" "exactly one PreToolUse hook"
+
+repository=$(fixture inline-shell); printf 'Status: !`git status`\n' > "$repository/plugins/p/skills/s/z.md"; git -C "$repository" add -A
+assert_contains "$(shipped_content_problems "$repository")" "runs a shell command when the file loads"
+repository=$(fixture skill-hooks)
+printf -- '---\nname: s\ndescription: d\nhooks: {}\n---\nBody.\n' > "$repository/plugins/p/skills/s/SKILL.md"; git -C "$repository" add -A
+assert_contains "$(shipped_content_problems "$repository")" "frontmatter holds only name and description"
 
 # This repository's plugins follow every rule.
 assert_eq "$(shipped_content_problems .)" ""

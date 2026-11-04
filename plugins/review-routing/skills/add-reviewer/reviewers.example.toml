@@ -89,25 +89,25 @@ reason = "the SDK moves money"
 # Routing test cases for the check: the exact set of reviewers each path gets. One per route,
 # plus near misses it must not claim. A path does not have to exist yet.
 [[expect]]
-path = "src/payments/charge.py"
+path = 'src/payments/charge.py'
 reviewers = ["payments-reviewer"]
 
 [[expect]]
-path = "tests/payments/test_charge_refunds.py"
+path = 'tests/payments/test_charge_refunds.py'
 reviewers = ["payments-reviewer"]
 
 [[expect]]
-path = "src/app/payments_page.py" # near miss: the app's payments page is not the payments code
+path = 'src/app/payments_page.py' # near miss: the app's payments page is not the payments code
 reviewers = ["review-routing:change-reviewer"]
 
 [[expect]]
-path = "migrations/0002_add_index.sql"
+path = 'migrations/0002_add_index.sql'
 reviewers = ["database-reviewer"]
 
 [[expect]]
-path = "README.md"
+path = 'README.md'
 reviewers = ["docs-reviewer"]
 
 [[expect]]
-path = "docs/archive/2019.md" # near miss: excluded from the docs route
+path = 'docs/archive/2019.md' # near miss: excluded from the docs route
 reviewers = ["review-routing:change-reviewer"]

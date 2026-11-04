@@ -27,11 +27,11 @@ In Claude Code:
 
 **Only Claude Code is supported today.** The plugins are built and tested there, and nothing has been tried in any other tool. We plan to add support for GitHub Copilot CLI and other coding assistants, but that work has not been done.
 
-What exists so far is groundwork, not support: the skills are plain `SKILL.md` files, a format other tools also read, and the marketplace is mirrored in `.github/plugin/marketplace.json`, the catalog file Copilot CLI documents. Agents, commands and hooks follow Claude Code's formats, so all of `review-routing` (its value is in its agents and hooks) is Claude Code only. Even the portable skills `scout` and `forge` depend on Claude Code for installation, automatic triggering and reading earlier-session prompt history. The reasoning and the open questions are in [docs/decisions/0001-cross-tool-layout.md](docs/decisions/0001-cross-tool-layout.md).
+What exists so far is groundwork, not support: the skills are plain `SKILL.md` files, a format other tools also read, and the marketplace is mirrored in `.github/plugin/marketplace.json`, the catalog file Copilot CLI documents. Agents, commands and hooks follow Claude Code's formats, so all of `review-routing` (its value is in its agents, its routing and its hook) is Claude Code only. Even the portable skills `scout` and `forge` depend on Claude Code for installation, automatic triggering and reading earlier-session prompt history. The reasoning and the open questions are in [docs/decisions/0001-cross-tool-layout.md](docs/decisions/0001-cross-tool-layout.md).
 
 ## Uninstall and support
 
-`/plugin uninstall <plugin>@mash-workbench-marketplace`, and `/plugin marketplace remove mash-workbench-marketplace` to drop the marketplace. Report a problem at https://github.com/svelasquezr/mash-workbench-marketplace/issues. What each plugin writes, and what the `review-routing` hooks do to every session, is in the plugin READMEs.
+`/plugin uninstall <plugin>@mash-workbench-marketplace`, and `/plugin marketplace remove mash-workbench-marketplace` to drop the marketplace. Report a problem at https://github.com/svelasquezr/mash-workbench-marketplace/issues. What each plugin writes, and what the `review-routing` hook does to every session, is in the plugin READMEs.
 
 ## Contributing
 

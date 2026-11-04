@@ -8,32 +8,42 @@ paths = ['plugins', '.claude-plugin', '.github/plugin', 'AGENTS.md', '.claude/ag
 reviewers = ["plugin-safety-reviewer"]
 reason = "runs as instructions on consumers' machines"
 
+# The tests that enforce the no-scripts and reviewer rules: weakening one is a safety change too.
+[[routes]]
+paths = ['tests/test_no_scripts.sh', 'tests/test_agent_frontmatter.sh', 'tests/test_haiku_reviewer_guard.sh', 'scripts/check.sh']
+reviewers = ["plugin-safety-reviewer"]
+reason = "the guards of the no-scripts policy"
+
 # Routing test cases (the add-reviewer skill's check): every path also gets the default reviewer only
 # when no route claims it.
 [[expect]]
-path = "plugins/review-routing/skills/review-changes/SKILL.md"
+path = 'plugins/review-routing/skills/review-changes/SKILL.md'
 reviewers = ["plugin-safety-reviewer"]
 
 [[expect]]
-path = "plugins/review-routing/hooks/hooks.json"
+path = 'plugins/review-routing/hooks/hooks.json'
 reviewers = ["plugin-safety-reviewer"]
 
 [[expect]]
-path = ".claude-plugin/marketplace.json"
+path = '.claude-plugin/marketplace.json'
 reviewers = ["plugin-safety-reviewer"]
 
 [[expect]]
-path = ".claude/agents/plugin-safety-reviewer.md"
+path = '.claude/agents/plugin-safety-reviewer.md'
 reviewers = ["plugin-safety-reviewer"]
 
 [[expect]]
-path = "tests/test_no_scripts.sh" # near miss: repo-only tests never ship
+path = 'tests/test_no_scripts.sh'
+reviewers = ["plugin-safety-reviewer"]
+
+[[expect]]
+path = 'tests/test_skill_references.sh' # near miss: other repo-only tests get the general review
 reviewers = ["review-routing:change-reviewer"]
 
 [[expect]]
-path = "docs/decisions/0004-no-shipped-scripts.md" # near miss: docs stay in the repository
+path = 'docs/decisions/0004-no-shipped-scripts.md' # near miss: docs stay in the repository
 reviewers = ["review-routing:change-reviewer"]
 
 [[expect]]
-path = "plugins-notes.md" # near miss: a top-level file whose name starts like the folder
+path = 'plugins-notes.md' # near miss: a top-level file whose name starts like the folder
 reviewers = ["review-routing:change-reviewer"]

