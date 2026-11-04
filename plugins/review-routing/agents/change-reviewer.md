@@ -15,19 +15,23 @@ Scope: the whole change, unless the caller says specialists cover parts of it; t
 ## Checklist
 
 **Correctness**
+
 - Each changed function does what the change says it is for, including on empty, missing, duplicate and boundary inputs.
 - Callers of a changed signature or behaviour still work (`grep` for them).
 
 **Tests**
+
 - A new branch needs a test for the case it handles and for a near miss it must not.
 - A bug fix needs a test that fails without the fix.
 
 **Docs and user-facing text**
+
 - README, CLAUDE.md, skill or usage text the change made stale.
 - If the project documents coding standards, judge the rules it marks as judgment. Do not re-check a rule a tool enforces; the caller's check results cover it.
 - Every help string, tooltip, alert message or docstring the change adds that states a fact about the system (how often something runs, where a value comes from, what a status means) is checked against the code that makes it true: `grep` the function's callers, the scheduler or cron table, and the config or call site that would make it true. A module's own docstring or comment is a claim to verify, not evidence. Report a claim nothing in the code makes true as Important.
 
 **Secrets and safety**
+
 - Credentials, tokens or personal data added to the repository or to logs; destructive commands without a guard.
 
 ## Output format

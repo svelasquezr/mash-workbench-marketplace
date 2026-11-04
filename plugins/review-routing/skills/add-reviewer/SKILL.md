@@ -6,6 +6,7 @@ description: Use when a class of bug slipped through review twice in the same ar
 # Add a specialist reviewer
 
 A specialist reviewer earns its place. Add one when:
+
 - **a class of bug slipped through review twice in the same area**: its checklist is built from those bugs. The count comes from the project's escape ledger, not memory: `bash <this skill's base directory>/escapes-report.sh <repo-root>` names each area with two or more escapes (an escape is a bug in code a review passed, found later by anyone: a person, CI or a later reviewer; one line per bug, keyed by its issue link; `bash <this skill's base directory>/escape-add.sh <repo-root> <area-directory> <class> <issue link>` records one; with no ledger chosen yet it exits 3 and writes nothing: follow the escapes section of `<this skill's base directory>/../review-changes/reference.md`; the area is the directory a route claims, never a file); or
 - **the user names an area where one mistake is expensive** (money, auth and security, data migrations, a public API contract, infrastructure). This is usually how the first specialist starts.
 
@@ -27,7 +28,7 @@ Below, `route` means `python3 <this skill's base directory>/../review-changes/re
    - `[[routes]]` for the area's paths;
    - once per project, a `[[mirrors]]` entry so a test counts as the code it tests;
    - `[[changed_lines]]` when a line in a shared file belongs to the area.
-   Details: "Routing details" in the reference.
+     Details: "Routing details" in the reference.
 4. **Add routing test cases:** for each new route, an `[[expect]]` for a path it must claim, one for a near miss it must not (for `^src/payments/`, `src/app/payments_page.py`), and one for a test file through the mirror.
 5. **Check:** `route --check` until it passes; preview with `route --paths <file>... --explain`. Never add a pattern just to quiet `--check` for a path that belongs to a specialist; list in `allow_default` only the paths a general review is enough for, each with a comment. What it fails on: "Checking" in the reference.
 6. **CLAUDE.md:** if it isn't there yet, add one rule: "Review every change with the agents `.claude/reviewers.toml` routes it to (the review-changes skill); pass them the test and lint results."

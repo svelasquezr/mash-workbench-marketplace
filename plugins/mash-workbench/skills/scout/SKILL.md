@@ -15,6 +15,7 @@ Capture, don't build. The current task comes first.
    - **mcp**: access to an external system
 
    Use `unsure` if it's unclear.
+
 2. Run `bash <this skill's base directory>/backlog-add.sh "<repo-root>" <form> "<short title>" "<why: what repeated or what went wrong>"`, where `<repo-root>` is the literal path `git rev-parse --show-toplevel` prints (run it on its own, not inside `$( )`, which some permission setups refuse). Outside a git repository use the project folder.
    - Exit 3 means the project has no backlog yet, and nothing was written. Ask the user, in one question, where to keep it: `docs/mash/tooling-backlog.md`, another file, or nowhere. Re-run with `--create` or `--file <path>`, and offer to add the new file to `.gitignore` (recommend committing it: an ignored backlog holds only this user's entries). For another file or nowhere, offer to add `{"env": {"MASH_WORKBENCH_BACKLOG": "<path, or off>"}}` to `.claude/settings.local.json` (only this user) or `.claude/settings.json` (the whole project), so later sessions don't ask again.
    - A message that the backlog is off: say nothing and continue the task.
