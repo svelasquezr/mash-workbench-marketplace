@@ -66,3 +66,33 @@ assert_contains "$(git --glob-pathspecs diff --shortstat --no-renames "$R" -- 's
 assert_eq "$(git log --format='%h %s' --right-only "$R" | wc -l | tr -d ' ')" "2"
 # A fix round's two-dot range works with --right-only too.
 assert_eq "$(git log --format=%s --right-only "$base..$head" | grep -E -c '^chore')" "1"
+
+# Step 3 is its own line, not only a substring of the longer commands.
+# shellcheck disable=SC2016  # literal Markdown
+assert_contains "$reference" '**Changed paths:** `git diff --name-only --no-renames <R>`'
+
+# "Recording escapes": the duplicate check matches the link as the whole last field (Claude's Grep tool is ripgrep;
+# Python's re reads this pattern the same way), so #1 is not taken for #12, and trailing blanks or CRLF don't hide one.
+# shellcheck disable=SC2016  # literal Markdown
+assert_contains "$reference" 'the pattern ` · <link>\s*$`'
+printf -- '- 2026-01-01 · src/a · wrong-result · https://github.com/o/r/issues/12\n- 2026-01-02 · src/a · wrong-result · https://github.com/o/r/issues/7 \r\n' > ledger.md
+is_recorded() { python3 -c 'import re, sys; print(bool(re.search(" · " + re.escape(sys.argv[1]) + r"\s*$", open("ledger.md").read(), re.M)))' "$1"; }
+assert_eq "$(is_recorded https://github.com/o/r/issues/1)" "False"
+assert_eq "$(is_recorded https://github.com/o/r/issues/12)" "True"
+assert_eq "$(is_recorded https://github.com/o/r/issues/7)" "True"
+
+# add-reviewer's "The check": expect paths go through a list file (written with the Write tool, never a shell) into a
+# throwaway index; the real index is untouched.
+check_text=$(cat "$OLDPWD/plugins/review-routing/skills/add-reviewer/reference.md")
+# shellcheck disable=SC2016  # literal Markdown
+for documented in 'git hash-object -t blob /dev/null' \
+  "GIT_INDEX_FILE='<folder>/expect.index' git update-index --index-info < '<folder>/expect.list'" \
+  '`100644 <blob>`, a tab (not spaces), the path' "GIT_INDEX_FILE='<folder>/expect.index' git --glob-pathspecs ls-files -- <paths>"; do
+  assert_contains "$check_text" "$documented"
+done
+folder=$(git rev-parse --path-format=absolute --git-path review-routing); mkdir -p "$folder"
+blob=$(git hash-object -t blob /dev/null)
+printf "100644 $blob\t%s\n" "src/payments/new_module.py" "src/app/payments_page.py" "it's a path.md" > "$folder/expect.list"
+GIT_INDEX_FILE="$folder/expect.index" git update-index --index-info < "$folder/expect.list"
+assert_eq "$(GIT_INDEX_FILE="$folder/expect.index" git --glob-pathspecs ls-files -- 'src/payments' 'tests/payments' | lines)" "src/payments/new_module.py"
+assert_eq "$(git status --short | lines)" "?? ledger.md"

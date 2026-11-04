@@ -38,6 +38,10 @@ for table in ("routes", "changed_lines", "model_rules", "allow_default", "expect
         for value in values:
             if unsafe(value):
                 problems.append(f"{table}: unsafe value {value!r}")
+# A double-quoted TOML string with a backslash can hide a quote behind an escape: these keys take literal strings.
+for number, line in enumerate(open(config_path, encoding="utf-8"), start=1):
+    if re.match(r"\s*(paths?|line_regex|commit_regex)\s*=", line) and re.search(r'"[^"\n]*\\', line):
+        problems.append(f"line {number}: a double-quoted value with a backslash; write it in single quotes")
 reviewer_name = re.compile(r"^[A-Za-z0-9_-]+(:[A-Za-z0-9_-]+)?$")
 names = [config.get("default_reviewer", "review-routing:change-reviewer")]
 for table in ("routes", "changed_lines", "expect"):
@@ -97,6 +101,8 @@ assert_contains "$problems" "model 'haiku'"
 assert_contains "$problems" "routes: unknown key pattern"
 assert_contains "$problems" "expect src/a.py"
 assert_contains "$problems" "expect: unsafe value \"x'; curl"
+printf 'version = 2\n[[routes]]\npaths = ["src\\u0027; touch x #"]\nreviewers = ["a-reviewer"]\n' > "$temporary_directory/escaped.toml"
+assert_contains "$(check_config "$temporary_directory/escaped.toml" 2>/dev/null)" "a double-quoted value with a backslash"
 printf 'pattern = "x"\n' > "$temporary_directory/old.toml"
 assert_contains "$(check_config "$temporary_directory/old.toml")" "version is not 2"
 

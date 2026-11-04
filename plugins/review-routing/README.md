@@ -25,7 +25,7 @@ To try it without installing: `claude --plugin-dir <path-to>/plugins/review-rout
 
 ## Requirements
 
-`git` and `grep` (plus `mkdir`, `rm` and `date`, which every shell has). Nothing needs `gh`, GitHub, Python or Node: the review works on a git range, whatever hosts the repository. Escape-ledger links from github.com are normalised; any other `https://` link is kept as given, unless it carries credentials or a token, which is refused. Built for Claude Code and developed against 2.1.318; older versions are untested. `inspect` reads the project's `CLAUDE.md` and `AGENTS.md` and, where they exist, `.claude/memory/`, `.claude/plans/` and the auto-memory folder under `~/.claude/projects/`.
+`git` and `grep` (plus `mkdir`, `rm` and `date`, which every Unix-like system has). Nothing needs `gh`, GitHub, Python or Node: the review works on a git range, whatever hosts the repository. Escape-ledger links from github.com are normalised; any other `https://` link is kept as given, unless it carries credentials or a token, which is refused. Built for Claude Code and developed against 2.1.318; older versions are untested. `inspect` reads the project's `CLAUDE.md` and `AGENTS.md` and, where they exist, `.claude/memory/`, `.claude/plans/` and the auto-memory folder under `~/.claude/projects/`.
 
 ## Opinionated defaults
 
@@ -42,13 +42,11 @@ Every reviewer this plugin runs, including the ones `add-reviewer` writes from i
 
 The hook applies in every project once the plugin is enabled. It runs on every Agent call (a few milliseconds), writes nothing and reads only the call's input. It denies the call when the model is Haiku and the call looks like a review: the agent's name contains `reviewer`, or the prompt contains `SAFE TO LAND` or `Critical / Important / Minor`. Anything else passes, and so does everything when `grep` is missing. The only way to switch it off is to disable the plugin.
 
-You can also add `"Agent(model:haiku)"` to `permissions.deny` in your own settings (a plugin cannot ship permission rules). Per Claude Code's [permissions docs](https://code.claude.com/docs/en/permissions), such a rule matches the model an Agent call passes, so it stops an explicit Haiku dispatch of any agent; it does not see a model set only in an agent file.
+You can also add `"Agent(model:haiku)"` to `permissions.deny` in your own settings (a plugin cannot ship permission rules). Tested with Claude Code 2.1.318: an Agent call that passes `model: haiku` is then denied for any agent (see Claude Code's [permissions docs](https://code.claude.com/docs/en/permissions)); the rule does not see a model set only in an agent file.
 
-## Fewer permission prompts
+## Permission prompts
 
-`review-changes` runs one plain git command per Bash call. The routing commands start with `git diff --name-only`, `git --glob-pathspecs diff --name-only`, `git --glob-pathspecs diff --shortstat`, `git log --format=%s --right-only` and `git rev-parse`; the check adds `git --glob-pathspecs ls-files` and `git hash-object`. To stop being asked for those, you can allow exactly these prefixes, for example `"Bash(git --glob-pathspecs diff --name-only:*)"`, `"Bash(git diff --name-only:*)"` and `"Bash(git rev-parse:*)"`.
-
-Keep the rules that narrow. A prefix rule also allows whatever follows the prefix: a broad rule such as `Bash(git log:*)` or `Bash(git --glob-pathspecs:*)` would also allow `--output=<file>` (writes a file anywhere) or any git subcommand, including ones that change your repository. Commands that write (`mkdir -p`, `rm -f`, the redirects that write the diff file, and `git update-index` on the throwaway index) still ask, and that is on purpose.
+`review-changes` runs one plain git command per Bash call, so each one can be approved on its own. Allowing `"Bash(git rev-parse:*)"` is safe: `rev-parse` only prints. Think twice before allowing any `git diff` or `git log` prefix, however narrow (`Bash(git diff --name-only:*)` included): both commands accept `--output=<file>`, so such a rule also lets Claude write any file you can write without asking. Commands that write on purpose (`mkdir -p`, `rm -f`, the redirects that write the diff file, `git update-index` on the throwaway index) should keep asking.
 
 ## What it writes
 

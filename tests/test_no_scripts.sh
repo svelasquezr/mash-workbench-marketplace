@@ -45,11 +45,15 @@ for line in listing.splitlines():
         host = match.group(0).split("/")[2].lower()
         if host not in allowed_hosts:
             problems.append(f"{path}: links outside github.com and code.claude.com: {match.group(0)}")
-    if path.endswith(".md") and re.search(r"(?:^|\s)!`[^`\n]+`", text, re.M):
-        problems.append(f"{path}: uses the !`command` syntax, which runs a shell command when the file loads")
+    if path.endswith(".md"):
+        # Claude Code runs !`command` (a code span opened right after "!") and a fence opened as ```! when a skill
+        # loads. Walk the code spans, so a span that merely contains "!" (such as `:!`) is not mistaken for one.
+        inline = any(text[m.start() - 1:m.start()] == "!" for m in re.finditer(r"`[^`\n]+`", text))
+        if inline or re.search(r"^\s*(?:```|~~~)\s*!", text, re.M):
+            problems.append(f"{path}: uses the !`command` syntax, which runs a shell command when the file loads")
     if name == "SKILL.md":
         frontmatter = text.split("---", 2)[1] if text.startswith("---") else ""
-        keys = re.findall(r"^([A-Za-z_-]+):", frontmatter, re.M)
+        keys = re.findall(r"^[\"']?([A-Za-z_-]+)[\"']?\s*:", frontmatter, re.M)
         if sorted(keys) != ["description", "name"]:
             problems.append(f"{path}: frontmatter holds only name and description (found {', '.join(keys)})")
     if name == ".mcp.json":
@@ -126,6 +130,16 @@ assert_contains "$(shipped_content_problems "$repository")" "exactly one PreTool
 
 repository=$(fixture inline-shell); printf 'Status: !`git status`\n' > "$repository/plugins/p/skills/s/z.md"; git -C "$repository" add -A
 assert_contains "$(shipped_content_problems "$repository")" "runs a shell command when the file loads"
+for form in '(!`curl x`)' '```!\ncurl x\n```' '~~~ !\ncurl x\n~~~'; do
+  repository=$(fixture "inline-$RANDOM"); printf -- "Text\n%b\n" "$form" > "$repository/plugins/p/skills/s/z.md"; git -C "$repository" add -A
+  assert_contains "$(shipped_content_problems "$repository")" "runs a shell command when the file loads"
+done
+# A code span that only contains "!" is fine.
+repository=$(fixture bang-in-span); printf 'Refuse a leading `:` other than `:!`, keep `a!b`.\n' > "$repository/plugins/p/skills/s/z.md"; git -C "$repository" add -A
+assert_eq "$(shipped_content_problems "$repository")" ""
+repository=$(fixture quoted-key)
+printf -- '---\nname: s\ndescription: d\n"hooks": {}\n---\nBody.\n' > "$repository/plugins/p/skills/s/SKILL.md"; git -C "$repository" add -A
+assert_contains "$(shipped_content_problems "$repository")" "frontmatter holds only name and description"
 repository=$(fixture skill-hooks)
 printf -- '---\nname: s\ndescription: d\nhooks: {}\n---\nBody.\n' > "$repository/plugins/p/skills/s/SKILL.md"; git -C "$repository" add -A
 assert_contains "$(shipped_content_problems "$repository")" "frontmatter holds only name and description"
