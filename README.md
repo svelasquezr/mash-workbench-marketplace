@@ -1,6 +1,6 @@
 # mash-workbench-marketplace
 
-A plugin marketplace for Claude Code (support for GitHub Copilot CLI and other coding agents is planned, not yet available), under the brand **MASH**: **M**emories, **A**gents, **S**kills, **H**ooks. These are the places an instruction to a coding agent can live. Scripts and MCP servers are the other two rungs of the same ladder, and the plugins here treat them as first-class: the aim is to put each rule in the most deterministic place that fits (hook, then script, then skill, then agent, then MCP server) instead of leaving it as prose the agent may forget.
+A plugin marketplace for Claude Code (support for GitHub Copilot CLI and other coding agents is planned, not yet available), under the brand **MASH**: **M**emories, **A**gents, **S**kills, **H**ooks. These are the places an instruction to a coding agent can live. Scripts and MCP servers are the other two rungs of the same ladder: the aim is to put each rule in the most deterministic place that fits (hook, then script, then skill, then agent, then MCP server) instead of leaving it as prose the agent may forget. The plugins themselves ship no scripts: their skills hand the exact work to git, and their reviewers have no shell ([docs/decisions/0004-no-shipped-scripts.md](docs/decisions/0004-no-shipped-scripts.md)).
 
 ## Plugins
 
@@ -11,7 +11,7 @@ A plugin marketplace for Claude Code (support for GitHub Copilot CLI and other c
 
 ## Requirements
 
-Claude Code, with `git`, `bash` and `python3` 3.11 or newer on your PATH (the scripts and hooks use the standard library only).
+Claude Code and `git`. Nothing else to install: the plugins ship only Markdown, JSON and TOML.
 
 ## Install
 
@@ -27,7 +27,7 @@ In Claude Code:
 
 **Only Claude Code is supported today.** The plugins are built and tested there, and nothing has been tried in any other tool. We plan to add support for GitHub Copilot CLI and other coding assistants, but that work has not been done.
 
-What exists so far is groundwork, not support: the skills are plain `SKILL.md` files, a format other tools also read, and the marketplace is mirrored in `.github/plugin/marketplace.json`, the catalog file Copilot CLI documents. Agents, commands and hooks follow Claude Code's formats, so all of `review-routing` (its value is in its agents and hooks) is Claude Code only. Even the portable skills `scout` and `forge` depend on Claude Code for installation, automatic triggering and reading earlier-session transcripts. The reasoning and the open questions are in [docs/decisions/0001-cross-tool-layout.md](docs/decisions/0001-cross-tool-layout.md).
+What exists so far is groundwork, not support: the skills are plain `SKILL.md` files, a format other tools also read, and the marketplace is mirrored in `.github/plugin/marketplace.json`, the catalog file Copilot CLI documents. Agents, commands and hooks follow Claude Code's formats, so all of `review-routing` (its value is in its agents and hooks) is Claude Code only. Even the portable skills `scout` and `forge` depend on Claude Code for installation, automatic triggering and reading earlier-session prompt history. The reasoning and the open questions are in [docs/decisions/0001-cross-tool-layout.md](docs/decisions/0001-cross-tool-layout.md).
 
 ## Uninstall and support
 

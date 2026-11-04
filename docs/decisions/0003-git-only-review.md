@@ -13,3 +13,7 @@
 - Pros: works on any host; no merge-strategy assumptions; no noise on the PR; one fewer external dependency.
 - Cons: no review record on the PR (the reviewer-written findings live in the session); a future `gh` skill must re-implement `--pr` routing, recoverable from git history; `reviewer-guard` still refuses `gh` writes by reviewers, as protection.
 - `find-checks.sh` lists candidate checks but the user confirms before anything runs: a guessed command could do harm; the cost is one question.
+
+## Update
+
+`find-checks.sh` and `reviewer-guard` are gone since [0004](0004-no-shipped-scripts.md): review-changes lists check-command candidates itself (the user still confirms before anything runs), and reviewers have no shell, so they cannot run `gh` at all.
