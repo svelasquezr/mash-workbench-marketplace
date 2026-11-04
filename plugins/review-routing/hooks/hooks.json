@@ -1,5 +1,5 @@
 {
-  "description": "haiku-reviewer-guard: refuse a reviewer agent launched on Haiku; reviewer-guard: refuse a reviewer's Bash git commands that change a real checkout and gh commands that write to GitHub",
+  "description": "Denies a reviewer agent launched on Haiku (inline shell and grep; no script file). Fails open when grep is missing or the input is not what it expects.",
   "hooks": {
     "PreToolUse": [
       {
@@ -7,17 +7,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "command -v python3 >/dev/null 2>&1 || exit 0; exec python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/haiku-reviewer-guard.py\"",
-            "timeout": 10
-          }
-        ]
-      },
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "command -v python3 >/dev/null 2>&1 || exit 0; exec python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/reviewer-guard.py\"",
+            "command": "command -v grep >/dev/null || exit 0; i=$(cat); printf '%s' \"$i\" | grep -Eiq '\"model\" *: *\"[^\"]*haiku' && printf '%s' \"$i\" | grep -Eq '\"subagent_type\" *: *\"[^\"]*reviewer|SAFE TO LAND|Critical / Important / Minor' && { echo \"review-routing: reviewers never run on Haiku; dispatch on sonnet, opus or fable\" >&2; exit 2; }; exit 0",
             "timeout": 10
           }
         ]

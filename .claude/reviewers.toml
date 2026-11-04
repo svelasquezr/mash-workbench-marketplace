@@ -1,0 +1,39 @@
+# Which reviewer agents review which paths of this repository (review-routing's review-changes skill).
+# Format: plugins/review-routing/skills/add-reviewer/reviewers.example.toml.
+version = 2
+
+# Everything this marketplace ships to other people's machines, and the rules for writing it.
+[[routes]]
+paths = ['plugins', '.claude-plugin', '.github/plugin', 'AGENTS.md', '.claude/agents', '.claude/reviewers.toml']
+reviewers = ["plugin-safety-reviewer"]
+reason = "runs as instructions on consumers' machines"
+
+# Routing test cases (the add-reviewer skill's check): every path also gets the default reviewer only
+# when no route claims it.
+[[expect]]
+path = "plugins/review-routing/skills/review-changes/SKILL.md"
+reviewers = ["plugin-safety-reviewer"]
+
+[[expect]]
+path = "plugins/review-routing/hooks/hooks.json"
+reviewers = ["plugin-safety-reviewer"]
+
+[[expect]]
+path = ".claude-plugin/marketplace.json"
+reviewers = ["plugin-safety-reviewer"]
+
+[[expect]]
+path = ".claude/agents/plugin-safety-reviewer.md"
+reviewers = ["plugin-safety-reviewer"]
+
+[[expect]]
+path = "tests/test_no_scripts.sh" # near miss: repo-only tests never ship
+reviewers = ["review-routing:change-reviewer"]
+
+[[expect]]
+path = "docs/decisions/0004-no-shipped-scripts.md" # near miss: docs stay in the repository
+reviewers = ["review-routing:change-reviewer"]
+
+[[expect]]
+path = "plugins-notes.md" # near miss: a top-level file whose name starts like the folder
+reviewers = ["review-routing:change-reviewer"]

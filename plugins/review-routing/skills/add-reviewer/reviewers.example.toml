@@ -1,12 +1,26 @@
 # .claude/reviewers.toml: which reviewer agents review which paths of this project.
-# Read by the review-routing plugin's reviewers-for-change.py (the review-changes skill runs it);
-# `reviewers-for-change.py --check` tests this file. Patterns are Python regular expressions,
-# searched in repository-relative paths (forward slashes): anchor them with ^ and escape dots.
+#
+# The review-changes skill reads this file and asks git which changed files each rule claims,
+# so every match is made by git itself, the same way every time. The add-reviewer skill writes
+# and checks it.
+#
+# Paths are git glob pathspecs, relative to the repository root:
+#   'src/payments'           the folder and everything under it
+#   'src/payments/*.py'      .py files directly in that folder (* stops at a /)
+#   'tests/**/test_charge*'  ** crosses folders
+#   '*.md'                   Markdown files at the top level only
+#   ':!docs/archive'         inside a list: leave these paths out of this rule
+# Write every value in single quotes ('...'): review-changes refuses a value that contains a
+# single quote or a line break, or that starts with - or with : (only :! is allowed).
+#
 # Top-level keys come first: TOML puts every key after a [[table]] header into that table.
 
-# Optional: who reviews a path no route and no fallback claims. The default is this plugin's
-# read-only change-reviewer (Sonnet); "general-purpose" still works but can edit files and has no
-# model of its own (review-changes starts it on sonnet when --models prints "-").
+# Required: the format of this file. Version 1 files (regex patterns) are for review-routing 0.3;
+# the add-reviewer skill's "Migrating from 0.3" converts them.
+version = 2
+
+# Optional: who reviews a changed path that no route claims. Default: this plugin's read-only
+# change-reviewer. It must be a read-only reviewer agent: "general-purpose" is refused.
 # default_reviewer = "review-routing:change-reviewer"
 
 # Optional: the model the default reviewer runs on here: sonnet, opus or fable (never haiku).
@@ -14,95 +28,66 @@
 # default_model = "opus"
 
 # Optional: the tracked paths that may get only the default reviewer, each with a reason. With
-# it, --check fails when a new file falls through to the default, so a new module can't silently
-# miss its specialist. Without it, --check skips that coverage check and says so.
+# it, the check fails when a tracked file falls through to the default without being listed, so
+# a new module can't silently miss its specialist. Without it, the check skips that test.
 allow_default = [
-  { pattern = '^src/app/', reason = "application glue: a general review is enough" },
-  { pattern = '^package\.json$', reason = "dependency bumps; the payments SDK has its own rule" },
-  '^\.claude/',       # a plain pattern works too; `route --explain` then shows no reason
+  { paths = ['src/app'], reason = "application glue: a general review is enough" },
+  { paths = ['package.json', 'package-lock.json'], reason = "dependency bumps; the payments SDK has its own rule below" },
+  { paths = ['.claude'], reason = "agent tooling" },
 ]
 
-# A path gets every reviewer whose route matches it; one route may name several reviewers.
-# `reason` (optional, on routes, fallbacks and changed_lines) shows in `route --explain`.
+# A changed path gets every reviewer whose route claims it; one route may name several reviewers.
+# List a module's tests next to its code, so a test change reaches the same reviewer.
+# `reason` (optional) is shown in the review-changes preview table.
 [[routes]]
-pattern = '^src/payments/'
+paths = ['src/payments', 'tests/payments']
 reviewers = ["payments-reviewer"]
 reason = "moves money"
 
 [[routes]]
-pattern = '^migrations/'
+paths = ['migrations']
 reviewers = ["database-reviewer"]
 
 [[routes]]
-pattern = '^(docs/|CLAUDE\.md$)'
+paths = ['docs', '*.md', ':!docs/archive']
 reviewers = ["docs-reviewer"]
+reason = "user-facing docs; the archive is history"
 
-# A test also counts as the code it tests; the first mirror that matches is used. \g<name>
-# inserts a named group. shorter_names: tests/payments/test_charge_refunds.py also stands for
-# src/payments/charge.py (`_<part>`s dropped from the end of the name).
-[[mirrors]]
-pattern = '^tests/(?P<folders>(?:[^/]+/)*)test_(?P<name>[^/]+)$'
-source = 'src/\g<folders>\g<name>'
-shorter_names = true
-
-# A changed line (added or removed, not context) matching line_pattern, in a file matching
-# path_pattern, adds the reviewers: bumping the payments SDK changes how money moves. The pattern
-# sees the line without the diff's +/-, so '^' anchors at its content.
+# A changed line (added or removed) that matches line_regex, in a file the paths claim, adds the
+# reviewers: bumping the payments SDK changes how money moves. line_regex is a POSIX extended
+# regex (git diff -G): no \d, no lookahead; ^ anchors at the line's content.
+# ignore_case = true matches upper and lower case alike.
 [[changed_lines]]
-path_pattern = '^package(-lock)?\.json$'
-line_pattern = 'payments-sdk'
+paths = ['package.json', 'package-lock.json']
+line_regex = 'payments-sdk'
+ignore_case = true
 reviewers = ["payments-reviewer"]
 reason = "the SDK moves money"
 
-# Only for a path no route claims; the first match wins. Anything else gets default_reviewer.
-[[fallbacks]]
-pattern = '\.md$'
-reviewers = ["docs-reviewer"]
-
-# Optional: a stronger model for one reviewer when a change is risky; every condition given must
-# hold (title_pattern checks the range's commit subjects, any one matching;
-# --title sets one for a preview). The first matching rule wins; without one, default_model applies
-# (default reviewer only), else the agent file's model. A --paths preview has no line counts, so a
-# rule with min_added_lines never holds there.
+# Optional: a stronger model for one reviewer when a change is risky. Every condition given must
+# hold: commit_regex (POSIX extended) matches one of the change's commit subjects; paths claims a
+# changed file; min_added_lines (needs paths) lines or more were added under those paths. The
+# first matching rule wins; without one, default_model applies (default reviewer only), else the
+# agent file's model.
 # Sizing policy: reviewers run on Sonnet by default (their agent file); Opus for substantial logic;
-# Fable for design, or for the area where one miss is most expensive. Never Haiku: a reviewer is
-# chosen for judgment, and any Haiku spelling is a config error. min_added_lines needs a path_pattern.
-# Layout: each rule runs from its "# [[model_rules]]" line to the next empty line and holds only
-# commented TOML (the routing test uncomments them and runs --check).
+# Fable for design, or for the area where one miss is most expensive. Never Haiku.
 # [[model_rules]]
 # reviewer = "payments-reviewer"
 # model = "fable"
-# title_pattern = '^feat'
-# path_pattern = '^src/payments/'
+# commit_regex = '^feat'
+# paths = ['src/payments']
 # min_added_lines = 40
 # reason = "new payment code: a design review where one miss moves money"
 
-# Substantial logic: 150 or more lines added under migrations/ in one change (summed over the
-# files the pattern matches) gets Opus.
 # [[model_rules]]
 # reviewer = "database-reviewer"
 # model = "opus"
-# path_pattern = '^migrations/'
+# paths = ['migrations']
 # min_added_lines = 150
 # reason = "150+ migration lines in one change is substantial logic"
 
-# Optional (illustrative; adapt the modules and allows): an import guard. The code a critical entry
-# point imports must reach that area's reviewer, so a new module the payment code starts to use
-# can't slip past it. --check walks the imports (Python, read with ast; nothing runs) and fails on
-# a file that is neither routed to the reviewer nor allowed with a reason. `route --explain` shows
-# the import chain of a changed file.
-# [[import_guards]]
-# name = "payment path"
-# language = "python"
-# source_dirs = ["src"]
-# entry_modules = ["payments.charge"]
-# reviewer = "payments-reviewer"
-# allow = [
-#   { path = "src/payments/__init__.py", reason = "package marker" },
-#   { pattern = '^src/payments/formatting/', reason = "string formatting, no money moves" },
-# ]
-
-# Routing test cases, checked by --check: one per route, plus near misses it must not claim.
+# Routing test cases for the check: the exact set of reviewers each path gets. One per route,
+# plus near misses it must not claim. A path does not have to exist yet.
 [[expect]]
 path = "src/payments/charge.py"
 reviewers = ["payments-reviewer"]
@@ -112,7 +97,7 @@ path = "tests/payments/test_charge_refunds.py"
 reviewers = ["payments-reviewer"]
 
 [[expect]]
-path = "src/app/payments_page.py"  # near miss: the app's payments page is not the payments code
+path = "src/app/payments_page.py" # near miss: the app's payments page is not the payments code
 reviewers = ["review-routing:change-reviewer"]
 
 [[expect]]
@@ -122,3 +107,7 @@ reviewers = ["database-reviewer"]
 [[expect]]
 path = "README.md"
 reviewers = ["docs-reviewer"]
+
+[[expect]]
+path = "docs/archive/2019.md" # near miss: excluded from the docs route
+reviewers = ["review-routing:change-reviewer"]
