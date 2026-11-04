@@ -44,6 +44,10 @@ The hook applies in every project once the plugin is enabled. It runs on every A
 
 For a hard stop on every Haiku subagent, not only reviewers, add `"Agent(model:haiku)"` to `permissions.deny` in your own settings; a plugin cannot ship permission rules.
 
+## Fewer permission prompts
+
+`review-changes` runs one plain git command per Bash call: `git diff`, `git --glob-pathspecs diff`, `git log`, `git rev-parse`, and for the check `git --glob-pathspecs ls-files`, `git hash-object` and `git update-index` on a throwaway index; `git log … | grep -E -c` for commit-title rules. To stop being asked for each one, allow them in your settings, for example `"Bash(git diff:*)"`, `"Bash(git --glob-pathspecs:*)"`, `"Bash(git log:*)"` and `"Bash(git rev-parse:*)"`. None of them changes your repository.
+
 ## What it writes
 
 Only when you or Claude run the matching skill: the diff file for reviewers under `.git/review-routing/` (`review-changes`), `docs/mash/review-escapes.md` (`add-reviewer` and `review-changes`, one line per missed bug; only after you chose where it lives), `.claude/reviewers.toml` and `.claude/agents/<name>.md` (`add-reviewer`, new reviewers), fix commits for what a review finds (`review-changes`; it never pushes, opens a PR or merges), a line in `CLAUDE.md` naming your check commands when you accept it (`review-changes`), and edits to `CLAUDE.md` or memory files that you approve (`inspect`).
