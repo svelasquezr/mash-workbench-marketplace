@@ -54,12 +54,23 @@ for line in listing.splitlines():
         span_after_bang = any(text[m.start() - 1:m.start()] == "!" for m in re.finditer(r"`[^`\n]+`", text))
         if claude_inline or span_after_bang or "```!" in text:
             problems.append(f"{path}: uses the !`command` syntax, which runs a shell command when the file loads")
-    if name == "SKILL.md":
-        frontmatter = text.split("---", 2)[1] if text.startswith("---") else ""
-        # Every top-level key, quoted or escaped spellings included: anything but plain name and description fails.
-        keys = [key.strip() for key in re.findall(r"^(?![\s#-])([^:\n]+):", frontmatter, re.M)]
-        if sorted(keys) != ["description", "name"]:
-            problems.append(f"{path}: frontmatter holds only name and description (found {', '.join(keys)})")
+    # Frontmatter is allow-listed line by line, so no YAML trick (an explicit "? hooks" key, a lone carriage return as
+    # a line break, quoted or escaped keys, anchors) can smuggle in a key such as hooks:, which runs commands.
+    if name.lower() == "skill.md" and name != "SKILL.md":
+        problems.append(f"{path}: name a skill file SKILL.md exactly")
+    is_agent = re.fullmatch(r"plugins/[^/]+/agents/[^/]+\.md", path) is not None
+    if name == "SKILL.md" or is_agent:
+        allowed = ("name", "description") if name == "SKILL.md" else ("name", "description", "tools", "model", "effort")
+        plain = r"[^\s#&*!|>'\"%@`{\[?,:\-](?:(?!: | #)[^\x00-\x1f\x7f\x85\u2028\u2029])*"
+        quoted = r'"[^"\\\x00-\x1f\x7f\x85\u2028\u2029]*"' if is_agent else r"(?!)"
+        line_rule = re.compile(rf"({'|'.join(allowed)}): (?:{plain}|{quoted})")
+        head = text.split("---", 2)[1] if text.startswith("---\n") and text.count("---") >= 2 else None
+        lines = [] if head is None else [line for line in head.split("\n") if line]
+        keys = sorted(line.split(":", 1)[0] for line in lines)
+        required = ["description", "name"]
+        if head is None or any(not line_rule.fullmatch(line) for line in lines) or len(keys) != len(set(keys)) \
+                or (name == "SKILL.md" and keys != required) or not set(required) <= set(keys):
+            problems.append(f"{path}: frontmatter holds only {', '.join(allowed)}, one plain value per line")
     if name == ".mcp.json":
         problems.append(f"{path}: an MCP server runs a program")
     if name == "plugin.json":
@@ -145,13 +156,26 @@ repository=$(fixture bang-in-span); printf 'Refuse a leading `:` other than `:!`
 assert_eq "$(shipped_content_problems "$repository")" ""
 repository=$(fixture quoted-key)
 printf -- '---\nname: s\ndescription: d\n"hooks": {}\n---\nBody.\n' > "$repository/plugins/p/skills/s/SKILL.md"; git -C "$repository" add -A
-assert_contains "$(shipped_content_problems "$repository")" "frontmatter holds only name and description"
+assert_contains "$(shipped_content_problems "$repository")" "frontmatter holds only name, description"
 repository=$(fixture escaped-key)
 printf -- '---\nname: s\ndescription: d\n"\\x68ooks": {}\n---\nBody.\n' > "$repository/plugins/p/skills/s/SKILL.md"; git -C "$repository" add -A
-assert_contains "$(shipped_content_problems "$repository")" "frontmatter holds only name and description"
+assert_contains "$(shipped_content_problems "$repository")" "frontmatter holds only name, description"
 repository=$(fixture skill-hooks)
 printf -- '---\nname: s\ndescription: d\nhooks: {}\n---\nBody.\n' > "$repository/plugins/p/skills/s/SKILL.md"; git -C "$repository" add -A
-assert_contains "$(shipped_content_problems "$repository")" "frontmatter holds only name and description"
+assert_contains "$(shipped_content_problems "$repository")" "frontmatter holds only name, description"
+
+for frontmatter in '? hooks\n: {}' 'description2: x\rhooks: {}' 'hooks: {PreToolUse: []}' 'name2: &h hooks'; do
+  repository=$(fixture "frontmatter-$RANDOM")
+  printf -- '---\nname: s\ndescription: d\n%b\n---\nBody.\n' "$frontmatter" > "$repository/plugins/p/skills/s/SKILL.md"; git -C "$repository" add -A
+  assert_contains "$(shipped_content_problems "$repository")" "frontmatter holds only name, description"
+done
+repository=$(fixture cr-break); printf -- '---\nname: s\ndescription: d\rhooks: {}\n---\nBody.\n' > "$repository/plugins/p/skills/s/SKILL.md"; git -C "$repository" add -A
+assert_contains "$(shipped_content_problems "$repository")" "frontmatter holds only name, description"
+repository=$(fixture lowercase); git -C "$repository" mv plugins/p/skills/s/SKILL.md plugins/p/skills/s/skill.md
+assert_contains "$(shipped_content_problems "$repository")" "name a skill file SKILL.md exactly"
+repository=$(fixture agent-hooks); mkdir -p "$repository/plugins/p/agents"
+printf -- '---\nname: a\ndescription: "d"\nhooks: {}\nmodel: sonnet\n---\nBody.\n' > "$repository/plugins/p/agents/a.md"; git -C "$repository" add -A
+assert_contains "$(shipped_content_problems "$repository")" "frontmatter holds only name, description, tools, model, effort"
 
 # This repository's plugins follow every rule.
 assert_eq "$(shipped_content_problems .)" ""
