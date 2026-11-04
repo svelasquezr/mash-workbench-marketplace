@@ -21,7 +21,7 @@ To try it without installing: `claude --plugin-dir <path-to>/plugins/mash-workbe
 
    Each line records the date, a proposed form, a title, and **why** the candidate exists. The file is committed with the repo, so the reasons are reviewable and versioned.
 
-2. **Forge**: the `forge` skill (`/mash-workbench:forge`; Claude Code's docs say plain `/forge` also works unless another command has that name) reads the open backlog items, the current session, and recurring corrections and command sequences from the project's earlier sessions (`scripts/past-friction.py`, read-only, no model call), then shows one table: form, where the tool should live, reasoning, rough size, pros and cons, and a recommendation. You pick which to build. It builds each approved item test-first, ticks it off with a pointer to where it now lives, and turns a promoted memory into a one-line pointer so the rule lives in one place.
+2. **Forge**: the `forge` skill (`/mash-workbench:forge`; Claude Code's docs say plain `/forge` also works unless another command has that name) reads the open backlog items, the current session, and corrections you repeated in the project's earlier sessions (three `grep` commands over Claude Code's prompt history, shown in the skill's reference), then shows one table: form, where the tool should live, reasoning, rough size, pros and cons, and a recommendation. You pick which to build. It builds each approved item test-first, ticks it off with a pointer to where it now lives, and turns a promoted memory into a one-line pointer so the rule lives in one place.
 
 ## Deterministic first
 
@@ -41,10 +41,10 @@ When the form is unclear at capture time, the entry says `unsure` and `/forge` d
 
 ## Requirements and what it reads
 
-- `git`, `bash` and `python3` 3.11 or newer on your PATH. The scripts use the standard library only and need no network.
-- Built for Claude Code and developed against 2.1.289; older versions are untested.
+- `git` and `grep`. The plugin ships no scripts: only two skills, which tell Claude which commands to run.
+- Built for Claude Code and developed against 2.1.318; older versions are untested.
 - `scout` writes only the project's tooling backlog, and only once you chose where it lives: the first time it has something to note, it asks whether to create `docs/mash/tooling-backlog.md`, use another file, or keep none; a backlog already at `docs/tooling-backlog.md` keeps working where it is (move it with `git mv` when you like), and when it creates the file it offers to add it to `.gitignore` (an ignored backlog holds only your entries; committing it is the default and shares them). To answer once for later sessions, set `MASH_WORKBENCH_BACKLOG` (a path relative to the repository, or `off`) in the `env` block of `.claude/settings.local.json` (only you) or `.claude/settings.json` (everyone). `forge` writes only what you approve it to build.
-- `scripts/past-friction.py` reads your Claude Code session transcripts for the current project (`~/.claude/projects/<project-folder>/*.jsonl`, and the folders of its worktrees) to find corrections and command sequences that recur across sessions. It makes no model call and no network call, never writes to the transcripts, and prints only counts, dates and one example per pattern. A correction's example shows only the wording that two or more sessions share; every other word is replaced by "…", so something you typed once (a name, a path, a secret) is not printed, though a phrase you repeat across sessions would be. A command sequence shows only program, subcommand and script names. It does not follow symbolic links out of the transcripts folder, and uses `$CLAUDE_CONFIG_DIR/projects` when that is set. Run it yourself first if you want to see exactly what `forge` is shown: `python3 plugins/mash-workbench/scripts/past-friction.py --project <path>`.
+- For earlier sessions, `forge` reads Claude Code's prompt history (`~/.claude/history.jsonl`, or `$CLAUDE_CONFIG_DIR/history.jsonl`) through one pipeline of three `grep` commands: it keeps this project's lines, then the prompts that read like a correction ("no, …", "I told you", "you keep", "… again"), then prints only the prompt text and its session id. Pasted contents and other projects' prompts never reach Claude. It makes no network call and writes nothing; `forge` summarises what recurs in two or more sessions and never copies your prompts into the table, the backlog or any file. The exact command is in `skills/forge/reference.md`; run it yourself to see what `forge` is shown. Other tools have no such file, and `forge` skips this source there.
 
 ## Optional integrations
 
@@ -66,6 +66,10 @@ Summaries of each project as of October 2026; check the project itself for what 
 | Claude Code `/insights`                                                                            | report of friction over recent sessions                             | a report; you act on it by hand                                                                                                                    |
 
 mash-workbench's difference: one backlog with a reason per entry, a deterministic-first ladder across five forms, a place to put each tool, your approval before anything is built, and test-first building.
+
+## Upgrading from 0.2
+
+The plugin no longer ships `backlog-add.sh`, `backlog-path.sh`, `backlog-stale.sh` or `past-friction.py`, and no longer needs Python. The backlog format and `MASH_WORKBENCH_BACKLOG` are unchanged. Earlier sessions now come from the prompt history instead of the full transcripts, so repeated command sequences are no longer listed; repeated corrections are.
 
 ## Uninstall and support
 
