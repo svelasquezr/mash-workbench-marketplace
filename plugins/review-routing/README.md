@@ -13,14 +13,14 @@ To try it without installing: `claude --plugin-dir <path-to>/plugins/review-rout
 
 ## What it contains
 
-| Part | What it does |
-|---|---|
-| `review-changes` skill | before you open a pull request: picks the reviewers and their models for your committed changes, runs your checks first, dispatches the reviewers, triages findings and fixes what the change introduced; prints a summary in the terminal and writes nothing to a PR |
-| `add-reviewer` skill | adds a specialist reviewer when the same class of bug slips through review twice, and records each missed bug in `docs/mash/review-escapes.md` |
-| `inspect` skill (`/review-routing:inspect`) | for a project that already has review habits: finds instructions in `CLAUDE.md`, `AGENTS.md`, memory or plans that would override the routing, and areas you already brief reviewers on by hand; proposes rewrites and applies only the ones you approve |
-| `change-reviewer` agent | the default, read-only reviewer: correctness, tests for new branches, stale docs, unsupported claims, secrets |
-| `reviewer-guard` hook | refuses the plugin's reviewers (its own agents and the ones your `.claude/reviewers.toml` names) their non-read git commands (in a real repository, not a scratch one) and their GitHub-writing `gh` commands (a guard against accidents, not a security boundary; the gaps are listed in the hook's docstring) |
-| `haiku-reviewer-guard` hook | refuses to start a reviewer on Haiku (a heuristic: it recognises a reviewer by its name or by verdict words in the prompt) |
+| Part                                        | What it does                                                                                                                                                                                                                                                                                                    |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `review-changes` skill                      | before you open a pull request: picks the reviewers and their models for your committed changes, runs your checks first, dispatches the reviewers, triages findings and fixes what the change introduced; prints a summary in the terminal and writes nothing to a PR                                           |
+| `add-reviewer` skill                        | adds a specialist reviewer when the same class of bug slips through review twice, and records each missed bug in `docs/mash/review-escapes.md`                                                                                                                                                                  |
+| `inspect` skill (`/review-routing:inspect`) | for a project that already has review habits: finds instructions in `CLAUDE.md`, `AGENTS.md`, memory or plans that would override the routing, and areas you already brief reviewers on by hand; proposes rewrites and applies only the ones you approve                                                        |
+| `change-reviewer` agent                     | the default, read-only reviewer: correctness, tests for new branches, stale docs, unsupported claims, secrets                                                                                                                                                                                                   |
+| `reviewer-guard` hook                       | refuses the plugin's reviewers (its own agents and the ones your `.claude/reviewers.toml` names) their non-read git commands (in a real repository, not a scratch one) and their GitHub-writing `gh` commands (a guard against accidents, not a security boundary; the gaps are listed in the hook's docstring) |
+| `haiku-reviewer-guard` hook                 | refuses to start a reviewer on Haiku (a heuristic: it recognises a reviewer by its name or by verdict words in the prompt)                                                                                                                                                                                      |
 
 ## Requirements
 

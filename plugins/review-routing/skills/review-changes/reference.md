@@ -29,18 +29,18 @@ An existing ledger keeps its old header, and old entries keyed by PR links stay 
 
 ## Common mistakes
 
-| Mistake | Instead |
-|---|---|
-| Picking reviewers from the file names you remember | Run `route`; docs, scripts and `.claude/` may have reviewers too |
-| Reading a non-zero exit as "no reviewers needed" | Fix the range or config and run it again |
-| Skipping `review-routing:change-reviewer` because "it's a small change" | Every agent the script prints is dispatched |
-| Letting reviewers run the suite and linters | Run them once; pass the results in each prompt |
-| Dispatching reviewers while a test, linter or formatter is red | Fix the deterministic failures first |
-| Running a check command `find-checks.sh` listed without asking | It lists candidates; the user confirms |
-| A clean verdict reported with no checks having run | Say **Unchecked** in the summary |
-| A reviewer flags formatting, style or a convention and the fix stops there | Automate it (test, lint rule, formatter, hook) |
-| Re-reviewing the whole change after a small fix | Send the fix's diff to the reviewers Fix rounds step 3 names |
-| Starting a fix-round reviewer without a model | Use the model SKILL.md step 1 (`route <range> --models`) gave it |
-| Fixing an old bug a reviewer spotted inside this change | List it as Pre-existing; one concern per change |
-| Counting a reviewer that crashed or gave no verdict as safe | Dispatch it again |
-| Calling the branch ready while a reviewer said `NOT SAFE` | Every last verdict must be `SAFE TO LAND` |
+| Mistake                                                                    | Instead                                                          |
+| -------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| Picking reviewers from the file names you remember                         | Run `route`; docs, scripts and `.claude/` may have reviewers too |
+| Reading a non-zero exit as "no reviewers needed"                           | Fix the range or config and run it again                         |
+| Skipping `review-routing:change-reviewer` because "it's a small change"    | Every agent the script prints is dispatched                      |
+| Letting reviewers run the suite and linters                                | Run them once; pass the results in each prompt                   |
+| Dispatching reviewers while a test, linter or formatter is red             | Fix the deterministic failures first                             |
+| Running a check command `find-checks.sh` listed without asking             | It lists candidates; the user confirms                           |
+| A clean verdict reported with no checks having run                         | Say **Unchecked** in the summary                                 |
+| A reviewer flags formatting, style or a convention and the fix stops there | Automate it (test, lint rule, formatter, hook)                   |
+| Re-reviewing the whole change after a small fix                            | Send the fix's diff to the reviewers Fix rounds step 3 names     |
+| Starting a fix-round reviewer without a model                              | Use the model SKILL.md step 1 (`route <range> --models`) gave it |
+| Fixing an old bug a reviewer spotted inside this change                    | List it as Pre-existing; one concern per change                  |
+| Counting a reviewer that crashed or gave no verdict as safe                | Dispatch it again                                                |
+| Calling the branch ready while a reviewer said `NOT SAFE`                  | Every last verdict must be `SAFE TO LAND`                        |

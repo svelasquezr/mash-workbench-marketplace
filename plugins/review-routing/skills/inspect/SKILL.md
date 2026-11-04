@@ -19,8 +19,8 @@ Read "Plugin rules" in `<this skill's base directory>/reference.md` before step 
 
 ## Common mistakes
 
-| Mistake | Instead |
-|---|---|
-| "The hook blocks Haiku, the text can stay" | Rewrite it: sessions follow the text first |
+| Mistake                                     | Instead                                              |
+| ------------------------------------------- | ---------------------------------------------------- |
+| "The hook blocks Haiku, the text can stay"  | Rewrite it: sessions follow the text first           |
 | Opus or Fable sizing text called a conflict | Only text naming Haiku or replacing `route --models` |
-| Writing the specialist now | Offer add-reviewer; create nothing |
+| Writing the specialist now                  | Offer add-reviewer; create nothing                   |

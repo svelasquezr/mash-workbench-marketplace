@@ -4,10 +4,10 @@ A plugin marketplace for Claude Code (support for GitHub Copilot CLI and other c
 
 ## Plugins
 
-| Plugin | What it does |
-|---|---|
+| Plugin                                     | What it does                                                                                                                                                     |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [`mash-workbench`](plugins/mash-workbench) | notes repeated work as tooling candidates during a session (`scout`), then turns the approved ones into hooks, scripts, skills, agents or MCP servers (`/forge`) |
-| [`review-routing`](plugins/review-routing) | sends each change to the reviewers it needs, from a per-project list of specialists, and tells you when your branch is ready to open as a PR |
+| [`review-routing`](plugins/review-routing) | sends each change to the reviewers it needs, from a per-project list of specialists, and tells you when your branch is ready to open as a PR                     |
 
 ## Requirements
 
