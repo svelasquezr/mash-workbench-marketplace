@@ -38,8 +38,13 @@ for table in ("routes", "changed_lines", "model_rules", "allow_default", "expect
         for value in values:
             if unsafe(value):
                 problems.append(f"{table}: unsafe value {value!r}")
+raw_text = open(config_path, encoding="utf-8").read()
 # No double-quoted string holds a backslash: an escape can hide a quote from someone reading the file, and the path
-# and regex keys take single-quoted literal strings anyway. Strict on purpose: it looks at every line but comments.
+# and regex keys take single-quoted literal strings anyway. Single-line strings are checked on every line but
+# comments (strict on purpose: a backslash in a quoted pair inside a literal is flagged too); multi-line strings
+# (""" or ''') are refused outright.
+if '"""' in raw_text or "'''" in raw_text:
+    problems.append("a multi-line string; write each value on one line in single quotes")
 for number, line in enumerate(open(config_path, encoding="utf-8"), start=1):
     if not line.lstrip().startswith("#") and any("\\" in string for string in re.findall(r'"(?:[^"\\\n]|\\.)*"', line)):
         problems.append(f"line {number}: a double-quoted string with a backslash; write it in single quotes")
@@ -106,6 +111,8 @@ printf 'version = 2\n[[routes]]\npaths = ["src\\u0027; touch x #"]\nreviewers = 
 assert_contains "$(check_config "$temporary_directory/escaped.toml" 2>/dev/null)" "a double-quoted string with a backslash"
 printf 'version = 2\n[[routes]]\npaths = [\n  "src\\u0027x",\n]\nreviewers = ["a-reviewer"]\n' > "$temporary_directory/multiline.toml"
 assert_contains "$(check_config "$temporary_directory/multiline.toml" 2>/dev/null)" "a double-quoted string with a backslash"
+printf 'version = 2\n[[routes]]\npaths = ["""\nsrc\x27x"""]\nreviewers = ["a-reviewer"]\n' > "$temporary_directory/triple.toml"
+assert_contains "$(check_config "$temporary_directory/triple.toml" 2>/dev/null)" "a multi-line string"
 printf 'pattern = "x"\n' > "$temporary_directory/old.toml"
 assert_contains "$(check_config "$temporary_directory/old.toml")" "version is not 2"
 

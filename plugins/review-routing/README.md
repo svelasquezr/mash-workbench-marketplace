@@ -46,7 +46,7 @@ You can also add `"Agent(model:haiku)"` to `permissions.deny` in your own settin
 
 ## Permission prompts
 
-`review-changes` runs one plain git command per Bash call, so each one can be approved on its own. `git rev-parse` has no option that writes a file, so `"Bash(git rev-parse:*)"` is the one rule worth considering. Think twice before allowing any `git diff` or `git log` prefix, however narrow (`Bash(git diff --name-only:*)` included): both commands accept `--output=<file>`, so such a rule also lets Claude write any file you can write without asking. Commands that write on purpose (`mkdir -p`, `rm -f`, the redirects that write the diff file, `git update-index` on the throwaway index) should keep asking.
+`review-changes` runs one plain git command per Bash call, so each one can be approved on its own. `git rev-parse` only prints (no option of it writes a file, as of git 2.55), so `"Bash(git rev-parse:*)"` is the one rule worth considering. Think twice before allowing any `git diff` or `git log` prefix, however narrow (`Bash(git diff --name-only:*)` included): both commands accept `--output=<file>`, so such a rule also lets Claude write any file you can write without asking. Commands that write on purpose (`mkdir -p`, `rm -f`, the redirects that write the diff file, `git update-index` on the throwaway index) should keep asking.
 
 ## What it writes
 

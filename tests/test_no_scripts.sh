@@ -1,7 +1,8 @@
 # shellcheck shell=bash
 # Policy (docs/decisions/0004-no-shipped-scripts.md): the plugins ship no scripts. Everything under plugins/ is
-# Markdown, JSON or TOML (plus LICENSE), nothing is executable, no text tells Claude to run a file the plugin
-# ships, and the only hook is review-routing's inline Haiku guard. Shipped text also carries no hidden Unicode
+# Markdown, JSON or TOML (plus LICENSE) in an allow-listed place, the manifest holds only descriptive keys, skill and
+# agent frontmatter is allow-listed line by line, nothing is executable, no text tells Claude to run a file or a
+# load-time command, and the only hook is review-routing's inline Haiku guard. Shipped text also carries no hidden Unicode
 # (zero-width, bidirectional or tag characters can hide instructions from a human reviewer) and links only to
 # github.com and code.claude.com. The plugin-safety-reviewer agent judges what this test cannot.
 # shellcheck disable=SC2016  # the fixtures hold literal Markdown and shell text on purpose
@@ -19,6 +20,11 @@ listing = subprocess.run(["git", "-C", str(root), "ls-files", "-s", "--", "plugi
                          capture_output=True, text=True, check=True).stdout
 problems = []
 allowed_suffixes = {".md", ".json", ".toml"}
+shipped_path = re.compile(
+    r"plugins/[^/]+/(?:\.claude-plugin/plugin\.json|LICENSE|README\.md|skills/[^/]+/[^/]+\.(?:md|toml)|agents/[^/]+\.md)"
+    r"|plugins/review-routing/hooks/hooks\.json"
+)
+manifest_keys = {"name", "description", "version", "author", "homepage", "repository", "license", "keywords"}
 invocation = re.compile(
     r"\b(?:bash|sh|zsh|dash|python3?|node|deno|bun|ruby|perl|pwsh|powershell)\s+(?:<[^>\n]*>)?[^\s`'\"]*\.(?:sh|py|js|mjs|cjs|ts|rb|pl|ps1)\b"
     r"|\$\{?CLAUDE_(?:PLUGIN_ROOT|SKILL_DIR)\}?/[^\s`'\"]*\.(?:sh|py|js|mjs|cjs|ts|rb|pl|ps1)\b"
@@ -30,6 +36,10 @@ for line in listing.splitlines():
     meta, path = line.split("\t", 1)
     mode = meta.split()[0]
     name = Path(path).name
+    # An allowlist of places, not a list of dangers: Claude Code keeps adding components that run programs
+    # (MCP and LSP servers, monitors, a settings.json subagentStatusLine, commands), and none of them may ship.
+    if not shipped_path.fullmatch(path):
+        problems.append(f"{path}: not a place a plugin may ship a file (manifest, LICENSE, README.md, skills/, agents/, review-routing's hooks.json)")
     if name != "LICENSE" and Path(path).suffix not in allowed_suffixes:
         problems.append(f"{path}: only Markdown, JSON, TOML and LICENSE ship in a plugin")
     if mode != "100644":
@@ -52,13 +62,22 @@ for line in listing.splitlines():
         # (such as `:!`) is not flagged.
         claude_inline = re.search(r"(?:^|\s)!`[^`]+`", text, re.M)
         span_after_bang = any(text[m.start() - 1:m.start()] == "!" for m in re.finditer(r"`[^`\n]+`", text))
-        if claude_inline or span_after_bang or "```!" in text:
+        # A placeholder right after "!" becomes !`...` when the skill is invoked with a backticked argument.
+        placeholder = re.search(r"(?:^|\s)!\$", text, re.M)
+        if claude_inline or span_after_bang or placeholder or "```!" in text:
             problems.append(f"{path}: uses the !`command` syntax, which runs a shell command when the file loads")
     # Frontmatter is allow-listed line by line, so no YAML trick (an explicit "? hooks" key, a lone carriage return as
     # a line break, quoted or escaped keys, anchors) can smuggle in a key such as hooks:, which runs commands.
     if name.lower() == "skill.md" and name != "SKILL.md":
         problems.append(f"{path}: name a skill file SKILL.md exactly")
-    is_agent = re.fullmatch(r"plugins/[^/]+/agents/[^/]+\.md", path) is not None
+    # An agent file, or the template add-reviewer copies into a project as one (same frontmatter rules).
+    is_agent = re.fullmatch(r"plugins/[^/]+/agents/.+\.md", path) is not None or name == "reviewer-template.md"
+    # Frontmatter is how Claude Code attaches hooks to a component, so only skills and agents may have any: a
+    # command file (commands/ also takes hooks:) or any other Markdown with frontmatter is refused outright.
+    if path.endswith(".md") and text.startswith("---") and name != "SKILL.md" and not is_agent:
+        problems.append(f"{path}: only SKILL.md files and agents may have frontmatter")
+    if re.match(r"plugins/[^/]+/commands/", path):
+        problems.append(f"{path}: plugins ship skills, not commands")
     if name == "SKILL.md" or is_agent:
         allowed = ("name", "description") if name == "SKILL.md" else ("name", "description", "tools", "model", "effort")
         plain = r"[^\s#&*!|>'\"%@`{\[?,:\-](?:(?!: | #)[^\x00-\x1f\x7f\x85\u2028\u2029])*"
@@ -70,14 +89,15 @@ for line in listing.splitlines():
         required = ["description", "name"]
         if head is None or any(not line_rule.fullmatch(line) for line in lines) or len(keys) != len(set(keys)) \
                 or (name == "SKILL.md" and keys != required) or not set(required) <= set(keys):
-            problems.append(f"{path}: frontmatter holds only {', '.join(allowed)}, one plain value per line")
+            problems.append(f"{path}: frontmatter holds only {', '.join(allowed)}, one non-empty plain value per line (no tabs, no YAML syntax)")
     if name == ".mcp.json":
         problems.append(f"{path}: an MCP server runs a program")
     if name == "plugin.json":
         manifest = json.loads(text)
-        for key in ("hooks", "mcpServers", "lspServers"):
-            if key in manifest:
-                problems.append(f"{path}: declares {key}")
+        # Only descriptive keys: every component key (hooks, mcpServers, lspServers, monitors, commands, agents,
+        # skills, outputStyles, settings, experimental, ...) can point Claude Code at something that runs.
+        for key in sorted(set(manifest) - manifest_keys):
+            problems.append(f"{path}: declares {key}")
     if name == "hooks.json":
         if path != "plugins/review-routing/hooks/hooks.json":
             problems.append(f"{path}: the only hook is review-routing's Haiku guard")
@@ -176,6 +196,33 @@ assert_contains "$(shipped_content_problems "$repository")" "name a skill file S
 repository=$(fixture agent-hooks); mkdir -p "$repository/plugins/p/agents"
 printf -- '---\nname: a\ndescription: "d"\nhooks: {}\nmodel: sonnet\n---\nBody.\n' > "$repository/plugins/p/agents/a.md"; git -C "$repository" add -A
 assert_contains "$(shipped_content_problems "$repository")" "frontmatter holds only name, description, tools, model, effort"
+
+repository=$(fixture command-hooks); mkdir -p "$repository/plugins/p/commands"
+printf -- '---\ndescription: d\nhooks: {}\n---\nBody.\n' > "$repository/plugins/p/commands/c.md"; git -C "$repository" add -A
+assert_contains "$(shipped_content_problems "$repository")" "only SKILL.md files and agents may have frontmatter"
+assert_contains "$(shipped_content_problems "$repository")" "plugins ship skills, not commands"
+repository=$(fixture nested-agent); mkdir -p "$repository/plugins/p/agents/sub"
+printf -- '---\nname: a\ndescription: d\nhooks: {}\n---\nBody.\n' > "$repository/plugins/p/agents/sub/a.md"; git -C "$repository" add -A
+assert_contains "$(shipped_content_problems "$repository")" "plugins/p/agents/sub/a.md: frontmatter holds only"
+repository=$(fixture reference-frontmatter)
+printf -- '---\nhooks: {}\n---\nBody.\n' > "$repository/plugins/p/skills/s/reference.md"; git -C "$repository" add -A
+assert_contains "$(shipped_content_problems "$repository")" "only SKILL.md files and agents may have frontmatter"
+repository=$(fixture custom-paths); printf '{"name": "p", "commands": "./elsewhere"}\n' > "$repository/plugins/p/.claude-plugin/plugin.json"; git -C "$repository" add -A
+assert_contains "$(shipped_content_problems "$repository")" "declares commands"
+
+# Components that run programs are refused by place, whatever their content.
+for carrier in monitors/monitors.json .lsp.json settings.json hooks/other.json; do
+  repository=$(fixture "carrier-$RANDOM"); mkdir -p "$(dirname "$repository/plugins/p/$carrier")"
+  printf '[{"name": "m", "command": "tail -F x"}]\n' > "$repository/plugins/p/$carrier"; git -C "$repository" add -A
+  assert_contains "$(shipped_content_problems "$repository")" "plugins/p/$carrier: not a place a plugin may ship a file"
+done
+for key in monitors experimental settings; do
+  repository=$(fixture "manifest-$key"); printf '{"name": "p", "%s": {}}\n' "$key" > "$repository/plugins/p/.claude-plugin/plugin.json"
+  git -C "$repository" add -A
+  assert_contains "$(shipped_content_problems "$repository")" "declares $key"
+done
+repository=$(fixture placeholder); printf 'Run !$ARGUMENTS now.\n' > "$repository/plugins/p/skills/s/z.md"; git -C "$repository" add -A
+assert_contains "$(shipped_content_problems "$repository")" "runs a shell command when the file loads"
 
 # This repository's plugins follow every rule.
 assert_eq "$(shipped_content_problems .)" ""
