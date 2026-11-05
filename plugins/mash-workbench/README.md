@@ -20,19 +20,20 @@ To try it without installing: `claude --plugin-dir <path-to>/plugins/mash-workbe
    ```
 
    Each line records the date, a proposed form, a title, and **why** the candidate exists. The file is committed with the repo, so the reasons are reviewable and versioned.
+
 2. **Forge**: the `forge` skill (`/mash-workbench:forge`; Claude Code's docs say plain `/forge` also works unless another command has that name) reads the open backlog items, the current session, and recurring corrections and command sequences from the project's earlier sessions (`scripts/past-friction.py`, read-only, no model call), then shows one table: form, where the tool should live, reasoning, rough size, pros and cons, and a recommendation. You pick which to build. It builds each approved item test-first, ticks it off with a pointer to where it now lives, and turns a promoted memory into a one-line pointer so the rule lives in one place.
 
 ## Deterministic first
 
 Each candidate is promoted to the most deterministic form that fits:
 
-| Form | Use for | Pros | Cons |
-|---|---|---|---|
-| hook | a rule that must always hold (block, format, validate) | enforced every time, no tokens | only for checks a program can make |
-| script | a procedure with no judgment | repeatable, testable, cheap | someone must decide to run it |
-| skill | judgment, with scripts for the mechanics | flexible | Claude may skip or misread it |
-| agent | a review that needs a separate context | fresh eyes, own model | slow and costly |
-| mcp | access to an external system | reusable integration | most to build and maintain |
+| Form   | Use for                                                | Pros                           | Cons                               |
+| ------ | ------------------------------------------------------ | ------------------------------ | ---------------------------------- |
+| hook   | a rule that must always hold (block, format, validate) | enforced every time, no tokens | only for checks a program can make |
+| script | a procedure with no judgment                           | repeatable, testable, cheap    | someone must decide to run it      |
+| skill  | judgment, with scripts for the mechanics               | flexible                       | Claude may skip or misread it      |
+| agent  | a review that needs a separate context                 | fresh eyes, own model          | slow and costly                    |
+| mcp    | access to an external system                           | reusable integration           | most to build and maintain         |
 
 When the form is unclear at capture time, the entry says `unsure` and `/forge` decides.
 
@@ -56,13 +57,13 @@ Neither is required.
 
 Summaries of each project as of October 2026; check the project itself for what it does today.
 
-| Tool | What it does | Difference from mash-workbench |
-|---|---|---|
-| [claude-reflect](https://github.com/BayramAnnakov/claude-reflect) | hooks queue your corrections; `/reflect` applies them with approval | writes mostly prose rules (CLAUDE.md); `/reflect-skills` also turns repeated workflows from past sessions into commands; no hooks or scripts |
-| [hookify](https://github.com/anthropics/claude-plugins-official/tree/main/plugins/hookify) | turns an instruction or correction into a warn/block rule | pattern-matching rules (regex, contains, equals), no backlog; a good fit for quick personal rules, while mash-workbench builds tested hook scripts |
-| [Claudeception](https://github.com/blader/Claudeception) | extracts skills from sessions | skills only, no triage |
-| continuous-learning ([everything-claude-code](https://github.com/affaan-m/everything-claude-code)) | hooks record observations, `/evolve` clusters them | promotes to skills and agents, not hooks or scripts; mostly automatic |
-| Claude Code `/insights` | report of friction over recent sessions | a report; you act on it by hand |
+| Tool                                                                                               | What it does                                                        | Difference from mash-workbench                                                                                                                     |
+| -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [claude-reflect](https://github.com/BayramAnnakov/claude-reflect)                                  | hooks queue your corrections; `/reflect` applies them with approval | writes mostly prose rules (CLAUDE.md); `/reflect-skills` also turns repeated workflows from past sessions into commands; no hooks or scripts       |
+| [hookify](https://github.com/anthropics/claude-plugins-official/tree/main/plugins/hookify)         | turns an instruction or correction into a warn/block rule           | pattern-matching rules (regex, contains, equals), no backlog; a good fit for quick personal rules, while mash-workbench builds tested hook scripts |
+| [Claudeception](https://github.com/blader/Claudeception)                                           | extracts skills from sessions                                       | skills only, no triage                                                                                                                             |
+| continuous-learning ([everything-claude-code](https://github.com/affaan-m/everything-claude-code)) | hooks record observations, `/evolve` clusters them                  | promotes to skills and agents, not hooks or scripts; mostly automatic                                                                              |
+| Claude Code `/insights`                                                                            | report of friction over recent sessions                             | a report; you act on it by hand                                                                                                                    |
 
 mash-workbench's difference: one backlog with a reason per entry, a deterministic-first ladder across five forms, a place to put each tool, your approval before anything is built, and test-first building.
 

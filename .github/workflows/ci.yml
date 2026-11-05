@@ -2,16 +2,16 @@ name: ci
 on:
   pull_request:
   push:
-    branches: [main]  # branch pushes are covered by their pull request; avoids a duplicate run
+    branches: [main] # branch pushes are covered by their pull request; avoids a duplicate run
 permissions:
-  contents: read  # the job only checks out and tests; it writes nothing back
+  contents: read # the job only checks out and tests; it writes nothing back
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7.0.1
         with:
-          fetch-depth: 0  # full history, so commit messages in the pushed range can be checked
+          fetch-depth: 0 # full history, so commit messages in the pushed range can be checked
       - uses: actions/setup-node@v7.1.0
         with:
           node-version: "24"

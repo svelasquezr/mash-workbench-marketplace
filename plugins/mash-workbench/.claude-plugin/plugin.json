@@ -6,13 +6,7 @@
     "name": "Sergio Velasquez"
   },
   "license": "MIT",
-  "keywords": [
-    "automation",
-    "hooks",
-    "skills",
-    "backlog",
-    "self-improvement"
-  ],
+  "keywords": ["automation", "hooks", "skills", "backlog", "self-improvement"],
   "homepage": "https://github.com/svelasquezr/mash-workbench-marketplace",
   "repository": "https://github.com/svelasquezr/mash-workbench-marketplace"
 }

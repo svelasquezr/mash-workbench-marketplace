@@ -20,13 +20,16 @@ Only judgment items: anything a test, linter, formatter or hook can check goes i
 here. Delete this comment. -->
 
 **<Invariant>** (<where it is enforced; the bug, PR or issue behind it>)
+
 - <what to check, naming the files and functions>
 - <the near miss: what looks wrong here but is fine, so you don't flag it>
 
 **Tests**
+
 - A new branch in <area> code needs a test for the case it handles and for a near miss it must not.
 
 **Claims about the system**
+
 - Every help string, alert message, doc sentence or docstring the change adds that states a fact about the system (how often something runs, where a value comes from, what a status means) is checked against the code that makes it true: `grep` the function's callers, the scheduler or cron table, and the config or call site that would make it true. A module's own docstring or comment is a claim to verify, not evidence. Report a claim nothing in the code makes true as Important.
 
 ## Output format
