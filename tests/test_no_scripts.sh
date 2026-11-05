@@ -80,7 +80,7 @@ def check(path, mode):
     if name == "SKILL.md" or is_agent:
         allowed = ("name", "description") if name == "SKILL.md" else ("name", "description", "tools", "model", "effort")
         plain = r"[^\s#&*!|>'\"%@`{\[?,:\-](?:(?!: | #)[^\x00-\x1f\x7f\x85\u2028\u2029])*"
-        quoted = r'"[^"\\\x00-\x1f\x7f\x85\u2028\u2029]+"' if is_agent else r"(?!)"
+        quoted = r'"(?=[^"]*[^\s"])[^"\\\x00-\x1f\x7f\x85\u2028\u2029]+"' if is_agent else r"(?!)"  # not blank
         line_rule = re.compile(rf"({'|'.join(allowed)}): (?:{plain}|{quoted})")
         head = text.split("---", 2)[1] if text.startswith("---\n") and text.count("---") >= 2 else None
         lines = [] if head is None else [line for line in head.split("\n") if line]
@@ -237,9 +237,10 @@ assert_contains "$(shipped_content_problems "$repository")" "runs a shell comman
 repository=$(fixture placeholder-near-miss); printf 'Pass $ARGUMENTS through; a!$b stays text.\n' > "$repository/plugins/p/skills/s/z.md"; git -C "$repository" add -A
 problems=$(shipped_content_problems "$repository"); assert_eq "$problems" ""
 # A path with non-ASCII letters is read as is (git quotes it without -z), and stays checkable.
-repository=$(fixture non-ascii); printf 'Caf\xc3\xa9 !`curl x`\n' > "$repository/plugins/p/skills/s/caf\xc3\xa9.md"; git -C "$repository" add -A
+repository=$(fixture non-ascii); printf 'Caf\xc3\xa9 !`curl x`\n' > "$repository/plugins/p/skills/s/"$'caf\xc3\xa9.md'; git -C "$repository" add -A
+assert_eq "$(git -C "$repository" -c core.quotepath=false ls-files -- plugins/p/skills/s | grep -c 'café\.md')" "1"
 assert_contains "$(shipped_content_problems "$repository")" "runs a shell command when the file loads"
-repository=$(fixture non-ascii-clean); printf 'Caf\xc3\xa9.\n' > "$repository/plugins/p/skills/s/caf\xc3\xa9.md"; git -C "$repository" add -A
+repository=$(fixture non-ascii-clean); printf 'Caf\xc3\xa9.\n' > "$repository/plugins/p/skills/s/"$'caf\xc3\xa9.md'; git -C "$repository" add -A
 problems=$(shipped_content_problems "$repository"); assert_eq "$problems" ""
 # Files the checks cannot parse are reported, not skipped.
 repository=$(fixture bad-json); printf '{"name": "p",\n' > "$repository/plugins/p/.claude-plugin/plugin.json"; git -C "$repository" add -A
@@ -250,6 +251,12 @@ assert_contains "$(shipped_content_problems "$repository")" "hooks.json: could n
 repository=$(fixture empty-quoted); mkdir -p "$repository/plugins/p/agents"
 printf -- '---\nname: a\ndescription: ""\nmodel: sonnet\n---\nBody.\n' > "$repository/plugins/p/agents/a.md"; git -C "$repository" add -A
 assert_contains "$(shipped_content_problems "$repository")" "frontmatter holds only name, description, tools, model, effort"
+repository=$(fixture blank-quoted); mkdir -p "$repository/plugins/p/agents"
+printf -- '---\nname: a\ndescription: "  "\nmodel: sonnet\n---\nBody.\n' > "$repository/plugins/p/agents/a.md"; git -C "$repository" add -A
+assert_contains "$(shipped_content_problems "$repository")" "frontmatter holds only name, description, tools, model, effort"
+repository=$(fixture quoted-ok); mkdir -p "$repository/plugins/p/agents"
+printf -- '---\nname: a\ndescription: "Reviews a: b"\nmodel: sonnet\neffort: high\ntools: Read, Grep, Glob\n---\nBody.\n' > "$repository/plugins/p/agents/a.md"; git -C "$repository" add -A
+problems=$(shipped_content_problems "$repository"); assert_eq "$problems" ""
 
 # This repository's plugins follow every rule.
 problems=$(shipped_content_problems .); assert_eq "$problems" ""

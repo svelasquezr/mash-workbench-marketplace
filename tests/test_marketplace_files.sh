@@ -57,6 +57,10 @@ assert_contains "$(check_fixture '{"plugins": [{"name": "p", "description": "d",
 assert_contains "$(check_fixture '{"plugins": [{"name": "p", "description": "d", "source": {"source": "github", "repo": "o/r"}}]}')" "p: source must be ./plugins/p"
 assert_contains "$(check_fixture '{"plugins": [{"name": "p", "description": "other", "source": "./plugins/p"}]}')" "p: catalog and plugin.json descriptions differ"
 assert_contains "$(check_fixture '{"plugins": [{"name": "p",')" "could not be checked: JSONDecodeError"
+assert_contains "$(check_fixture '{"plugins": [{"name": "q", "description": "d", "source": "./plugins/q"}]}')" "could not be checked: FileNotFoundError"
+mkdir -p "$temporary_directory/plugins/r/.claude-plugin"
+printf '{"name": "other", "description": "d"}\n' > "$temporary_directory/plugins/r/.claude-plugin/plugin.json"
+assert_contains "$(check_fixture '{"plugins": [{"name": "r", "description": "d", "source": "./plugins/r"}]}')" "r: plugin.json is named 'other'"
 
 # Both catalogs exist, are identical and pass. Outputs are captured first, so a crash stops the test (set -e).
 for catalog in "$claude_catalog" "$copilot_catalog"; do
