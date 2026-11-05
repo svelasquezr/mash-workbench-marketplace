@@ -16,7 +16,8 @@ shipped_content_problems() {
 import json, re, subprocess, sys
 from pathlib import Path
 root = Path(sys.argv[1])
-listing = subprocess.run(["git", "-C", str(root), "ls-files", "-s", "--", "plugins"],
+# -z: a path with spaces or non-ASCII letters comes out as is, not quoted and escaped.
+listing = subprocess.run(["git", "-C", str(root), "ls-files", "-s", "-z", "--", "plugins"],
                          capture_output=True, text=True, check=True).stdout
 problems = []
 allowed_suffixes = {".md", ".json", ".toml"}
@@ -32,9 +33,7 @@ invocation = re.compile(
 hidden = re.compile("[\u200b\u200c\u200d\u2060\ufeff\u202a-\u202e\u2066-\u2069\U000e0000-\U000e007f]")
 url = re.compile(r"https?://[^\s)>\]`'\"]+")
 allowed_hosts = ("github.com", "code.claude.com")
-for line in listing.splitlines():
-    meta, path = line.split("\t", 1)
-    mode = meta.split()[0]
+def check(path, mode):
     name = Path(path).name
     # An allowlist of places, not a list of dangers: Claude Code keeps adding components that run programs
     # (MCP and LSP servers, monitors, a settings.json subagentStatusLine, commands), and none of them may ship.
@@ -81,7 +80,7 @@ for line in listing.splitlines():
     if name == "SKILL.md" or is_agent:
         allowed = ("name", "description") if name == "SKILL.md" else ("name", "description", "tools", "model", "effort")
         plain = r"[^\s#&*!|>'\"%@`{\[?,:\-](?:(?!: | #)[^\x00-\x1f\x7f\x85\u2028\u2029])*"
-        quoted = r'"[^"\\\x00-\x1f\x7f\x85\u2028\u2029]*"' if is_agent else r"(?!)"
+        quoted = r'"[^"\\\x00-\x1f\x7f\x85\u2028\u2029]+"' if is_agent else r"(?!)"
         line_rule = re.compile(rf"({'|'.join(allowed)}): (?:{plain}|{quoted})")
         head = text.split("---", 2)[1] if text.startswith("---\n") and text.count("---") >= 2 else None
         lines = [] if head is None else [line for line in head.split("\n") if line]
@@ -101,7 +100,7 @@ for line in listing.splitlines():
     if name == "hooks.json":
         if path != "plugins/review-routing/hooks/hooks.json":
             problems.append(f"{path}: the only hook is review-routing's Haiku guard")
-            continue
+            return
         hooks = json.loads(text)["hooks"]
         entries = [hook for event in hooks.values() for group in event for hook in group["hooks"]]
         if list(hooks) != ["PreToolUse"] or len(entries) != 1:
@@ -110,6 +109,14 @@ for line in listing.splitlines():
             command = hook.get("command", "").replace("/dev/null", "")  # discarding output is not a file
             if hook.get("type") != "command" or re.search(r"(?:^|[\s;|&(<>\"'])(?:\.{1,2}|~|\$\{?\w+\}?)?/[^\s/]|\.(?:sh|py|js)\b|python|node|jq|curl|wget|\beval\b", command):
                 problems.append(f"{path}: the hook must be an inline command that names no file, interpreter or network tool")
+
+for entry in filter(None, listing.split("\0")):
+    meta, path = entry.split("\t", 1)
+    # A file the checks cannot read or parse (bad JSON, an unexpected hooks.json shape) is a problem, never a pass.
+    try:
+        check(path, meta.split()[0])
+    except Exception as error:
+        problems.append(f"{path}: could not be checked: {type(error).__name__}: {error}")
 print("\n".join(problems))
 PY
 }
@@ -125,8 +132,10 @@ fixture() {
 }
 
 # A clean plugin passes.
+# Every "no problems" assertion captures the output first: `problems=$(...)` stops the test when the check crashes
+# (set -e), while `assert_eq "$(...)" ""` would read the crash's empty output as a pass.
 clean=$(fixture clean)
-assert_eq "$(shipped_content_problems "$clean")" ""
+problems=$(shipped_content_problems "$clean"); assert_eq "$problems" ""
 
 # Each rule catches what it is for.
 repository=$(fixture script); printf 'echo hi\n' > "$repository/plugins/p/skills/s/run.sh"; git -C "$repository" add -A
@@ -173,7 +182,7 @@ done
 # A code span that only contains "!" is fine; so is `a!`b`, which Claude Code does not run (it needs a line start or
 # whitespace before the "!").
 repository=$(fixture bang-in-span); printf 'Refuse a leading `:` other than `:!`, keep `a!b`.\n' > "$repository/plugins/p/skills/s/z.md"; git -C "$repository" add -A
-assert_eq "$(shipped_content_problems "$repository")" ""
+problems=$(shipped_content_problems "$repository"); assert_eq "$problems" ""
 repository=$(fixture quoted-key)
 printf -- '---\nname: s\ndescription: d\n"hooks": {}\n---\nBody.\n' > "$repository/plugins/p/skills/s/SKILL.md"; git -C "$repository" add -A
 assert_contains "$(shipped_content_problems "$repository")" "frontmatter holds only name, description"
@@ -224,5 +233,23 @@ done
 repository=$(fixture placeholder); printf 'Run !$ARGUMENTS now.\n' > "$repository/plugins/p/skills/s/z.md"; git -C "$repository" add -A
 assert_contains "$(shipped_content_problems "$repository")" "runs a shell command when the file loads"
 
+# Near misses: a "!$" not after a line start or whitespace, and $ARGUMENTS on its own, are not load-time commands.
+repository=$(fixture placeholder-near-miss); printf 'Pass $ARGUMENTS through; a!$b stays text.\n' > "$repository/plugins/p/skills/s/z.md"; git -C "$repository" add -A
+problems=$(shipped_content_problems "$repository"); assert_eq "$problems" ""
+# A path with non-ASCII letters is read as is (git quotes it without -z), and stays checkable.
+repository=$(fixture non-ascii); printf 'Caf\xc3\xa9 !`curl x`\n' > "$repository/plugins/p/skills/s/caf\xc3\xa9.md"; git -C "$repository" add -A
+assert_contains "$(shipped_content_problems "$repository")" "runs a shell command when the file loads"
+repository=$(fixture non-ascii-clean); printf 'Caf\xc3\xa9.\n' > "$repository/plugins/p/skills/s/caf\xc3\xa9.md"; git -C "$repository" add -A
+problems=$(shipped_content_problems "$repository"); assert_eq "$problems" ""
+# Files the checks cannot parse are reported, not skipped.
+repository=$(fixture bad-json); printf '{"name": "p",\n' > "$repository/plugins/p/.claude-plugin/plugin.json"; git -C "$repository" add -A
+assert_contains "$(shipped_content_problems "$repository")" "plugin.json: could not be checked: JSONDecodeError"
+repository=$(fixture hook-shape); mkdir -p "$repository/plugins/review-routing/hooks"
+printf '{"hooks": {"PreToolUse": [{"matcher": "Agent"}]}}\n' > "$repository/plugins/review-routing/hooks/hooks.json"; git -C "$repository" add -A
+assert_contains "$(shipped_content_problems "$repository")" "hooks.json: could not be checked: KeyError"
+repository=$(fixture empty-quoted); mkdir -p "$repository/plugins/p/agents"
+printf -- '---\nname: a\ndescription: ""\nmodel: sonnet\n---\nBody.\n' > "$repository/plugins/p/agents/a.md"; git -C "$repository" add -A
+assert_contains "$(shipped_content_problems "$repository")" "frontmatter holds only name, description, tools, model, effort"
+
 # This repository's plugins follow every rule.
-assert_eq "$(shipped_content_problems .)" ""
+problems=$(shipped_content_problems .); assert_eq "$problems" ""

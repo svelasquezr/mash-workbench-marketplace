@@ -10,7 +10,7 @@ reason = "runs as instructions on consumers' machines"
 
 # The tests that enforce the no-scripts and reviewer rules: weakening one is a safety change too.
 [[routes]]
-paths = ['tests/test_no_scripts.sh', 'tests/test_agent_frontmatter.sh', 'tests/test_haiku_reviewer_guard.sh', 'tests/run.sh', 'tests/lib.sh', 'scripts/check.sh', '.github/workflows']
+paths = ['tests/test_no_scripts.sh', 'tests/test_agent_frontmatter.sh', 'tests/test_haiku_reviewer_guard.sh', 'tests/test_marketplace_files.sh', 'tests/test_reviewers_config.sh', 'tests/run.sh', 'tests/lib.sh', 'scripts/check.sh', '.github/workflows']
 reviewers = ["plugin-safety-reviewer"]
 reason = "the guards of the no-scripts policy"
 
@@ -34,6 +34,14 @@ reviewers = ["plugin-safety-reviewer"]
 
 [[expect]]
 path = 'tests/test_no_scripts.sh'
+reviewers = ["plugin-safety-reviewer"]
+
+[[expect]]
+path = 'tests/test_marketplace_files.sh'
+reviewers = ["plugin-safety-reviewer"]
+
+[[expect]]
+path = 'tests/test_reviewers_config.sh'
 reviewers = ["plugin-safety-reviewer"]
 
 [[expect]]

@@ -6,7 +6,7 @@ Plugin marketplace (brand MASH: Memories, Agents, Skills, Hooks) of general-purp
 
 ## Layout
 
-- `.claude-plugin/marketplace.json` — Claude Code catalog (`source: ./plugins/<name>`); `.github/plugin/marketplace.json` — the same catalog, kept in the file Copilot CLI documents, for the planned Copilot CLI support (untested). They must stay identical, and each entry's description must equal its `plugin.json` description (`tests/test_marketplace_files.sh`).
+- `.claude-plugin/marketplace.json` — Claude Code catalog (`source: ./plugins/<name>`); `.github/plugin/marketplace.json` — the same catalog, kept in the file Copilot CLI documents, for the planned Copilot CLI support (untested). They must stay identical, each entry holds only `name`, `description`, `source` and `category`, and its description must equal its `plugin.json` description (`tests/test_marketplace_files.sh`).
 - `plugins/<name>/` — `.claude-plugin/plugin.json`, `skills/<skill>/SKILL.md` (+ an optional `reference.md` and examples next to it), `agents/*.md`, `hooks/hooks.json`. Markdown, JSON and TOML only: plugins ship no scripts (`docs/decisions/0004-no-shipped-scripts.md`).
 - `tests/test_*.sh` — repo-only bash tests (they may use python3): conventions, and the documented git and grep commands run on fixtures; `bash tests/run.sh`
 - `.claude/agents/plugin-safety-reviewer.md` and `.claude/reviewers.toml` — this repository's own review routing (review-routing's `review-changes` skill)

@@ -39,14 +39,16 @@ for table in ("routes", "changed_lines", "model_rules", "allow_default", "expect
             if unsafe(value):
                 problems.append(f"{table}: unsafe value {value!r}")
 raw_text = open(config_path, encoding="utf-8").read()
-# No double-quoted string holds a backslash: an escape can hide a quote from someone reading the file, and the path
-# and regex keys take single-quoted literal strings anyway. Single-line strings are checked on every line but
-# comments (strict on purpose: a backslash in a quoted pair inside a literal is flagged too); multi-line strings
-# (""" or ''') are refused outright.
-if '"""' in raw_text or "'''" in raw_text:
-    problems.append("a multi-line string; write each value on one line in single quotes")
-for number, line in enumerate(open(config_path, encoding="utf-8"), start=1):
-    if not line.lstrip().startswith("#") and any("\\" in string for string in re.findall(r'"(?:[^"\\\n]|\\.)*"', line)):
+# Readability checks on the raw text, outside comment lines: no multi-line string (""" or ''') and no double-quoted
+# string with a backslash, since an escape can hide a quote from someone reading the file. They are a lint, not the
+# guard: a line can pair its quotes so that the backslash check misses a string. The guard is unsafe() above, which
+# judges every parsed value whatever quoting wrote it.
+for number, line in enumerate(raw_text.split("\n"), start=1):
+    if line.lstrip().startswith("#"):
+        continue
+    if '"""' in line or "'''" in line:
+        problems.append(f"line {number}: a multi-line string; write each value on one line in single quotes")
+    if any("\\" in string for string in re.findall(r'"(?:[^"\\\n]|\\.)*"', line)):
         problems.append(f"line {number}: a double-quoted string with a backslash; write it in single quotes")
 reviewer_name = re.compile(r"^[A-Za-z0-9_-]+(:[A-Za-z0-9_-]+)?$")
 names = [config.get("default_reviewer", "review-routing:change-reviewer")]
@@ -116,6 +118,17 @@ assert_contains "$(check_config "$temporary_directory/triple.toml" 2>/dev/null)"
 printf 'pattern = "x"\n' > "$temporary_directory/old.toml"
 assert_contains "$(check_config "$temporary_directory/old.toml")" "version is not 2"
 
-# The shipped example and this repository's config pass, expectations included.
-assert_eq "$(check_config plugins/review-routing/skills/add-reviewer/reviewers.example.toml)" ""
-assert_eq "$(check_config .claude/reviewers.toml)" ""
+# A multi-line string marker inside a comment is not a value.
+cat > "$temporary_directory/comment.toml" <<'TOML'
+version = 2
+# not a value: ''' or """
+[[routes]]
+paths = ['src']
+reviewers = ["a-reviewer"]
+TOML
+problems=$(check_config "$temporary_directory/comment.toml"); assert_eq "$problems" ""
+
+# The shipped example and this repository's config pass, expectations included. Each output is captured first:
+# `problems=$(...)` stops the test when the check crashes (set -e), where `assert_eq "$(...)" ""` would pass.
+problems=$(check_config plugins/review-routing/skills/add-reviewer/reviewers.example.toml); assert_eq "$problems" ""
+problems=$(check_config .claude/reviewers.toml); assert_eq "$problems" ""

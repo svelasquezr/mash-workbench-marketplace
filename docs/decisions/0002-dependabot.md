@@ -19,6 +19,6 @@ Dependabot over Renovate:
 
 ## Consequences
 
-- Not covered, update by hand: `@anthropic-ai/claude-code@…`, the `setup-uv` `version:`, and the `commitizen==…` and `pre-commit@…` pins in `ci.yml`.
+- Not covered, update by hand: `@anthropic-ai/claude-code@…`, the `setup-uv` `version:`, the `commitizen==…` and `pre-commit@…` pins in `ci.yml`, and the `prettier@…` pin in the local prettier hook of `.pre-commit-config.yaml` (Dependabot bumps a hook repository's `rev:`, not a local hook's `additional_dependencies`).
 - Known drift: commitizen is pinned in both `.pre-commit-config.yaml` (Dependabot bumps it) and `ci.yml` (it does not). Whoever merges the pre-commit PR bumps the `ci.yml` pin to match.
 - To revisit when: more of the pins move into files Dependabot understands, or the manual list grows painful (then consider Renovate).
