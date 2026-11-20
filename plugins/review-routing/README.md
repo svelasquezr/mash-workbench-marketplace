@@ -24,7 +24,7 @@ To try it without installing: `claude --plugin-dir <path-to>/plugins/review-rout
 
 ## Requirements
 
-`git`, `bash` and `python3` 3.11 or newer. Nothing needs `gh` or GitHub: the review works on a git range, whatever hosts the repository. Escape-ledger links from github.com are normalised; any other http(s) link is kept as given. Built for Claude Code and developed against 2.1.289; older versions are untested. `inspect` reads the project's `CLAUDE.md` and `AGENTS.md` and, where they exist, `.claude/memory/`, `.claude/plans/` and the auto-memory folder under `~/.claude/projects/`.
+`git`, `bash` and `python3` 3.11 or newer. Nothing needs `gh` or GitHub: the review works on a git range, whatever hosts the repository. Recording an escape needs only `bash` (no `python3`), and the skills say how to write the line by hand if the script cannot run. Escape-ledger links from github.com are normalised; any other http(s) link is kept as given. Built for Claude Code and developed against 2.1.289; older versions are untested. `inspect` reads the project's `CLAUDE.md` and `AGENTS.md` and, where they exist, `.claude/memory/`, `.claude/plans/` and the auto-memory folder under `~/.claude/projects/`.
 
 ## Opinionated defaults
 

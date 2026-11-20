@@ -27,6 +27,41 @@ A link the ledger already holds prints "already recorded" and exits 0, so a repe
 
 An existing ledger keeps its old header, and old entries keyed by PR links stay as they are. The report counts each distinct link once per area.
 
+## Recording by hand
+
+Only when `escape-add.sh` cannot run or fails for a reason other than its own answer: bash or the script is missing ("command not found", "No such file or directory"), or it exits with a code other than 0, 2 or 3. Exit 2 is a wrong argument: correct it and run the script again. Exit 3: ask the user where to keep the ledger, as above. Do these steps exactly, then tell the user that the script failed (quote its error) and that you wrote the line by hand.
+
+1. **The file.** `REVIEW_ROUTING_ESCAPES` (in the environment or the `env` block of `.claude/settings.local.json`, then `.claude/settings.json`): `off` means record nothing and stop; any other value is the file, relative to the repository root unless absolute. Not set: `docs/mash/review-escapes.md` if it exists, else `docs/review-escapes.md` if it exists, else ask the user as for exit 3. Never start a second ledger when one of these files already exists: the report would count only one of them.
+2. **Check the fields.** The area is a directory inside the repository (never a file, never `.`, never absolute, no `..`, no whitespace): drop a leading `./`, a trailing `/`, and turn `//` into `/`. The class is lowercase letters and digits in words joined by `-` (`wrong-result`, `missing-test`). No field may hold `·` or a line break. If a field fails, ask the user for a correct value.
+3. **Normalise the link.** A link holds no whitespace. First drop any trailing `/`. For a `github.com` link, also drop `#...` and `?...`, then any trailing `/` again. Then:
+
+   | Given                                                                                                                                                           | Write                                                                                                                                                                   |
+   | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+   | `https://www.GitHub.com/Owner/Repo/pull/7/files?w=1#diff`: any `/pull/7` or `/issues/7`, with or without `/files`, `/commits` or `/checks`, `www.` or `http://` | `https://github.com/owner/repo/issues/7`                                                                                                                                |
+   | `Owner/Repo#7`                                                                                                                                                  | `https://github.com/owner/repo/issues/7`                                                                                                                                |
+   | `#7`                                                                                                                                                            | owner/repo from `git remote get-url origin` (drop credentials and `.git`), lowercased: `https://github.com/owner/repo/issues/7`; no GitHub origin: ask for the full URL |
+   | another `github.com` link                                                                                                                                       | `https://github.com/` + the rest                                                                                                                                        |
+   | any other `http://` or `https://` link                                                                                                                          | as given                                                                                                                                                                |
+   | anything else                                                                                                                                                   | refuse; ask for an issue link                                                                                                                                           |
+
+4. **Duplicates.** If a line starting `- ` and a date already has this exact link as its fourth `·` field, write nothing and say "already recorded".
+5. **New file.** If the file does not exist, create it (and its directories) with these lines, then an empty line:
+
+   ```text
+   # Review escapes
+
+   Bugs in code a review passed, found later by anyone (a person, CI or a later reviewer); one line per bug, keyed by its issue: date · area · class · link.
+   The add-reviewer skill reads them through escapes-report.sh.
+   ```
+
+6. **Append one line** at the end of the file (first add a line break if the file does not end with one). The date is today in UTC (`date -u +%F`); the separator is a space, `·` (U+00B7) and a space. Example:
+
+   ```text
+   - 2026-10-11 · src/payments · wrong-result · https://github.com/o/r/issues/12
+   ```
+
+7. **Threshold.** Count the distinct links on entry lines with this area. At 2 or more, tell the user: "<area>: N escapes -> add a reviewer for <area> (add-reviewer skill)".
+
 ## Common mistakes
 
 | Mistake                                                                    | Instead                                                          |
