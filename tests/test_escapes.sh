@@ -249,7 +249,7 @@ assert_contains "$captured_output" "already recorded"
 run_capturing env ESCAPE_DATE=2026-13-45 bash "$add" "$hostile" src/a wrong-result https://github.com/o/r/issues/3
 assert_eq "$captured_exit_code" "2"
 # Calendar rules: a day past the month's end and month 0 are refused; 29 February only in a leap year.
-for bad_date in 2026-02-29 2026-04-31 2026-00-10 2100-02-29; do
+for bad_date in 2026-02-29 2026-04-31 2026-00-10 2026-01-00 0000-01-01 2100-02-29; do
   run_capturing env ESCAPE_DATE="$bad_date" bash "$add" "$hostile" src/a wrong-result https://github.com/o/r/issues/4
   assert_eq "$captured_exit_code" "2"
 done
@@ -275,5 +275,5 @@ hostile=$(fresh_ledger_dir); rm -f "$hostile/docs/review-escapes.md"
 ESCAPE_DATE=2026-10-11 bash "$add" "$hostile" src/payments wrong-result https://github.com/o/r/issues/12 >/dev/null
 while IFS= read -r header_line; do
   [[ -z "$header_line" ]] || assert_contains "$(cat "$by_hand")" "$header_line"
-done < <(head -3 "$hostile/docs/review-escapes.md")
+done < <(head -4 "$hostile/docs/review-escapes.md")
 assert_contains "$(cat "$by_hand")" "$(grep '^- ' "$hostile/docs/review-escapes.md")"
