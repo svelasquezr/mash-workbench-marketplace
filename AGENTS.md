@@ -17,12 +17,12 @@ Plugin marketplace (brand MASH: Memories, Agents, Skills, Hooks) of general-purp
 - Run `pre-commit install` once: it installs the commit-message hook (Conventional Commits) that CI also checks.
 - `tests/test_reviewer_guard.sh` builds its fixture repositories under `$HOME` (the hook treats `/tmp` as throwaway), removes them on exit, and refuses to run when `$HOME` is under `/tmp`.
 - `pre-commit` can run as `uvx pre-commit run --all-files`.
-- Scripts and hooks need `python3` 3.11 or newer.
+- Scripts and hooks need Python 3.11 or newer, and call it only through the plugin's `scripts/python.sh`: on Windows, `python3` is often the Microsoft Store alias, which fails every call. The file is the same in every plugin (`tests/test_find_python.sh`).
 
 ## Skill and agent conventions
 
 - A skill's `description` says only when to use it (triggers, symptoms), never its steps: Claude may follow a summary instead of reading the skill.
-- Skills run their scripts as `bash <this skill's base directory>/<script>.sh` (or `python3 …`): a bare path fails where the executable bit was lost.
+- Skills run their scripts as `bash <this skill's base directory>/<script>.sh` (or `bash <plugin>/scripts/python.sh …` for Python): a bare path fails where the executable bit was lost.
 - Keep a SKILL.md under ~500 words; point to another skill or a script's `--help` instead of repeating it.
 - Agents declare `model:` and `effort:` (`tests/test_agent_frontmatter.sh` checks it) and the fewest `tools:` they need. Reviewers (agent files named `*reviewer*`, or whose file contains the `SAFE TO LAND` verdict line) are read-only and never run on `haiku`.
 - Skills declare neither `model:` nor `effort:`, on purpose: they run inside the main conversation, and switching the model there re-reads the whole conversation without the prompt cache.

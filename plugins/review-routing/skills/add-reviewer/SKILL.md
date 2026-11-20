@@ -12,7 +12,7 @@ A specialist reviewer earns its place. Add one when:
 
 Don't add one for a rule a test, linter, formatter, type checker or hook can enforce: make it that instead (hook > script/test > skill > agent), because a tool is exact, free to run and never tired, and a reviewer is none of these. Style, formatting, naming, import order, a banned call, a required file or header: automate. A reviewer's checklist keeps only what needs judgment. Don't add one for an area a general review already covers well either. One area per agent.
 
-Below, `route` means `python3 <this skill's base directory>/../review-changes/reviewers-for-change.py`, run from the repository.
+Below, `route` means `bash <this skill's base directory>/../../scripts/python.sh <this skill's base directory>/../review-changes/reviewers-for-change.py`, run from the repository. Exit 3 means no Python 3.11 was found: stop, show the user its message, and do not write routing that `route --check` cannot test.
 
 ## Reference
 

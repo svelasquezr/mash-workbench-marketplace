@@ -1,6 +1,6 @@
 # inspect reference
 
-Detail the inspect skill points to. Commands run from the project's repository; `route` means `python3 <this skill's base directory>/../review-changes/reviewers-for-change.py`. Text proposed for the project names the script as review-changes's `reviewers-for-change.py --models`, because a project reader doesn't know the alias.
+Detail the inspect skill points to. Commands run from the project's repository; `route` means `bash <this skill's base directory>/../../scripts/python.sh <this skill's base directory>/../review-changes/reviewers-for-change.py`; exit 3 means no Python 3.11 was found: stop and show the user its message. Text proposed for the project names the script as review-changes's `reviewers-for-change.py --models`, because a project reader doesn't know the alias.
 
 ## Plugin rules
 

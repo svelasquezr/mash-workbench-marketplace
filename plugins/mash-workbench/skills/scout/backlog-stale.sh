@@ -2,7 +2,8 @@
 # List open tooling backlog entries (in the file backlog-path.sh names) older than <days> (default 30), oldest first, as
 # "<date> (<age> days) · <form> · <title>"; an open entry without a valid date follows as "undated · <entry>".
 # No backlog (none chosen yet, or off), or no open entries: prints nothing, exit 0. BACKLOG_TODAY (YYYY-MM-DD) overrides today, for tests.
-# Date math runs in Python (standard library) rather than GNU `date -d`, so it also works on macOS.
+# Date math runs in Python (standard library) rather than GNU `date -d`, so it also works on macOS; scripts/python.sh
+# finds the interpreter (exit 3 when there is none).
 set -euo pipefail
 usage="usage: backlog-stale.sh <repo-root> [days]"
 root="${1:?$usage}"; days="${2:-30}"
@@ -11,7 +12,7 @@ status=0
 backlog_file=$(bash "$(dirname "${BASH_SOURCE[0]}")/backlog-path.sh" "$root") || status=$?
 case "$status" in 0) ;; 3 | 4) exit 0 ;; *) exit "$status" ;; esac  # 3: none chosen yet, 4: off
 [[ -f "$backlog_file" ]] || exit 0
-python3 - "$backlog_file" "$days" "${BACKLOG_TODAY:-}" <<'PY'
+bash "$(dirname "${BASH_SOURCE[0]}")/../../scripts/python.sh" - "$backlog_file" "$days" "${BACKLOG_TODAY:-}" <<'PY'
 import datetime, re, sys
 path, days, today_text = sys.argv[1], int(sys.argv[2]), sys.argv[3]
 try:

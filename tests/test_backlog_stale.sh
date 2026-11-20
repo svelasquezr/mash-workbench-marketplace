@@ -59,3 +59,12 @@ rm -rf "$chosen"
 # A root that does not exist is an error, not "nothing stale".
 run_capturing bash "$script" /no/such/root
 [[ "$captured_exit_code" != 0 ]] || { echo "  a missing root exited 0"; exit 1; }
+
+# With python3 as the Windows Store stub and no other Python: exit 3 with the finder's message, never a silent "no stale entries".
+stub_bin=$(mktemp -d)
+printf '#!/bin/sh\necho "Python was not found" >&2\nexit 9009\n' > "$stub_bin/python3"; chmod +x "$stub_bin/python3"
+for tool in bash dirname cat; do ln -s "$(command -v "$tool")" "$stub_bin/$tool"; done
+run_capturing env -i PATH="$stub_bin" MASH_WORKBENCH_BACKLOG="${MASH_WORKBENCH_BACKLOG:-docs/tooling-backlog.md}" BACKLOG_TODAY=2026-10-21 "$(command -v bash)" "$script" "$temporary_directory"
+rm -rf "$stub_bin"
+assert_eq "$captured_exit_code" "3"
+assert_contains "$captured_output" "no Python 3.11 or newer found"

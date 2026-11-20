@@ -181,3 +181,22 @@ assert_contains "$captured_output" "usage:"
 run_capturing bash "$script" --creat "$root" script "A title" "why"
 assert_eq "$captured_exit_code" "2"
 assert_contains "$captured_output" "unknown option: --creat"
+
+# Calendar rules, without Python: a day past the month's end and month 0 are refused; 29 February only in a leap year.
+for bad_date in 2026-02-29 2026-04-31 2026-00-10 2100-02-29; do
+  run_capturing env BACKLOG_DATE="$bad_date" bash "$script" --create "$(mktemp -d)" script "A title" "why"
+  assert_eq "$captured_exit_code" "2"
+done
+for good_date in 2028-02-29 2000-02-29; do
+  root=$(mktemp -d)
+  BACKLOG_DATE="$good_date" bash "$script" --create "$root" script "A title" "why" >/dev/null
+  assert_contains "$(cat "$root/docs/mash/tooling-backlog.md")" "- [ ] $good_date · script · A title — why"
+done
+# With python3 as the Windows Store stub (prints a message, exits 9009), an entry is still added.
+stub_bin=$(mktemp -d)
+printf '#!/bin/sh\necho "Python was not found; run without arguments to install from the Microsoft Store" >&2\nexit 9009\n' > "$stub_bin/python3"
+chmod +x "$stub_bin/python3"
+root=$(mktemp -d)
+run_capturing env -u BACKLOG_DATE PATH="$stub_bin:$PATH" bash "$script" --create "$root" script "A title" "why"
+assert_eq "$captured_exit_code" "0"
+assert_contains "$(cat "$root/docs/mash/tooling-backlog.md")" "- [ ] $(date -u +%F) · script · A title — why"
