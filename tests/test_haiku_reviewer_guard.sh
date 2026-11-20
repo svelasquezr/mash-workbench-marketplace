@@ -63,7 +63,8 @@ allowed Bash review-routing:change-reviewer haiku "SAFE TO LAND"
 allowed Agent general-purpose haiku "Summarise this doc. It says the API is NOT SAFE for children."
 allowed Agent Explore haiku "Find where severities Critical / Important are defined."
 
-# Both registered hook commands do nothing, quietly, when python3 is not on the PATH, and run the hook when it is.
+# Both registered hook commands do nothing, quietly, with no bash or no Python 3.11 on the PATH (the Windows Store
+# python3 alias does not count), and run the hook when there is one.
 for hook_script in haiku-reviewer-guard.py reviewer-guard.py; do
   command_line=$(python3 - "$hooks_json" "$hook_script" <<'PY'
 import json, sys
@@ -75,6 +76,13 @@ PY
 )
   [[ -n "$command_line" ]] || { echo "  no hook command for $hook_script"; exit 1; }
   run_capturing env -i PATH=/nonexistent CLAUDE_PLUGIN_ROOT="$PWD/plugins/review-routing" /bin/sh -c "$command_line" <<< '{"tool_name":"Bash","tool_input":{"command":"git commit -m x"}}'
+  assert_eq "$captured_exit_code" "0"
+  assert_eq "$captured_output" ""
+  stub_bin=$(mktemp -d)
+  printf '#!/bin/sh\necho "Python was not found" >&2\nexit 9009\n' > "$stub_bin/python3"; chmod +x "$stub_bin/python3"
+  ln -s "$(command -v bash)" "$stub_bin/bash"
+  run_capturing env -i PATH="$stub_bin" CLAUDE_PLUGIN_ROOT="$PWD/plugins/review-routing" /bin/sh -c "$command_line" <<< '{"tool_name":"Agent","tool_input":{"model":"haiku","subagent_type":"x-reviewer","prompt":"review"}}'
+  rm -rf "$stub_bin"
   assert_eq "$captured_exit_code" "0"
   assert_eq "$captured_output" ""
 done

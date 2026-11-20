@@ -14,7 +14,7 @@ names='test|lint|format|typecheck|check'
 emit() { printf '%s\t%s\n' "$1" "$2"; }
 
 if [[ -f "$root/package.json" ]]; then
-  python3 -I - "$root/package.json" <<'PY' || true
+  bash "$(dirname "${BASH_SOURCE[0]}")/../../scripts/python.sh" --missing-ok -I - "$root/package.json" <<'PY' || true
 import json, sys
 try:
     scripts = json.load(open(sys.argv[1])).get("scripts", {})

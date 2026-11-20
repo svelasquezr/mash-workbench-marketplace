@@ -360,7 +360,7 @@ entries = {entry["matcher"]: entry for entry in data["hooks"]["PreToolUse"]}
 assert set(entries) == {"Agent|Task", "Bash"}, entries.keys()
 bash_hooks = entries["Bash"]["hooks"]
 assert len(bash_hooks) == 1 and bash_hooks[0]["type"] == "command"
-assert bash_hooks[0]["command"] == 'command -v python3 >/dev/null 2>&1 || exit 0; exec python3 "${CLAUDE_PLUGIN_ROOT}/hooks/reviewer-guard.py"', bash_hooks[0]["command"]
+assert bash_hooks[0]["command"] == 'command -v bash >/dev/null 2>&1 || exit 0; exec bash "${CLAUDE_PLUGIN_ROOT}/scripts/python.sh" --missing-ok "${CLAUDE_PLUGIN_ROOT}/hooks/reviewer-guard.py"', bash_hooks[0]["command"]
 assert bash_hooks[0]["timeout"] == 10
 assert "haiku-reviewer-guard" in data["description"] and "reviewer-guard" in data["description"].replace("haiku-reviewer-guard", "")
 assert "haiku-reviewer-guard.py" in entries["Agent|Task"]["hooks"][0]["command"]

@@ -24,7 +24,7 @@ To try it without installing: `claude --plugin-dir <path-to>/plugins/review-rout
 
 ## Requirements
 
-`git`, `bash` and `python3` 3.11 or newer. Nothing needs `gh` or GitHub: the review works on a git range, whatever hosts the repository. Recording an escape needs only `bash` (no `python3`), and the skills say how to write the line by hand if the script cannot run. Escape-ledger links from github.com are normalised; any other http(s) link is kept as given. Built for Claude Code and developed against 2.1.289; older versions are untested. `inspect` reads the project's `CLAUDE.md` and `AGENTS.md` and, where they exist, `.claude/memory/`, `.claude/plans/` and the auto-memory folder under `~/.claude/projects/`.
+`git`, `bash` and Python 3.11 or newer, found as `python3`, `python` or the Windows launcher `py -3` (the Microsoft Store alias does not count; set `MASH_PYTHON` to choose one, for example `py -3.12` or a full path). With none, the review runs only the general reviewer and says routing was skipped. Nothing needs `gh` or GitHub: the review works on a git range, whatever hosts the repository. Recording an escape needs only `bash` (no `python3`), and the skills say how to write the line by hand if the script cannot run. Escape-ledger links from github.com are normalised; any other http(s) link is kept as given. Built for Claude Code and developed against 2.1.289; older versions are untested. `inspect` reads the project's `CLAUDE.md` and `AGENTS.md` and, where they exist, `.claude/memory/`, `.claude/plans/` and the auto-memory folder under `~/.claude/projects/`.
 
 ## Opinionated defaults
 
@@ -43,7 +43,7 @@ Both hooks apply in every project once the plugin is enabled, not only in projec
 - It needs the `agent_type` field in the hook input, which names the subagent (`review-routing:change-reviewer`; a bare `change-reviewer` is recognised too). A Claude Code version that does not send it makes the guard do nothing.
 - Claude Code's built-in agents (`general-purpose`, `Explore`, `Plan`, ...) are never guarded, even when your config names one as a reviewer: the same agent type also builds and commits in that session.
 - `haiku-reviewer-guard` refuses an Agent call on Haiku when the call looks like a review.
-- Both need `python3` on your PATH and do nothing without it.
+- Both find Python the same way as the skills (`scripts/python.sh`) and do nothing without it. The interpreter probe adds one Python start to each call.
 - The only way to switch them off is to disable the plugin.
 
 ## What it writes

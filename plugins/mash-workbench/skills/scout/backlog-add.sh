@@ -22,11 +22,18 @@ form="${2:?$usage}"; title="${3:?$usage}"; why="${4:?$usage}"
 case "$form" in hook|script|skill|agent|mcp|unsure) ;; *) echo "unknown form: $form" >&2; echo "$usage" >&2; exit 2 ;; esac
 # One entry is one line: a line break in the title or the reason (model-written text often has one) becomes a space.
 title=$(printf '%s' "$title" | tr '\r\n' '  '); why=$(printf '%s' "$why" | tr '\r\n' '  ')
+# Plain bash, no python3: on Windows python3 is often the Microsoft Store stub, which fails every call.
+valid_date() {
+  [[ "$1" =~ ^([0-9]{4})-([0-9]{2})-([0-9]{2})$ ]] || return 1
+  local year=$((10#${BASH_REMATCH[1]})) month=$((10#${BASH_REMATCH[2]})) day=$((10#${BASH_REMATCH[3]})) last=31
+  case "$month" in
+    4|6|9|11) last=30 ;;
+    2) if (( year % 4 == 0 && (year % 100 != 0 || year % 400 == 0) )); then last=29; else last=28; fi ;;
+  esac
+  (( year >= 1 && month >= 1 && month <= 12 && day >= 1 && day <= last ))
+}
 entry_date="${BACKLOG_DATE:-$(date -u +%F)}"
-if ! [[ "$entry_date" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] \
-  || ! python3 -c 'import datetime, sys; datetime.date.fromisoformat(sys.argv[1])' "$entry_date" 2>/dev/null; then
-  echo "BACKLOG_DATE must be a date, YYYY-MM-DD: $entry_date" >&2; exit 2
-fi
+valid_date "$entry_date" || { echo "BACKLOG_DATE must be a date, YYYY-MM-DD: $entry_date" >&2; exit 2; }
 [[ "$title" =~ [^[:space:]] ]] || { echo "the title is empty" >&2; echo "$usage" >&2; exit 2; }
 [[ "$title" != *" — "* ]] || { echo "the title must not contain ' — ': it separates the title from the reason" >&2; exit 2; }
 if [[ "${MASH_WORKBENCH_BACKLOG:-}" == off ]]; then

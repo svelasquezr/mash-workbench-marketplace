@@ -11,6 +11,14 @@ Only when `route` printed `general-purpose` (a project config that still names i
 3. Send `git diff <noted head> HEAD` to every reviewer that `route <noted head>..HEAD` prints, plus every reviewer that found something; not the whole change again. When the default branch (and only it) was merged in since the noted head, use `git log -p --first-parent --no-merges <noted head>..HEAD` plus `git show` of each merge that `git log --first-parent --merges <noted head>..HEAD` lists, so the base's commits don't pose as the fix. When the merge took in commits from the branch's own remote (`git merge origin/<feature>`), those sit on the merge's second parent and `--first-parent` hides them: send the plain `git diff <noted head> HEAD`.
 4. Start each reviewer on the model SKILL.md step 1 gave it (a reviewer new in this round: run `route <range> --models` again). Never take models from the `..` range: it sees only the fix's commits, so a model rule for new features wouldn't hold.
 
+## No Python
+
+`route` exits 3 when it finds no Python 3.11 or newer (`python3`, `python` and `py -3` were tried; on Windows the Microsoft Store alias, which prints "Python was not found", does not count). Then:
+
+1. Show the user the message `route` printed: it says how to install Python or set `MASH_PYTHON`.
+2. Do not guess the routing. Dispatch only `review-routing:change-reviewer` on `sonnet`, and continue with step 2.
+3. In the step 5 summary, add the line **Routing skipped: no Python 3.11 found (set MASH_PYTHON or install Python 3.11+)**. If `.claude/reviewers.toml` exists, list the agents it names (the `reviewers` values), so the user can ask for any of them by name.
+
 ## Recording escapes
 
 An escape is a bug in code a review passed, found later by anyone: a person, CI or a later reviewer. The ledger (`docs/mash/review-escapes.md` by default; `escapes-path.sh` says which file the project uses) holds one line per bug, keyed by its issue link. Pros of the issue link as the key: every path (a fix, a Pre-existing finding, a bug a person found) has one, and re-running a step cannot count a bug twice. Con: a bug with no issue has to get one first; the user files it on their host and gives you the link.
