@@ -248,3 +248,32 @@ assert_contains "$captured_output" "already recorded"
 # A date must be a real date.
 run_capturing env ESCAPE_DATE=2026-13-45 bash "$add" "$hostile" src/a wrong-result https://github.com/o/r/issues/3
 assert_eq "$captured_exit_code" "2"
+# Calendar rules: a day past the month's end and month 0 are refused; 29 February only in a leap year.
+for bad_date in 2026-02-29 2026-04-31 2026-00-10 2100-02-29; do
+  run_capturing env ESCAPE_DATE="$bad_date" bash "$add" "$hostile" src/a wrong-result https://github.com/o/r/issues/4
+  assert_eq "$captured_exit_code" "2"
+done
+for good_date in 2028-02-29 2000-02-29 2026-12-31; do
+  hostile=$(fresh_ledger_dir)
+  ESCAPE_DATE="$good_date" bash "$add" "$hostile" src/a wrong-result https://github.com/o/r/issues/4 >/dev/null
+  assert_contains "$(escape_ledger "$hostile")" "- $good_date · src/a · wrong-result ·"
+done
+
+# No Python needed: with python3 as the Windows Store stub (prints a message, exits 9009), recording still works.
+stub_bin=$(mktemp -d)
+printf '#!/bin/sh\necho "Python was not found; run without arguments to install from the Microsoft Store" >&2\nexit 9009\n' > "$stub_bin/python3"
+chmod +x "$stub_bin/python3"
+hostile=$(fresh_ledger_dir)
+run_capturing env -u ESCAPE_DATE PATH="$stub_bin:$PATH" bash "$add" "$hostile" src/a wrong-result https://github.com/o/r/issues/5
+rm -rf "$stub_bin"
+assert_eq "$captured_exit_code" "0"
+assert_contains "$(escape_ledger "$hostile")" "- $(date -u +%F) · src/a · wrong-result · https://github.com/o/r/issues/5"
+
+# The hand-recording rules in the review-changes reference match what the script writes, so they cannot drift.
+by_hand=plugins/review-routing/skills/review-changes/reference.md
+hostile=$(fresh_ledger_dir); rm -f "$hostile/docs/review-escapes.md"
+ESCAPE_DATE=2026-10-11 bash "$add" "$hostile" src/payments wrong-result https://github.com/o/r/issues/12 >/dev/null
+while IFS= read -r header_line; do
+  [[ -z "$header_line" ]] || assert_contains "$(cat "$by_hand")" "$header_line"
+done < <(head -3 "$hostile/docs/review-escapes.md")
+assert_contains "$(cat "$by_hand")" "$(grep '^- ' "$hostile/docs/review-escapes.md")"

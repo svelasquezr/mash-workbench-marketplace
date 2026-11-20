@@ -36,11 +36,18 @@ area=$(printf '%s' "$area" | tr -s '/')  # src//payments is src/payments
 [[ "$area$class$link" != *$'\n'* && "$area$class$link" != *$'\r'* ]] || refuse "fields must be on one line"
 [[ "$area" != *[[:space:]]* ]] || refuse "the area must not contain whitespace: $area"
 [[ "$class" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]] || refuse "the class is lowercase words joined by hyphens, such as wrong-result"
+# Plain bash, no python3: on Windows python3 is often the Microsoft Store stub, which fails every call.
+valid_date() {
+  [[ "$1" =~ ^([0-9]{4})-([0-9]{2})-([0-9]{2})$ ]] || return 1
+  local year=$((10#${BASH_REMATCH[1]})) month=$((10#${BASH_REMATCH[2]})) day=$((10#${BASH_REMATCH[3]})) last=31
+  case "$month" in
+    4|6|9|11) last=30 ;;
+    2) if (( year % 4 == 0 && (year % 100 != 0 || year % 400 == 0) )); then last=29; else last=28; fi ;;
+  esac
+  (( year >= 1 && month >= 1 && month <= 12 && day >= 1 && day <= last ))
+}
 entry_date="${ESCAPE_DATE:-$(date -u +%F)}"
-if ! [[ "$entry_date" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] \
-  || ! python3 -c 'import datetime, sys; datetime.date.fromisoformat(sys.argv[1])' "$entry_date" 2>/dev/null; then
-  refuse "ESCAPE_DATE must be a date, YYYY-MM-DD: $entry_date"
-fi
+valid_date "$entry_date" || refuse "ESCAPE_DATE must be a date, YYYY-MM-DD: $entry_date"
 [[ ! -f "$root/$area" ]] || refuse "the area is a directory, not a file: use $(dirname "$area")"
 lower() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }  # tr, not bash 4 case expansion: macOS ships bash 3.2
 while [[ "$link" == ?*/ ]]; do link="${link%/}"; done
