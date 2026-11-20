@@ -167,3 +167,18 @@ assert_contains "$captured_output" "$(printf 'pytest # unit\t.github/workflows/e
 assert_contains "$captured_output" "$(printf 'pytest tests/test_install.py\t.github/workflows/e.yml')"
 assert_not_contains "$captured_output" "pip install"
 assert_not_contains "$captured_output" "npm install"
+
+# With python3 as the Windows Store stub and no other Python, package.json is skipped quietly; other sources still work.
+stub_repo=$(fresh store-stub)
+printf '{"scripts": {"test": "jest"}}' > "$stub_repo/package.json"
+printf 'test:\n\techo ok\n' > "$stub_repo/Makefile"
+stub_bin=$(mktemp -d "$temporary_directory/bin.XXXXXX")
+printf '#!/bin/sh\necho "Python was not found" >&2\nexit 9009\n' > "$stub_bin/python3"; chmod +x "$stub_bin/python3"
+for tool in bash grep sed awk cat tr sort head dirname basename find; do
+  if command -v "$tool" >/dev/null 2>&1; then ln -s "$(command -v "$tool")" "$stub_bin/$tool"; fi
+done
+run_capturing env -i PATH="$stub_bin" "$(command -v bash)" "$find_checks" "$stub_repo"
+assert_eq "$captured_exit_code" "0"
+assert_not_contains "$captured_output" "Python was not found"
+assert_not_contains "$captured_output" "npm test"
+assert_contains "$captured_output" "make test"

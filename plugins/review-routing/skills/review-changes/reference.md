@@ -16,7 +16,7 @@ Only when `route` printed `general-purpose` (a project config that still names i
 `route` exits 3 when it finds no Python 3.11 or newer (`python3`, `python` and `py -3` were tried; on Windows the Microsoft Store alias, which prints "Python was not found", does not count). Then:
 
 1. Show the user the message `route` printed: it says how to install Python or set `MASH_PYTHON`.
-2. Do not guess the routing. Dispatch only `review-routing:change-reviewer` on `sonnet`, and continue with step 2.
+2. Do not guess the routing. Dispatch only `review-routing:change-reviewer` on `sonnet`, and continue with step 2. Skip `route --check` too (it needs Python as well), and say so in the summary.
 3. In the step 5 summary, add the line **Routing skipped: no Python 3.11 found (set MASH_PYTHON or install Python 3.11+)**. If `.claude/reviewers.toml` exists, list the agents it names (the `reviewers` values), so the user can ask for any of them by name.
 
 ## Recording escapes

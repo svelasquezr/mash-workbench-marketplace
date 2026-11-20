@@ -11,7 +11,7 @@ A plugin marketplace for Claude Code (support for GitHub Copilot CLI and other c
 
 ## Requirements
 
-Claude Code, with `git`, `bash` and `python3` 3.11 or newer on your PATH (the scripts and hooks use the standard library only).
+Claude Code, with `git`, `bash` and Python 3.11 or newer, found as `python3`, `python` or the Windows launcher `py -3` (the Microsoft Store alias does not count; `MASH_PYTHON` chooses one) (the scripts and hooks use the standard library only).
 
 ## Install
 
