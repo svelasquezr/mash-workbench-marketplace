@@ -13,7 +13,8 @@ set -euo pipefail
 #       ESCAPE_DATE or today in UTC; a name that exists, also in processed/, gets -2, -3 and so on. The same
 #       area with the same source already in the folder (not in processed/) prints "already recorded: <file>"; a
 #       GitHub /pull/N and /issues/N with no fragment count as the same source. When the area is at or over the threshold after the record, and
-#       not declined, its escapes-report.sh line is printed too.
+#       not declined, its escapes-report.sh line is printed too. The same source already recorded in another area is
+#       still recorded (the report counts per area); "also recorded in <area>: <file>" follows the "recorded" line.
 #   escape-add.sh --batch <file> <repo-root>
 #       Record several: blocks separated by a line "---8<---", each an escape file's frontmatter (plus "slug:"; "date:"
 #       and "source:" optional) and its body. Every block is checked first; one bad block writes nothing. Prints
@@ -204,9 +205,11 @@ escape_rows() {
   if ((${#files[@]} > 0)); then awk -f "$here/escape-fields.awk" "${files[@]}"; fi
 }
 
-# write_escape <date> <area> <class> <slug> <source> <body>: sets written ("recorded" or "already") and written_file.
+# write_escape <date> <area> <class> <slug> <source> <body>: sets written ("recorded" or "already"), written_file, and
+# written_also (the first other area's file with the same source, as "<area>: <file>", or "").
 write_escape() {
   local date=$1 area=$2 class=$3 slug=$4 source=$5 body=$6 name number=1 existing
+  written_also=""
   if [[ -n "$source" ]]; then
     # Per area, as the report counts. A GitHub /pull/N and /issues/N with no fragment are the same number: an old
     # ledger wrote every pull request as /issues/N.
@@ -217,6 +220,9 @@ write_escape() {
     existing=$(escape_rows | AREA="$area" SOURCE="$source" SAME="$same" \
       awk -F '\t' '$3 == ENVIRON["AREA"] && ($5 == ENVIRON["SOURCE"] || $5 == ENVIRON["SAME"]) { print $1; exit }')
     if [[ -n "$existing" ]]; then written=already; written_file="$folder/$existing"; return 0; fi
+    existing=$(escape_rows | AREA="$area" SOURCE="$source" SAME="$same" \
+      awk -F '\t' '$3 != ENVIRON["AREA"] && ($5 == ENVIRON["SOURCE"] || $5 == ENVIRON["SAME"]) { print $3 "\t" $1; exit }')
+    if [[ -n "$existing" ]]; then written_also="${existing%%"$tab"*}: $(display "$folder/${existing#*"$tab"}")"; fi
   fi
   [[ -w "$folder" ]] || { echo "escape-add: cannot write in $folder" >&2; exit 2; }
   # noclobber claims the name in one step, so two sessions recording at once never share a file. A name in processed/
@@ -327,9 +333,10 @@ case "$1" in
     if ((blocks == 0)); then refuse "the batch file holds no blocks"; fi
     resolve_folder record
     prepare_folder
-    recorded=0; already=0; areas=()
+    recorded=0; already=0; areas=(); also_lines=""
     for ((index = 1; index <= blocks; index++)); do
       write_escape "${b_date[index]}" "${b_area[index]}" "${b_class[index]}" "${b_slug[index]}" "${b_source[index]}" "${b_body[index]}"
+      if [[ -n "$written_also" ]]; then also_lines="${also_lines}also recorded in $written_also"$'\n'; fi
       if [[ "$written" == recorded ]]; then
         recorded=$((recorded + 1))
         case " ${areas[*]-} " in *" ${b_area[index]} "*) ;; *) areas+=("${b_area[index]}") ;; esac
@@ -338,6 +345,7 @@ case "$1" in
       fi
     done
     echo "recorded $recorded, already recorded $already"
+    if [[ -n "$also_lines" ]]; then printf '%s' "$also_lines"; fi
     if ((${#areas[@]} > 0)); then threshold_lines "${areas[@]}"; fi
     exit 0
     ;;
@@ -371,4 +379,5 @@ prepare_folder
 write_escape "$default_date" "$area" "$class" "${positional[3]}" "$source" "$body"
 if [[ "$written" == already ]]; then echo "already recorded: $(display "$written_file")"; exit 0; fi
 echo "recorded: $(display "$written_file")"
+if [[ -n "$written_also" ]]; then echo "also recorded in $written_also"; fi
 threshold_lines "$area"

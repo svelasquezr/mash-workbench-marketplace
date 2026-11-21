@@ -11,7 +11,8 @@
 # Exit 0 with the path; 3 when nothing has been chosen yet (not set and no old file), so nothing is created before
 # the user says where; 4 when it is off; 5 when the repository has no main worktree to read (bare, or a linked
 # worktree of a --separate-git-dir repository) and no absolute path is set; 6 when the setting is the main worktree
-# itself. An empty setting counts as not set.
+# itself (the repository-root refusal applies inside a git repository only; outside one, a path equal to <repo-root>
+# is printed as it is). An empty setting counts as not set.
 # Outside a git repository, <repo-root> stands in for the main worktree and only REVIEW_ROUTING_ESCAPES is read
 # (no settings files).
 set -euo pipefail

@@ -26,7 +26,7 @@ new_repo() {
   (cd "$folder" && pwd -P)
 }
 body="$fixture/body.md"
-printf 'When the order has a discount, the total includes tax.\nThe total must not include tax. Tax is a separate line.\n' > "$body"
+printf 'When the order has a discount, the total includes tax. The total must not include tax. Tax is a separate line.\n' > "$body"
 # record <repo> <area> <class> <slug> [more arguments]: escape-add.sh with the shared body file.
 record() { local repo=$1 area=$2 class=$3 slug=$4; shift 4; bash "$add" "$repo" "$area" "$class" "$slug" --body-file "$body" "$@"; }
 count_files() { find "$1/$escapes_folder" -maxdepth 1 -name '*.md' ! -name README.md | wc -l | tr -d ' '; }
@@ -70,6 +70,18 @@ assert_contains "$captured_output" "-first.md"
 run_capturing record "$repo" src/b other-class other-area --source "https://github.com/acme/shop/pull/7#discussion_r1"
 assert_contains "$captured_output" "recorded: $escapes_folder/"
 assert_not_contains "$captured_output" "already"
+# It still records, and names the file the same source has in the other area.
+assert_contains "$captured_output" "also recorded in src/a: $escapes_folder/"
+assert_contains "$captured_output" "-first.md"
+# A different source prints no hint; the batch prints the hint after its summary line.
+run_capturing record "$repo" src/b other-class unrelated --source "https://github.com/acme/shop/pull/99"
+assert_not_contains "$captured_output" "also recorded"
+rm "$repo/$escapes_folder"/*-unrelated.md
+printf -- '---\narea: src/c\nclass: wrong-result\nslug: batch-also\nsource: https://github.com/acme/shop/pull/7#discussion_r1\n---\nA body.\n' > "$fixture/also-batch.md"
+run_capturing bash "$add" --batch "$fixture/also-batch.md" "$repo"
+assert_contains "$captured_output" "recorded 1, already recorded 0"
+assert_contains "$captured_output" "also recorded in src/a: $escapes_folder/"
+rm "$repo/$escapes_folder"/*-batch-also.md
 rm "$repo/$escapes_folder"/*-other-area.md
 record "$repo" src/a wrong-result second --source "https://github.com/acme/shop/pull/7#discussion_r2" >/dev/null
 assert_eq "$(count_files "$repo")" "2"

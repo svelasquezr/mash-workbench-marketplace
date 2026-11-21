@@ -14,10 +14,7 @@ Scope: you own <the area, in words>. <Neighbouring reviewer> owns <its part>; wh
 
 ## Checklist
 
-<!-- Specific to this codebase, or it adds nothing a general review doesn't: file paths, the
-invariants that must hold, and the bugs that made this reviewer necessary (link each PR or issue).
-Only judgment items: anything a test, linter, formatter or hook can check goes into that tool, not
-here. Delete this comment. -->
+<!-- Specific to this codebase, or it adds nothing a general review doesn't: file paths, the invariants that must hold, and the bugs that made this reviewer necessary (link each PR or issue). Only judgment items: anything a test, linter, formatter or hook can check goes into that tool, not here. Delete this comment. -->
 
 **<Invariant>** (<where it is enforced; the bug, PR or issue behind it>)
 

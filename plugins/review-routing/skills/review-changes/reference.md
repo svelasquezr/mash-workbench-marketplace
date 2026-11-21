@@ -19,12 +19,20 @@ Only when `route` printed `general-purpose` (a project config that still names i
 2. Do not guess the routing. Dispatch only `review-routing:change-reviewer` on `sonnet`, and continue with step 2. Skip `route --check` too (it needs Python as well), and say so in the summary.
 3. In the step 5 summary, add the line **Routing skipped: no Python 3.11 found (set MASH_PYTHON or install Python 3.11+)**. If `.claude/reviewers.toml` exists, list the agents it names (the `reviewers` values), so the user can ask for any of them by name.
 
+## Review log and escape lines
+
+Step 5, when every reviewer's last verdict is `SAFE TO LAND`:
+
+1. **Log the range.** `bash <this skill's base directory>/review-log.sh add <repo-root> <base> <head>`. For a `<default>...HEAD` range, `<base>` is `git merge-base <default> HEAD`. When the user commits after the review, you run `add` after that commit, with `<base>` and the new `HEAD`. The line goes to `reviews.log` in the main worktree's `.claude/mash-workbench/` folder, which the script lists in the repository's `info/exclude`: nothing reaches a commit or a pull request. It records the range's patch-ids too, so a later squash or rebase merge still matches. The record-escape skill asks `review-log.sh reviewed <repo-root> <commit>` whether a commit passed a review (exit 0 yes, anything else no answer in the log: a squash merge that needed conflict fixes has another diff, so the skill then asks the user). `add` refuses a base that is not an ancestor of the head and a range with no changes (exit 2). Not logged on `NOT SAFE`; a failure to log does not block the summary: say so in one line.
+2. **Escape lines.** Run `bash <this skill's base directory>/../add-reviewer/escapes-report.sh <repo-root>` and add one line to the summary for each area it marks `-> add a reviewer for <area>` (threshold: default 3, or the `escapes.threshold` setting; a declined area is not marked). Ask the user, once per area: "<area> has N escapes that a review passed. Add a specialist reviewer for it?" Yes: run the add-reviewer skill. No: `bash <this skill's base directory>/../../scripts/mash-settings.sh set <repo-root> declined.<area> <YYYY-MM-DD>:<N> --local`; the report asks again at N + 2.
+3. **Uncommitted escape files.** With committed escapes, count the files that wait (`git -C <main worktree> status --porcelain --untracked-files=all -- <escapes folder>`, leaving out `README.md`) and add "N escape files wait uncommitted in <folder>" when N is above 0. The user commits them from the main worktree. No skill commits them.
+
 ## Recording escapes
 
 An escape is a bug in code a review passed, found later by anyone: a person, CI or a later reviewer. Each escape is one file in the project's escapes folder (by default `.claude/mash-workbench/escapes/` in the main worktree, the folder where the repository was cloned; `bash <this skill's base directory>/../add-reviewer/escapes-path.sh <repo-root>` prints it). The file describes the bug, so add-reviewer needs no git host, and separate files never conflict in a merge.
 
 1. **Is it a repeat?** `bash <this skill's base directory>/../add-reviewer/escape-add.sh --list <repo-root> <area>` prints that area's escapes, newest first, one line each. If one is the same bug, say so and record nothing.
-2. **The body.** Write it to a temporary file, in ASD-STE100: the conditions, then the incorrect result, then the expected result. The first line is the summary `--list` shows.
+2. **The body.** Write it to a temporary file, in ASD-STE100: the conditions, then the incorrect result, then the expected result. It is one paragraph on one line, with the sentences separated by spaces; `--list` shows its first line as the summary.
 3. **Record.** `bash <this skill's base directory>/../add-reviewer/escape-add.sh <repo-root> <area-directory> <class> <slug> --body-file <file> [--source <link>]`. The area is the directory a route claims (`src/payments`), never a file. The class and the slug are lowercase words joined by `-` (`wrong-result`, `discount-tax`). Add `--source` when there is a link: a review comment, an issue or a pull request. For several escapes at once, `--batch <file> <repo-root>` takes blocks in the file format below, each with a `slug:` line, separated by a line `---8<---`.
 
 When to record:
@@ -42,7 +50,7 @@ What the script answers:
 - "already recorded: <file>" (exit 0): an escape with the same area and the same source is already in the folder, so a repeat is safe. The same source in another area is another escape, as the report counts it.
 - A line ending "-> add a reviewer for <area> (add-reviewer skill)": the area reached the threshold (default 3, the `escapes.threshold` setting). Ask the user: "<area> has N escapes that a review passed. Add a specialist reviewer for it?" Yes: run the add-reviewer skill. No: save the decline with `bash <this skill's base directory>/../../scripts/mash-settings.sh set <repo-root> declined.<area> <YYYY-MM-DD>:<N> --local`; the report asks again at N + 2.
 
-The file goes to the escapes folder in the main worktree, also when you work in a linked worktree. No skill commits escape files. With committed escapes, tell the user "N escape files wait uncommitted in <folder>" (count them with `git -C <main worktree> status --porcelain -- <folder>`); the user commits them from the main worktree, never on the fix branch.
+The file goes to the escapes folder in the main worktree, also when you work in a linked worktree. No skill commits escape files. With committed escapes, tell the user "N escape files wait uncommitted in <folder>" (count them with `git -C <main worktree> status --porcelain --untracked-files=all -- <folder>`, leaving out `README.md`); the user commits them from the main worktree, never on the fix branch.
 
 The source link is normalised: for a `github.com` link, `www.`, a `?query`, a trailing `/` and the fragment are dropped, but a review comment keeps `#discussion_r<id>` (the files view's `#r<id>` becomes that), a `#note_<id>` stays, and on a pull request `#issuecomment-<id>` and `#pullrequestreview-<id>` stay; `/pull/N` stays a pull request, and its `/files`, `/changes`, `/commits` or `/checks` page is the pull request; `owner/repo#N` and `#N` (owner and repo from the origin remote) become `https://github.com/<owner>/<repo>/issues/N`. Any other http(s) link only loses a trailing `/`. `#N` with no GitHub origin is refused.
 
@@ -51,7 +59,7 @@ The source link is normalised: for a `github.com` link, `www.`, a `?query`, a tr
 When `escape-add.sh` exits 3 with "no escapes folder chosen yet", nothing has been written. Ask, then set it up:
 
 1. **Where.** Ask the user, in one question, where to keep escapes, with a recommendation: `.claude/mash-workbench/escapes` committed (recommended: the whole team's misses add up), the same folder excluded (only this clone), another folder, or none (`off`). Check a path first with the `check-escapes-path` command the script printed: it says what the choice means, or refuses (exit 6) a linked worktree, a temporary folder, the git directory, or a folder another repository owns. For an excluded folder inside the repo, add it to `<git common dir>/info/exclude` (`git rev-parse --git-common-dir` names the dir).
-2. **Save the answer.** Run the `mash-settings.sh set` command the script printed: `--team` for committed escapes (the `settings` file is committed with them), `--local` for excluded escapes, a folder outside the repo, or `off`. Exit 1 means another writer holds the settings lock: try again; if none is running, remove the lock folder the message names.
+2. **Save the answer.** Run the `mash-settings.sh set` command the script printed: `--team` for committed escapes (the `settings` file is committed with them), `--local` for excluded escapes, a folder outside the repo, or `off`. Exit 1 means another writer holds the settings lock: run the same command again. If it persists, the message names the lock folder (`.settings.lock`): check that no other session is writing, then remove that folder and run the command again.
 3. **Offer write access**, whatever the answer was: with it, background sessions in new worktrees record without a prompt. Show the user these rules, and add them only on a yes, merged into `permissions.allow` of `<main worktree>/.claude/settings.local.json` (`bash <this skill's base directory>/../../scripts/mash-settings.sh main-worktree <repo-root>` prints the main worktree; create the file when it is missing). Edit that file with your own edit tool, so Claude Code asks the user to approve the write too; no script edits it.
 
    ```json
@@ -60,6 +68,7 @@ When `escape-add.sh` exits 3 with "no escapes folder chosen yet", nothing has be
        "allow": [
          "Bash(bash */review-routing/*add-reviewer/escape-add.sh*)",
          "Bash(bash */review-routing/*add-reviewer/escape-migrate.sh*)",
+         "Bash(bash */review-routing/*review-changes/review-log.sh*)",
          "Bash(bash */review-routing/*scripts/mash-settings.sh*)"
        ]
      }
@@ -106,8 +115,7 @@ Only when `escape-add.sh` cannot run or fails for a reason other than its own an
    source: https://github.com/acme/shop/pull/12#discussion_r222
    ---
 
-   When the order has a discount, the total includes tax.
-   The total must not include tax. Tax is a separate line.
+   When the order has a discount, the total includes tax. The total must not include tax. Tax is a separate line.
    ```
 
 8. **Threshold.** Count the files with this area (files with the same `source` once). At the threshold (default 3, or the `escapes.threshold` setting), unless `declined.<area>=<date>:<count>` is set and the count is below `<count>` + 2, tell the user: "<area>: N escapes -> add a reviewer for <area> (add-reviewer skill)".
