@@ -1,0 +1,32 @@
+# 0004: one home folder for settings and escapes
+
+## Context
+
+The review-escape ledger and its setting were found relative to the current worktree. The setting was in `.claude/settings.local.json`, and git does not track that file. A new linked worktree in `.claude/worktrees/<name>` does not have the file. Thus a background session in that worktree asked the user again, or it wrote a second ledger. Entries got lost.
+
+The ledger was one file with one line for each escape. The line held only a link to an issue or a pull request. Thus the `add-reviewer` skill had to read the git host to know what the bug was.
+
+A hook, `haiku-reviewer-guard.py`, also blocked a reviewer on the Haiku model. The router already refuses Haiku in three places. The hook was a second copy of that rule.
+
+## Decision
+
+1. **Home folder.** All settings and the review log live in `<main worktree>/.claude/mash-workbench/`. The scripts find the main worktree with git, so every worktree of a repository finds the same folder. `scripts/mash-settings.sh` does this work. Each MASH plugin has an identical copy of that script.
+2. **Main worktree.** The script reads `git rev-parse --git-common-dir`. A submodule records its work folder in `core.worktree`. A normal repository has its common dir at `<main>/.git`. A bare repository has no main worktree, so the script stops with exit code 5. A repository made with `git init --separate-git-dir` does not record its work folder. The script finds it only from the work folder itself. From a linked worktree of such a repository, the script stops with exit code 5. Outside a git repository, the script stops with exit code 2. Then `escapes-path.sh` uses the project folder as the main worktree and reads only the environment variable.
+3. **Settings files.** The home folder holds two files. `settings` is for the team, and the user can commit it. `settings.local` is private, and the script adds it to `$common/info/exclude`. Each line is `key=value`. The first `=` splits the line. The script ignores empty lines and lines that start with `#`. When a key occurs two times, the last line wins. An environment variable has priority over `settings.local`, and `settings.local` has priority over `settings`. There is no user-level file. The `set` command writes through a lock folder, so two writers cannot lose a line. With `--local`, it adds the exclude line before it writes `settings.local`, so git never shows that file as untracked. The command replaces a symbolic link with a regular file.
+4. **Escapes folder.** The user selects the folder. The default is `<home folder>/escapes/`. The script refuses a folder in a linked worktree, because git deletes the worktree with its branch. It also refuses the git directory, `/tmp`, `$TMPDIR` and the Claude Code scratchpad in them. A folder under `$HOME` but outside the repository gets a warning: a container rebuild can delete it.
+5. **Owner marker.** The escapes folder holds a `README.md` with a `repo:` line. The value is the repository key, `host/owner/repo` in lowercase, from the `origin` remote. Without a remote, the key is `local/<main worktree folder name>`, also in lowercase. The script refuses a folder outside the repository when its `repo:` line names a different repository. Inside the repository, the script does not do this check, because each clone can have a different remote spelling.
+6. **Escape files.** Each escape is one file, `<escapes folder>/YYYY-MM-DD-<slug>.md`. The file has frontmatter with `date`, `area`, `class`, and `source` when a link exists. The body gives the conditions, the incorrect result and the expected result, in ASD-STE100. There is no index file.
+7. **Permissions.** Setup asks the user for write access. With a yes, it adds `Bash(...)` allow rules to `<main>/.claude/settings.local.json`. Git does not track that file, so Claude Code applies it with no workspace-trust step, also in a new worktree. Each rule names one script that writes, with a wildcard for the plugin version folder. The rules use `Bash`, because an `Edit` rule cannot open `.claude/`.
+8. **Sandbox.** The README tells sandbox users which three sandbox settings they need. A repository file cannot set `autoAllowBashIfSandboxed`, so the plugins do not try.
+9. **Backlog.** The mash-workbench tooling backlog uses the same settings, the same path checks and the same `repo:` marker. It stays one file, because each entry is already one line.
+10. **Haiku guard.** We removed `haiku-reviewer-guard.py`. The router refuses Haiku in `route_config.py`, `route_models.py` and `route_check.py`. We kept `reviewer-guard.py`, because reviewers keep the Bash tool.
+11. **TOML.** The router keeps `.claude/reviewers.toml` and Python 3.11. The route file has nested tables and lists, and `tomllib` reads them with no extra package. The settings files are flat, so `key=value` is sufficient there, and bash can read it with no Python.
+
+## Pros and cons
+
+- Pros: every worktree finds one ledger and one set of settings. Separate escape files do not cause merge conflicts. Each escape file tells the bug, so `add-reviewer` does not need a git host. The settings need no Python.
+- Cons: the scripts cannot find the main worktree in a bare repository, or from a linked worktree of a `--separate-git-dir` repository. There, the user must give an absolute path.
+- Cons: a person can edit the `repo:` line by hand and so remove the owner check. Two local-only repositories with the same folder name get the same key. We accept these gaps.
+- Cons: the `settings` file is a new format next to the Claude Code settings. We accept this, because Claude Code does not give the same file to every worktree.
+- Cons: without the Haiku hook, a reviewer that a person starts directly, outside `review-changes`, can run on Haiku. We accept this gap.
+- Cons: escape files that the team commits appear as uncommitted changes in the main worktree. The user must commit them from there.
