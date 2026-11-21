@@ -2,6 +2,33 @@
 
 Newest first. "Changed scripts" lists the scripts and hooks whose behavior changed, so you know what to re-read before you update.
 
+## 0.5.1 - 2026-11-21
+
+Security fix. When you had added the allow rules that "Setting up escapes" offered in 0.4.0 to 0.5.0, Claude Code ran each command that started with `bash` and contained the script name, with no prompt. Examples are `bash -c '<a command>' /review-routing/add-reviewer/escape-add.sh` and `bash <a different script> /x/review-routing/add-reviewer/escape-add.sh`. The cause is that `*` in a rule matches all text, spaces included, and the rules had a wildcard before the script path. Only the plugin's own scripts must run with no prompt.
+
+**Remove the old rules now.** Open `.claude/settings.local.json` in the main worktree of each repository where you accepted the offer (and any other settings file you copied them to), and delete these lines from `permissions.allow`:
+
+```text
+Bash(bash */review-routing/*add-reviewer/escape-add.sh*)
+Bash(bash */review-routing/*add-reviewer/escape-migrate.sh*)
+Bash(bash */review-routing/*review-changes/review-log.sh*)
+Bash(bash */review-routing/*scripts/mash-settings.sh*)
+```
+
+Delete also any other rule for these scripts that has a `*` before the script path. Then, if you want sessions with no user to keep recording without a prompt, run step 3 of "Setting up escapes" (in the `review-changes` `reference.md`) again: it offers the new rules and names the old ones it finds.
+
+Changed scripts:
+
+- New `skills/review-changes/permission-rules.sh <repo-root>`: prints the allow rules to offer, and the old rules to remove. Each rule is `Bash(bash <script path> *)` with the exact path of the installed plugin and one wildcard, at the end; there is one rule for each spelling of the path that a skill writes, and only for `escape-add.sh` and `review-log.sh`. It reads the `Bash(...)` strings of `.claude/settings.local.json` in the main worktree (and in the current linked worktree), and prints `present:`, `add:` and `remove:` lines; a `remove:` rule is a `Bash(bash ...)` rule that is not a current rule and names one of the plugin's scripts under a `review-routing` folder or after a wildcard. It does not tell the `allow`, `deny` and `ask` lists apart. It writes nothing and makes no network call. It exits 6 and prints no rule when the plugin folder, or a symbolic link on the path to it, is inside a worktree of the repository (a session that edits files there could change the scripts), or when the plugin path holds a character a rule cannot spell safely.
+
+Other:
+
+- "Setting up escapes" step 3 runs that script and no longer shows a fixed list of rules. `escape-migrate.sh` and `mash-settings.sh` get no rule any more: they run only after you answered a question, so you are there to approve them.
+- The rules name the plugin's version folder, so they stop matching after each plugin update, on purpose: a new version's scripts run with no prompt only after you allowed them again. Run step 3 again after an update.
+- "Recording escapes" says what a session with no user does when Claude Code refuses the command: it tries no other spelling and no wrapper, and puts the escapes in its final report for a session with a user to record.
+- Added `docs/decisions/0005-exact-path-allow-rules.md`, with the Claude Code test results; decision 7 of 0004 points to it.
+- New test `tests/test_permission_rules.sh`.
+
 ## 0.5.0 - 2026-11-21
 
 New skill `record-escape`: when you process review comments, paste one, or correct code that a review passed, it records the bug as an escape file, but only when a review passed the code and the problem is a behavior bug. To know whether a review passed the code, `review-changes` now keeps a log of the ranges it reviewed. The log stays on your machine and is never committed.
