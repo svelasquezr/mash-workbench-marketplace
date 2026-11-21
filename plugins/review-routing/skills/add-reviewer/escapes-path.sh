@@ -10,7 +10,8 @@
 # above, or an escapes setting that still names a file. escape-add.sh then refuses to record until it is migrated.
 # Exit 0 with the path; 3 when nothing has been chosen yet (not set and no old file), so nothing is created before
 # the user says where; 4 when it is off; 5 when the repository has no main worktree to read (bare, or a linked
-# worktree of a --separate-git-dir repository) and no absolute path is set.
+# worktree of a --separate-git-dir repository) and no absolute path is set; 6 when the setting is the main worktree
+# itself. An empty setting counts as not set.
 # Outside a git repository, <repo-root> stands in for the main worktree and only REVIEW_ROUTING_ESCAPES is read
 # (no settings files).
 set -euo pipefail
@@ -47,6 +48,13 @@ if (( status == 0 )); then
       exit 5
     fi
     choice="$main/$choice"
+  fi
+  # mash-settings.sh resolves .., ./ and symlinks, also in a folder that does not exist yet.
+  if [[ -n "$main" ]]; then
+    root_check=$(bash "$settings" check-escapes-path "$root" "$choice" 2>/dev/null || true)
+    case "$root_check" in
+      *"must not be the repository root"*) echo "escapes-path: the escapes folder must not be the repository root" >&2; exit 6 ;;
+    esac
   fi
   if [[ -n "$main" ]]; then
     for other in docs/mash/review-escapes.md docs/review-escapes.md; do

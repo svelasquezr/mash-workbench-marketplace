@@ -2,6 +2,15 @@
 
 Newest first. "Changed scripts" lists the scripts and hooks whose behavior changed, so you know what to re-read before you update.
 
+## 0.4.1 - 2026-11-21
+
+Fixed: when the `escapes` setting was empty (for example `escapes=` in a settings file), the escapes folder became the repository root. Escape files and a `README.md` were then written into the root, and the report counted every `.md` file there. An empty setting now counts as not set, so a repository with no setting, or with an old ledger, behaves as before. A setting that names the repository root is refused. A setting of only spaces or tabs also counts as not set; before, it made a folder named " " in the repository root.
+
+Changed scripts:
+
+- `scripts/mash-settings.sh`: `get` treats an empty or whitespace-only value as not set (exit 3, or the next source answers; a later empty line for a key hides an earlier value in the same file). `set` refuses such a value with exit 2 and points at `unset`. `check-escapes-path` refuses the repository root itself with exit 6.
+- `skills/add-reviewer/escapes-path.sh`: exits 6 with "the escapes folder must not be the repository root" when the setting resolves to the main worktree.
+
 ## 0.4.0 - 2026-11-21
 
 Escapes are now one file per bug, in one folder that every worktree finds. Nothing new is recorded into an old one-line ledger: migrate it first.

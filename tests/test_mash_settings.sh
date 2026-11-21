@@ -352,3 +352,39 @@ run_capturing bash "$add_script" "$offrepo" src/a wrong-result off --body-file "
 assert_eq "$captured_exit_code" "0"
 assert_contains "$captured_output" "off"
 [[ ! -e "$offrepo/.claude/mash-workbench/escapes" ]] || { echo "  recorded while off"; exit 1; }
+
+# An empty value counts as not set, for every key: get skips it (the next source answers), set refuses it.
+empty_repo="$area/empty"; new_repository "$empty_repo"; mkdir -p "$empty_repo/.claude/mash-workbench"
+printf 'k=\n' > "$empty_repo/.claude/mash-workbench/settings.local"
+run_capturing settings get "$empty_repo" k
+assert_eq "$captured_exit_code" "3"
+printf 'k=team\n' > "$empty_repo/.claude/mash-workbench/settings"
+assert_eq "$(settings get "$empty_repo" k)" "team"
+run_capturing settings set "$empty_repo" k "" --local
+assert_eq "$captured_exit_code" "2"
+assert_contains "$captured_output" "unset"
+assert_eq "$(settings get "$empty_repo" k)" "team"
+# check-escapes-path refuses the repository root itself.
+for root_path in "$empty_repo" "$empty_repo/" . ./; do
+  run_capturing settings check-escapes-path "$empty_repo" "$root_path"
+  assert_eq "$captured_exit_code" "6"
+  assert_contains "$captured_output" "the escapes folder must not be the repository root"
+done
+run_capturing settings check-escapes-path "$empty_repo" docs/escapes
+assert_eq "$captured_exit_code" "0"
+
+# A value of only spaces or tabs counts as empty: get skips it, set refuses it.
+printf 'w= \nv=\t\n' > "$empty_repo/.claude/mash-workbench/settings.local"
+run_capturing settings get "$empty_repo" w
+assert_eq "$captured_exit_code" "3"
+run_capturing settings get "$empty_repo" v
+assert_eq "$captured_exit_code" "3"
+for blank in " " $'\t'; do
+  run_capturing settings set "$empty_repo" w "$blank" --local
+  assert_eq "$captured_exit_code" "2"
+  assert_contains "$captured_output" "unset"
+done
+# The last line of a key wins within a file: a later empty line hides an earlier value, and the next source answers.
+printf 'last=early\nlast=\n' > "$empty_repo/.claude/mash-workbench/settings.local"
+printf 'last=team\n' > "$empty_repo/.claude/mash-workbench/settings"
+assert_eq "$(settings get "$empty_repo" last)" "team"

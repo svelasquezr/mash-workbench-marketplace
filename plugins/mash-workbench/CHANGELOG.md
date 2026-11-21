@@ -2,6 +2,14 @@
 
 Newest first. "Changed scripts" lists the scripts and hooks whose behavior changed, so you know what to re-read before you update.
 
+## 0.2.5 - 2026-11-21
+
+Fixed: an empty setting, such as `escapes=`, was read as a real value. For the escapes setting this made review-routing write files into the repository root.
+
+Changed scripts:
+
+- `scripts/mash-settings.sh` (the same file as in review-routing): `get` treats an empty or whitespace-only value as not set (exit 3, or the next source answers; a later empty line for a key hides an earlier value in the same file). `set` refuses such a value with exit 2 and points at `unset`. `check-escapes-path` refuses the repository root itself with exit 6.
+
 ## 0.2.4 - 2026-11-21
 
 Changed scripts:
