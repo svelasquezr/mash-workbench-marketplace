@@ -13,8 +13,7 @@ agent (or a bare name that is one of this plugin's agent files), or an agent the
 the repository root) and that the project or the user defines in `.claude/agents/`, or that a plugin ships (a
 `plugin:name`). Claude Code's built-in agents are never guarded, even when the config names one, because the same
 type also builds in that session. Any other agent is left alone, whatever its name or its file says.
-haiku-reviewer-guard.py's `is_reviewer` differs on purpose: that hook sees the dispatch prompt, this one sees only
-`agent_type`.
+This hook sees only `agent_type`, never the dispatch prompt.
 
 Blocks (exit 2, reason on stderr, which Claude Code shows to Claude):
   - git, when it runs in a real repository, unless the subcommand is a read: show diff log blame status grep

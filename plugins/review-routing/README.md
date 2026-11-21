@@ -20,7 +20,6 @@ To try it without installing: `claude --plugin-dir <path-to>/plugins/review-rout
 | `inspect` skill (`/review-routing:inspect`) | for a project that already has review habits: finds instructions in `CLAUDE.md`, `AGENTS.md`, memory or plans that would override the routing, and areas you already brief reviewers on by hand; proposes rewrites and applies only the ones you approve                                                        |
 | `change-reviewer` agent                     | the default, read-only reviewer: correctness, tests for new branches, stale docs, unsupported claims, secrets                                                                                                                                                                                                   |
 | `reviewer-guard` hook                       | refuses the plugin's reviewers (its own agents and the ones your `.claude/reviewers.toml` names) their non-read git commands (in a real repository, not a scratch one) and their GitHub-writing `gh` commands (a guard against accidents, not a security boundary; the gaps are listed in the hook's docstring) |
-| `haiku-reviewer-guard` hook                 | refuses to start a reviewer on Haiku (a heuristic: it recognises a reviewer by its name or by verdict words in the prompt)                                                                                                                                                                                      |
 
 ## Requirements
 
@@ -28,23 +27,22 @@ To try it without installing: `claude --plugin-dir <path-to>/plugins/review-rout
 
 ## Opinionated defaults
 
-- Reviewers never run on Haiku: the hook refuses it and the routing config rejects it. There is no opt-out other than disabling the plugin (see the hooks section below).
+- The routing config rejects Haiku, the router never prints it, and `review-changes` tells the session to use the models the router prints. Nothing checks a direct dispatch or a fix-round dispatch any more.
 - Models in `.claude/reviewers.toml` are the aliases `sonnet`, `opus` and `fable`, the ones Claude Code's agent tool accepted when this plugin was written. If your Claude Code accepts other aliases, the config check rejects them until the list in `route_types.py` is updated. Pin only models your plan can start: a reviewer pinned to a model you cannot use fails when it is dispatched.
 
 ## Verdict format
 
-Every reviewer this plugin runs, including the ones `add-reviewer` writes from its template, ends its review with exactly one line: `SAFE TO LAND` when it found no Critical and no Important problems, or `NOT SAFE: <why>` otherwise. Minor findings never block. `review-changes` calls the branch ready to open as a PR only when every reviewer's last verdict is `SAFE TO LAND`. The `haiku-reviewer-guard` hook also reads the phrase in an agent's prompt as a sign that the agent is a reviewer. A reviewer you write by hand should end the same way, or `review-changes` cannot read its verdict. Reviewer files copied from an older version of the template may still say "ready for `gh issue create`" under Pre-existing; they keep working, and the new wording is "ready to file as an issue".
+Every reviewer this plugin runs, including the ones `add-reviewer` writes from its template, ends its review with exactly one line: `SAFE TO LAND` when it found no Critical and no Important problems, or `NOT SAFE: <why>` otherwise. Minor findings never block. `review-changes` calls the branch ready to open as a PR only when every reviewer's last verdict is `SAFE TO LAND`. A reviewer you write by hand should end the same way, or `review-changes` cannot read its verdict. Reviewer files copied from an older version of the template may still say "ready for `gh issue create`" under Pre-existing; they keep working, and the new wording is "ready to file as an issue".
 
-## What the hooks do to your session
+## What the hook does to your session
 
-Both hooks apply in every project once the plugin is enabled, not only in projects that use review routing. They run on every Bash call and every Agent call (around 15 ms each; for a reviewer's git command that is not a plain read, `reviewer-guard` also runs `git rev-parse` once per directory and git dir the command touches) and write nothing.
+The hook applies in every project once the plugin is enabled, not only in projects that use review routing. It runs on every Bash call (around 15 ms each; for a reviewer's git command that is not a plain read, `reviewer-guard` also runs `git rev-parse` once per directory and git dir the command touches) and writes nothing.
 
 - `reviewer-guard` acts only for this plugin's reviewers: its own `review-routing:` agents, and the agents your `.claude/reviewers.toml` names. Any other agent, including your own review-posting agent, is left alone.
 - It needs the `agent_type` field in the hook input, which names the subagent (`review-routing:change-reviewer`; a bare `change-reviewer` is recognised too). A Claude Code version that does not send it makes the guard do nothing.
 - Claude Code's built-in agents (`general-purpose`, `Explore`, `Plan`, ...) are never guarded, even when your config names one as a reviewer: the same agent type also builds and commits in that session.
-- `haiku-reviewer-guard` refuses an Agent call on Haiku when the call looks like a review.
-- Both find Python the same way as the skills (`scripts/python.sh`) and do nothing without it. The interpreter probe adds one Python start to each call.
-- The only way to switch them off is to disable the plugin.
+- It finds Python the same way as the skills (`scripts/python.sh`) and does nothing without it. The interpreter probe adds one Python start to each call.
+- The only way to switch it off is to disable the plugin.
 
 ## What it writes
 
