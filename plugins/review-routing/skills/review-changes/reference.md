@@ -21,54 +21,96 @@ Only when `route` printed `general-purpose` (a project config that still names i
 
 ## Recording escapes
 
-An escape is a bug in code a review passed, found later by anyone: a person, CI or a later reviewer. The ledger (`docs/mash/review-escapes.md` by default; `escapes-path.sh` says which file the project uses) holds one line per bug, keyed by its issue link. Pros of the issue link as the key: every path (a fix, a Pre-existing finding, a bug a person found) has one, and re-running a step cannot count a bug twice. Con: a bug with no issue has to get one first; the user files it on their host and gives you the link.
+An escape is a bug in code a review passed, found later by anyone: a person, CI or a later reviewer. Each escape is one file in the project's escapes folder (by default `.claude/mash-workbench/escapes/` in the main worktree, the folder where the repository was cloned; `bash <this skill's base directory>/../add-reviewer/escapes-path.sh <repo-root>` prints it). The file describes the bug, so add-reviewer needs no git host, and separate files never conflict in a merge.
 
-Run `bash <this skill's base directory>/../add-reviewer/escape-add.sh <repo-root> <area-directory> <class> <issue link>`. The area is the directory a route claims (`src/payments`), never a file.
+1. **Is it a repeat?** `bash <this skill's base directory>/../add-reviewer/escape-add.sh --list <repo-root> <area>` prints that area's escapes, newest first, one line each. If one is the same bug, say so and record nothing.
+2. **The body.** Write it to a temporary file, in ASD-STE100: the conditions, then the incorrect result, then the expected result. The first line is the summary `--list` shows.
+3. **Record.** `bash <this skill's base directory>/../add-reviewer/escape-add.sh <repo-root> <area-directory> <class> <slug> --body-file <file> [--source <link>]`. The area is the directory a route claims (`src/payments`), never a file. The class and the slug are lowercase words joined by `-` (`wrong-result`, `discount-tax`). Add `--source` when there is a link: a review comment, an issue or a pull request. For several escapes at once, `--batch <file> <repo-root>` takes blocks in the file format below, each with a `slug:` line, separated by a line `---8<---`.
 
-- **Step 0, a fix:** record the issue the fix closes; ask the user for the link.
-- **Step 4, a Pre-existing finding:** reviewers mark each one `escape: yes` (a behaviour bug with a failure scenario: a wrong result, data lost, a guard bypassed, in code an earlier review passed) or `escape: no` (drift, hygiene, testability, perf, and code no review covered: it predates any review, a direct push, vendored code). A finding in a change still under review is a finding for that change, not an escape. Record each `escape: yes` once the user gives the issue link. A wrong `yes` costs one ledger line, and the issue it links is visible.
-- **A bug a person or CI found:** record the issue for it.
+When to record:
 
-Ledger off (`escape-add.sh` says so and exits 0): say nothing more and continue. No ledger chosen yet: `escape-add.sh` exits 3 and writes nothing. Ask the user, in one question, where to keep it (`docs/mash/review-escapes.md`, another file, or nowhere), re-run with `--create` or `--file <path>`, and offer to add `{"env": {"REVIEW_ROUTING_ESCAPES": "<path, or off>"}}` to `.claude/settings.local.json` (only this user) or `.claude/settings.json` (the project). Offer to add a new ledger to `.gitignore` and recommend committing it: an ignored ledger counts only this user's escapes.
+- **Step 0, a fix:** the bug the fix closes; the source is its issue or the review comment that found it, when there is one.
+- **Step 4, a Pre-existing finding:** reviewers mark each one `escape: yes` (a behaviour bug with a failure scenario: a wrong result, data lost, a guard bypassed, in code an earlier review passed) or `escape: no` (drift, hygiene, testability, perf, and code no review covered: it predates any review, a direct push, vendored code). A finding in a change still under review is a finding for that change, not an escape. Record each `escape: yes`. A wrong `yes` costs one file, which the user can delete.
+- **A bug a person or CI found:** record it.
 
-A link the ledger already holds prints "already recorded" and exits 0, so a repeat is safe. When the area is at or over the threshold (default 2) after the new entry, the script also prints that area's report line, ending "-> add a reviewer for <area> (add-reviewer skill)". Tell the user, who decides whether to run add-reviewer. The entry goes to the ledger in the main worktree, also when you work in a linked worktree: commit it there, not on the fix branch (a ledger the project gitignores is updated but not committed). The link is normalised: a GitHub issue or PR URL, `owner/repo#N` and `#N` (owner and repo from the origin remote) all become `https://github.com/<owner>/<repo>/issues/N`; any other http(s) link is kept as given; `#N` with no GitHub origin is refused.
+What the script answers:
 
-An existing ledger keeps its old header, and old entries keyed by PR links stay as they are. The report counts each distinct link once per area.
+- "the escapes ledger is off" (exit 0): say nothing more and continue.
+- Exit 3, "no escapes folder chosen yet": follow "Setting up escapes" below, then record again.
+- Exit 3, "old ledger format": follow "Migrating an old ledger" below.
+- Exit 6: the folder is refused (the message says why); show the user and ask for another folder.
+- "already recorded: <file>" (exit 0): an escape with the same area and the same source is already in the folder, so a repeat is safe. The same source in another area is another escape, as the report counts it.
+- A line ending "-> add a reviewer for <area> (add-reviewer skill)": the area reached the threshold (default 3, the `escapes.threshold` setting). Ask the user: "<area> has N escapes that a review passed. Add a specialist reviewer for it?" Yes: run the add-reviewer skill. No: save the decline with `bash <this skill's base directory>/../../scripts/mash-settings.sh set <repo-root> declined.<area> <YYYY-MM-DD>:<N> --local`; the report asks again at N + 2.
+
+The file goes to the escapes folder in the main worktree, also when you work in a linked worktree. No skill commits escape files. With committed escapes, tell the user "N escape files wait uncommitted in <folder>" (count them with `git -C <main worktree> status --porcelain -- <folder>`); the user commits them from the main worktree, never on the fix branch.
+
+The source link is normalised: for a `github.com` link, `www.`, a `?query`, a trailing `/` and the fragment are dropped, but a review comment keeps `#discussion_r<id>` (the files view's `#r<id>` becomes that), a `#note_<id>` stays, and on a pull request `#issuecomment-<id>` and `#pullrequestreview-<id>` stay; `/pull/N` stays a pull request, and its `/files`, `/changes`, `/commits` or `/checks` page is the pull request; `owner/repo#N` and `#N` (owner and repo from the origin remote) become `https://github.com/<owner>/<repo>/issues/N`. Any other http(s) link only loses a trailing `/`. `#N` with no GitHub origin is refused.
+
+## Setting up escapes
+
+When `escape-add.sh` exits 3 with "no escapes folder chosen yet", nothing has been written. Ask, then set it up:
+
+1. **Where.** Ask the user, in one question, where to keep escapes, with a recommendation: `.claude/mash-workbench/escapes` committed (recommended: the whole team's misses add up), the same folder excluded (only this clone), another folder, or none (`off`). Check a path first with the `check-escapes-path` command the script printed: it says what the choice means, or refuses (exit 6) a linked worktree, a temporary folder, the git directory, or a folder another repository owns. For an excluded folder inside the repo, add it to `<git common dir>/info/exclude` (`git rev-parse --git-common-dir` names the dir).
+2. **Save the answer.** Run the `mash-settings.sh set` command the script printed: `--team` for committed escapes (the `settings` file is committed with them), `--local` for excluded escapes, a folder outside the repo, or `off`. Exit 1 means another writer holds the settings lock: try again; if none is running, remove the lock folder the message names.
+3. **Offer write access**, whatever the answer was: with it, background sessions in new worktrees record without a prompt. Show the user these rules, and add them only on a yes, merged into `permissions.allow` of `<main worktree>/.claude/settings.local.json` (`bash <this skill's base directory>/../../scripts/mash-settings.sh main-worktree <repo-root>` prints the main worktree; create the file when it is missing). Edit that file with your own edit tool, so Claude Code asks the user to approve the write too; no script edits it.
+
+   ```json
+   {
+     "permissions": {
+       "allow": [
+         "Bash(bash */review-routing/*add-reviewer/escape-add.sh*)",
+         "Bash(bash */review-routing/*add-reviewer/escape-migrate.sh*)",
+         "Bash(bash */review-routing/*scripts/mash-settings.sh*)"
+       ]
+     }
+   }
+   ```
+
+   Why there: git does not track that file, so Claude Code applies it in every new worktree with no trust step. The committed `.claude/settings.json` is ignored until the user accepts the workspace-trust dialog, and `~/.claude/settings.json` would allow these scripts in every project. Each rule names one script that writes, with the plugin folder fixed and a wildcard for the version folder (and for the skill folder the call starts from: this skill calls `.../skills/review-changes/../add-reviewer/escape-add.sh`), so it survives a plugin update. No space before the last `*`: the rule matches whether or not the script path is in quotes. An installed plugin runs from `.../review-routing/<version>/skills/...`; under `claude --plugin-dir <folder>` there is no version folder and the path is that folder, so the rules match only when the folder is named `review-routing`: otherwise put its name in place of `review-routing`. Check the rules once: record from a new linked worktree in a `claude -p` session; Claude Code must not ask for approval. The rules use `Bash`, because an `Edit` rule cannot open `.claude/`. A sandbox user also needs the sandbox settings the README names. In a tool other than Claude Code, skip this step.
+
+4. Record the escape again.
+
+## Migrating an old ledger
+
+When `escape-add.sh` exits 3 with "old ledger format at <file>", or the report or `escapes-path.sh` says "run escape-migrate.sh", the project still keeps escapes in the old one-line-per-escape file (`docs/mash/review-escapes.md`, `docs/review-escapes.md`, or a file the `escapes` setting names). Nothing is recorded until it is migrated.
+
+1. **Explain and ask.** The new format keeps every escape in one folder that every worktree finds, and each file describes its bug, so add-reviewer needs no git host. The migration writes one file per old line (its link as `source`, the body "Migrated; see source.") and keeps the old file. To migrate into a folder other than the default, set it up first ("Setting up escapes").
+2. **On yes:** `bash <this skill's base directory>/../add-reviewer/escape-migrate.sh <repo-root>`. A second run adds nothing.
+3. **The steps it prints:** removing the old file, setting the `escapes` folder, and removing `REVIEW_ROUTING_ESCAPES` from the `env` block of `.claude/settings*.json`. Run each only after the user agrees, then record the escape again. On no: record nothing, and say that recording waits for the migration.
 
 ## Recording by hand
 
-Only when `escape-add.sh` cannot run or fails for a reason other than its own answer: bash or the script is missing ("command not found", "No such file or directory"), or it exits with a code other than 0, 2 or 3. Exit 2 is a wrong argument: correct it and run the script again. Exit 3: ask the user where to keep the ledger, as above. Do these steps exactly, then tell the user that the script failed (quote its error) and that you wrote the line by hand.
+Only when `escape-add.sh` cannot run or fails for a reason other than its own answer: bash or the script is missing ("command not found", "No such file or directory"), or it exits with a code other than 0, 2, 3 or 6. Exit 2 is a wrong argument: correct it and run the script again. Exit 3 and 6: follow "What the script answers" above. Do these steps exactly, then tell the user that the script failed (quote its error) and that you wrote the file by hand.
 
-1. **The file.** `REVIEW_ROUTING_ESCAPES` (in the environment or the `env` block of `.claude/settings.local.json`, then `.claude/settings.json`): `off` means record nothing and stop; any other value is the file, relative to the main worktree (the folder where the repository was cloned) unless absolute. Not set: `docs/mash/review-escapes.md` in the main worktree if it exists, else `docs/review-escapes.md` there if it exists, else ask the user as for exit 3. Never start a second ledger when one of these files already exists: the report would count only one of them.
-2. **Check the fields.** The area is a directory inside the repository (never a file, never `.`, never absolute, no `..`, no whitespace): drop a leading `./`, a trailing `/`, and turn `//` into `/`. The class is lowercase letters and digits in words joined by `-` (`wrong-result`, `missing-test`). No field may hold `·` or a line break. If a field fails, ask the user for a correct value.
-3. **Normalise the link.** A link holds no whitespace. First drop any trailing `/`. For a `github.com` link, also drop `#...` and `?...`, then any trailing `/` again. Then:
-
-   | Given                                                                                                                                                           | Write                                                                                                                                                                   |
-   | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-   | `https://www.GitHub.com/Owner/Repo/pull/7/files?w=1#diff`: any `/pull/7` or `/issues/7`, with or without `/files`, `/commits` or `/checks`, `www.` or `http://` | `https://github.com/owner/repo/issues/7`                                                                                                                                |
-   | `Owner/Repo#7`                                                                                                                                                  | `https://github.com/owner/repo/issues/7`                                                                                                                                |
-   | `#7`                                                                                                                                                            | owner/repo from `git remote get-url origin` (drop credentials and `.git`), lowercased: `https://github.com/owner/repo/issues/7`; no GitHub origin: ask for the full URL |
-   | another `github.com` link                                                                                                                                       | `https://github.com/` + the rest                                                                                                                                        |
-   | any other `http://` or `https://` link                                                                                                                          | as given                                                                                                                                                                |
-   | anything else                                                                                                                                                   | refuse; ask for an issue link                                                                                                                                           |
-
-4. **Duplicates.** If a line starting `- ` and a date already has this exact link as its fourth `·` field, write nothing and say "already recorded".
-5. **New file.** If the file does not exist, create it (and its directories) with these lines, then an empty line:
+1. **The folder.** The main worktree is the first `worktree` line of `git worktree list --porcelain`. The `escapes` setting comes from `REVIEW_ROUTING_ESCAPES`, else the last `escapes=` line of `<main worktree>/.claude/mash-workbench/settings.local`, else of `settings` there. `off`: record nothing and stop. A relative value is from the main worktree. Not set: if `docs/mash/review-escapes.md` or `docs/review-escapes.md` exists there, or the value names a file, follow "Migrating an old ledger"; else ask as in "Setting up escapes".
+2. **Check the folder.** Never inside a linked worktree, the git directory, `/tmp` or `$TMPDIR`. Outside the main worktree, a `README.md` there must name this repository on its `repo:` line.
+3. **Check the fields.** The area is a directory inside the repository (never a file, never `.`, never absolute, no `..`, no whitespace): drop a leading `./`, a trailing `/`, and turn `//` into `/`. The class and the slug are lowercase letters and digits in words joined by `-`; the slug has at most 60 characters. If a field fails, ask the user for a correct value.
+4. **Normalise the source link**, as the last paragraph of "Recording escapes" says. Anything that is not an http(s) link, `owner/repo#N` or `#N`: ask for a link, or record without one.
+5. **Duplicates.** If a `.md` file in the folder (not in `processed/`) has this `area:` and the line `source: <link>`, write nothing and say "already recorded". A GitHub `/pull/N` and `/issues/N` with no fragment are the same link.
+6. **New folder.** Create it with a `README.md` holding these lines, where `repo:` is the origin remote as `host/owner/repo`, lowercased (with no origin, `local/<main worktree folder name>`):
 
    ```text
    # Review escapes
+   repo: github.com/acme/shop
 
-   Bugs in code a review passed, found later by anyone (a person, CI or a later reviewer); one line per bug, keyed by its issue: date · area · class · link.
-   The add-reviewer skill reads them through escapes-report.sh.
+   One file per bug that a review passed. The add-reviewer skill reads them through escapes-report.sh.
    ```
 
-6. **Append one line** at the end of the file (first add a line break if the file does not end with one). The date is today in UTC (`date -u +%F`); the separator is a space, `·` (U+00B7) and a space. Example:
+7. **Write the file** `<folder>/<YYYY-MM-DD>-<slug>.md`, dated today in UTC (`date -u +%F`); if the name exists, in the folder or in `processed/`, add `-2`, `-3` and so on before `.md`. Leave out the `source:` line when there is no link. One empty line separates the frontmatter from the body. Example:
 
    ```text
-   - 2026-10-11 · src/payments · wrong-result · https://github.com/o/r/issues/12
+   ---
+   date: 2026-11-21
+   area: src/billing
+   class: wrong-result
+   source: https://github.com/acme/shop/pull/12#discussion_r222
+   ---
+
+   When the order has a discount, the total includes tax.
+   The total must not include tax. Tax is a separate line.
    ```
 
-7. **Threshold.** Count the distinct links on entry lines with this area. At 2 or more, tell the user: "<area>: N escapes -> add a reviewer for <area> (add-reviewer skill)".
+8. **Threshold.** Count the files with this area (files with the same `source` once). At the threshold (default 3, or the `escapes.threshold` setting), unless `declined.<area>=<date>:<count>` is set and the count is below `<count>` + 2, tell the user: "<area>: N escapes -> add a reviewer for <area> (add-reviewer skill)".
 
 ## Common mistakes
 
@@ -87,3 +129,4 @@ Only when `escape-add.sh` cannot run or fails for a reason other than its own an
 | Fixing an old bug a reviewer spotted inside this change                    | List it as Pre-existing; one concern per change                  |
 | Counting a reviewer that crashed or gave no verdict as safe                | Dispatch it again                                                |
 | Calling the branch ready while a reviewer said `NOT SAFE`                  | Every last verdict must be `SAFE TO LAND`                        |
+| Committing escape files on the fix branch                                  | The user commits them from the main worktree                     |
