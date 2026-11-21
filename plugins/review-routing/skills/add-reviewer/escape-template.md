@@ -5,5 +5,4 @@ class: wrong-result
 source: https://github.com/acme/shop/pull/12#discussion_r222
 ---
 
-When the order has a discount, the total includes tax.
-The total must not include tax. Tax is a separate line.
+When the order has a discount, the total includes tax. The total must not include tax. Tax is a separate line.

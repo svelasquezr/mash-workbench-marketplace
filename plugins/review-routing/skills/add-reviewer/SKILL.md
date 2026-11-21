@@ -27,8 +27,7 @@ Below, `route` means `bash <this skill's base directory>/../../scripts/python.sh
 3. **Route it:** create `.claude/reviewers.toml` from `<this skill's base directory>/reviewers.example.toml` if the project has none (replace the example routes and expectations). Then add:
    - `[[routes]]` for the area's paths;
    - once per project, a `[[mirrors]]` entry so a test counts as the code it tests;
-   - `[[changed_lines]]` when a line in a shared file belongs to the area.
-     Details: "Routing details" in the reference.
+   - `[[changed_lines]]` when a line in a shared file belongs to the area. Details: "Routing details" in the reference.
 4. **Add routing test cases:** for each new route, an `[[expect]]` for a path it must claim, one for a near miss it must not (for `^src/payments/`, `src/app/payments_page.py`), and one for a test file through the mirror.
 5. **Check:** `route --check` until it passes; preview with `route --paths <file>... --explain`. Never add a pattern just to quiet `--check` for a path that belongs to a specialist; list in `allow_default` only the paths a general review is enough for, each with a comment. What it fails on: "Checking" in the reference.
 6. **CLAUDE.md:** if it isn't there yet, add one rule: "Review every change with the agents `.claude/reviewers.toml` routes it to (the review-changes skill); pass them the test and lint results."

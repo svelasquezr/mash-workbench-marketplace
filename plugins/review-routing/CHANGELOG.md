@@ -2,6 +2,27 @@
 
 Newest first. "Changed scripts" lists the scripts and hooks whose behavior changed, so you know what to re-read before you update.
 
+## 0.5.0 - 2026-11-21
+
+New skill `record-escape`: when you process review comments, paste one, or correct code that a review passed, it records the bug as an escape file, but only when a review passed the code and the problem is a behavior bug. To know whether a review passed the code, `review-changes` now keeps a log of the ranges it reviewed. The log stays on your machine and is never committed.
+
+Changed scripts:
+
+- New `skills/review-changes/review-log.sh`: `add <repo-root> <base> <head>` appends a line to `reviews.log` in the main worktree's `.claude/mash-workbench/` folder (and lists that file in the repository's `info/exclude`). The line holds the base and head commits and the patch-ids of the range and of each commit. `reviewed <repo-root> <commit>` exits 0 when a logged range holds the commit, or when the commit's diff equals the range's diff (a squash merge) or one commit's diff (a rebase merge or cherry-pick). That still works after the branch is deleted and `git gc` removes its commits. It exits 1 when the log has no answer. It never writes anywhere else and makes no network call.
+- `skills/add-reviewer/escape-add.sh`: when the same source is already recorded in another area, the escape is still recorded, and the script now prints "also recorded in <area>: <file>" after the "recorded" line (after the summary line for `--batch`).
+- `review-log.sh` makes every diff with `git diff-tree` (plumbing, from the main worktree), so `diff.submodule`, `diff.ignoreSubmodules` and `diff.relative` do not change an id either, and the id of a one-commit range is that commit's id. It uses fixed options (no color, no external diff, no text conversion, no rename detection, `a/` and `b/` prefixes, `--binary`), so the patch-ids do not change with the user's `color.ui`, `diff.external`, `diff.noprefix` or `diff.renames`. `add` refuses a base that is not an ancestor of the head, and a range with no changes (exit 2), and exits 6 without logging when a patch-id cannot be computed. `reviewed` computes the commit's own patch-id once. Its header states the limits: a squash merge with conflict fixes does not match, and a change that differs only in whitespace has the same patch-id.
+- `review-log.sh add` checks that the record is one line of exactly five fields before it appends (exit 6, nothing written, otherwise). A per-commit patch-id that fails is skipped, so it never writes a second line. The header names one more limit: a `.gitattributes` change on the reviewed branch that changes whether a file counts as binary makes a later squash merge miss, and the skill then asks the user.
+- `skills/add-reviewer/escapes-path.sh`: only a comment change. The header now says that the refusal of the repository root (exit 6) applies inside a git repository only.
+
+Other:
+
+- `review-changes` step 5: when every last verdict is `SAFE TO LAND`, it logs the range with `review-log.sh add`, and adds a summary line, with the question about a specialist reviewer, for each area at or over the escape threshold that is not declined. It also says "N escape files wait uncommitted in <folder>" when committed escapes wait. The details are in the new "Review log and escape lines" section of its `reference.md`.
+- The "Setting up escapes" section of the `review-changes` `reference.md` says what to do when `mash-settings.sh set` exits 1 (the settings lock is held): run it again; if it persists, check that no other session writes, then remove the lock folder the message names. The offered allow rules now include `review-log.sh`.
+- Fixed in the `review-changes` `reference.md` ("Recording escapes" and the new section): the count of "escape files wait uncommitted" now uses `git status --porcelain --untracked-files=all` on the escapes folder and leaves out `README.md`. Before, a new folder was counted as one entry, and `README.md` counted as a file.
+- The plugin description now names `record-escape`.
+- An escape's body is one paragraph on one line (sentences separated by spaces): `escape-template.md`, the "Recording escapes" and "Recording by hand" text and the `record-escape` skill say so.
+- New test `tests/test_skill_script_paths.sh`: every script path in a `SKILL.md` or `reference.md` names a file that exists.
+
 ## 0.4.1 - 2026-11-21
 
 Fixed: when the `escapes` setting was empty (for example `escapes=` in a settings file), the escapes folder became the repository root. Escape files and a `README.md` were then written into the root, and the report counted every `.md` file there. An empty setting now counts as not set, so a repository with no setting, or with an old ledger, behaves as before. A setting that names the repository root is refused. A setting of only spaces or tabs also counts as not set; before, it made a folder named " " in the repository root.
