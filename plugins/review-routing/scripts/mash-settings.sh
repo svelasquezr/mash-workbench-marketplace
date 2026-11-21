@@ -12,6 +12,8 @@ set -euo pipefail
 #   mash-settings.sh get <dir> <key>              print the value: environment variable, then settings.local, then settings
 #   mash-settings.sh set <dir> <key> <value> --local|--team
 #                                                 replace or append the key's line (--local: settings.local, --team: settings)
+#   mash-settings.sh unset <dir> <key> --local|--team
+#                                                 remove the key's lines from that file (a key not there is not an error)
 #   mash-settings.sh check-escapes-path <dir> <path>
 #                                                 print one line with the consequence of keeping escapes at <path>
 #   mash-settings.sh repo-key <dir>               print host/owner/repo of the origin remote, or local/<folder>
@@ -20,9 +22,9 @@ set -euo pipefail
 # Outside a git repository every command exits 2, except get when the key's environment variable is set (get reads
 # it first). Callers such as escapes-path.sh then let the project folder stand in for the main worktree and read only
 # the environment variable.
-# set takes a lock (the folder .settings.lock in the home folder) around its read-modify-write, and with --local adds
-# the exclude line before it writes settings.local. It replaces a symlinked settings file with a regular file.
-# Exit codes: 0 success; 1 another set holds the lock; 2 usage error, or <dir> is not in a git repository; 3 the key
+# set and unset take a lock (the folder .settings.lock in the home folder) around their read-modify-write; set --local
+# adds the exclude line before it writes settings.local. It replaces a symlinked settings file with a regular file.
+# Exit codes: 0 success; 1 another set or unset holds the lock; 2 usage error, or <dir> is not in a git repository; 3 the key
 # is not set anywhere; 5 bare repository, or the main worktree cannot be found from <dir>; 6 refused by a check (the
 # line says why).
 # Needs git 2.7 or later: rev-parse runs from the top level, where git 2.7 to 2.12 and later versions print the same
@@ -34,6 +36,7 @@ usage() {
     echo "       mash-settings.sh home <dir>"
     echo "       mash-settings.sh get <dir> <key>"
     echo "       mash-settings.sh set <dir> <key> <value> --local|--team"
+    echo "       mash-settings.sh unset <dir> <key> --local|--team"
     echo "       mash-settings.sh check-escapes-path <dir> <path>"
     echo "       mash-settings.sh repo-key <dir>"
   } >&2
@@ -204,8 +207,9 @@ command_get() {
   exit 3
 }
 
+# command_set <dir> <key> <value> <scope> [unset]: replace or append the key's line; with "unset", remove its lines.
 command_set() {
-  local dir=$1 key=$2 value=$3 scope=$4 home file temporary exclude lock tries
+  local dir=$1 key=$2 value=$3 scope=$4 mode=${5:-set} home file temporary exclude lock tries
   local line=".claude/mash-workbench/settings.local"
   [[ -n "$key" && "$key" != *=* && "$key" != \#* && "$key" != *$'\n'* && "$key" != *$'\r'* ]] \
     || fail 2 "a key is not empty, holds no = and no line break, and does not start with #: $key"
@@ -217,9 +221,10 @@ command_set() {
   esac
   need_main "$dir"
   home="$main/.claude/mash-workbench"
-  mkdir -p "$home"
   file="$home/$file"
-  if [[ "$scope" == --local ]]; then
+  if [[ "$mode" == unset && ! -f "$file" ]]; then printf '%s was not set in %s\n' "$key" "$file"; return 0; fi
+  mkdir -p "$home"
+  if [[ "$scope" == --local && "$mode" == set ]]; then
     # The exclude line comes first, so the private file never shows up as untracked, even for a moment.
     # Always the common git dir's exclude file: in submodules and --separate-git-dir repos, <main>/.git is a file.
     exclude="$common/info/exclude"
@@ -244,25 +249,25 @@ command_set() {
   trap 'rm -f "$temporary"; rmdir "$lock" 2>/dev/null || true' EXIT
   if [[ -f "$file" ]]; then
     cp -p "$file" "$temporary"
-    KEY="$key" VALUE="$value" awk '
+    KEY="$key" VALUE="$value" MODE="$mode" awk '
       {
         line = $0; sub(/\r$/, "", line)
         split_at = index(line, "=")
         if (line !~ /^#/ && split_at > 0 && substr(line, 1, split_at - 1) == ENVIRON["KEY"]) {
-          if (!done) print ENVIRON["KEY"] "=" ENVIRON["VALUE"]
+          if (!done && ENVIRON["MODE"] == "set") print ENVIRON["KEY"] "=" ENVIRON["VALUE"]
           done = 1
           next
         }
         print
       }
-      END { if (!done) print ENVIRON["KEY"] "=" ENVIRON["VALUE"] }' "$file" > "$temporary"
+      END { if (!done && ENVIRON["MODE"] == "set") print ENVIRON["KEY"] "=" ENVIRON["VALUE"] }' "$file" > "$temporary"
   else
     printf '%s=%s\n' "$key" "$value" > "$temporary"
   fi
   mv "$temporary" "$file"
   rmdir "$lock"
   trap - EXIT
-  printf 'set %s in %s\n' "$key" "$file"
+  printf '%s %s in %s\n' "$mode" "$key" "$file"
 }
 
 command_check() {
@@ -359,6 +364,10 @@ case "$command" in
   set)
     [[ $# -eq 4 ]] || usage
     command_set "$1" "$2" "$3" "$4"
+    ;;
+  unset)
+    [[ $# -eq 3 ]] || usage
+    command_set "$1" "$2" "" "$3" unset
     ;;
   check-escapes-path)
     [[ $# -eq 2 ]] || usage

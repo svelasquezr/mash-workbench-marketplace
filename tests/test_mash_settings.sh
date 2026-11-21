@@ -105,6 +105,32 @@ settings set "$locked" k v --local >/dev/null
 assert_eq "$(settings get "$locked" k)" "v"
 [[ ! -e "$locked/.claude/mash-workbench/.settings.lock" ]] || { echo "  set left its lock"; exit 1; }
 
+# unset removes every line of the key from one file, compares keys whole, keeps the other lines, and takes the lock.
+unset_repo="$area/unset"; new_repository "$unset_repo"
+printf '# keep\ndeclined.src/b=2026-11-01:3\ndeclined.src/bx=1\ndeclined.src/b=2026-11-02:4\r\nother=1\n' > "$area/unset-settings"
+mkdir -p "$unset_repo/.claude/mash-workbench"; cp "$area/unset-settings" "$unset_repo/.claude/mash-workbench/settings.local"
+run_capturing settings unset "$unset_repo" declined.src/b --local
+assert_eq "$captured_exit_code" "0"
+assert_eq "$(cat "$unset_repo/.claude/mash-workbench/settings.local")" "$(printf '# keep\ndeclined.src/bx=1\nother=1')"
+run_capturing settings get "$unset_repo" declined.src/b
+assert_eq "$captured_exit_code" "3"
+# A key that is not there, or a file that does not exist, is not an error, and nothing is created.
+run_capturing settings unset "$unset_repo" declined.src/b --local
+assert_eq "$captured_exit_code" "0"
+run_capturing settings unset "$unset_repo" anything --team
+assert_eq "$captured_exit_code" "0"
+[[ ! -e "$unset_repo/.claude/mash-workbench/settings" ]] || { echo "  unset created the team file"; exit 1; }
+mkdir "$unset_repo/.claude/mash-workbench/.settings.lock"
+run_capturing settings unset "$unset_repo" other --local
+assert_eq "$captured_exit_code" "1"
+assert_eq "$(settings get "$unset_repo" other)" "1"
+rmdir "$unset_repo/.claude/mash-workbench/.settings.lock"
+for bad in "unset $unset_repo k" "unset $unset_repo k --both"; do
+  # shellcheck disable=SC2086  # split on purpose
+  run_capturing bash "$settings_script" $bad
+  assert_eq "$captured_exit_code" "2"
+done
+
 # 11. Keys with / and . are compared whole, never as patterns.
 settings set "$prec" declined.src/billing 2026-11-21:3 --local >/dev/null
 settings set "$prec" a.b 1 --local >/dev/null
@@ -299,38 +325,30 @@ for old in docs/review-escapes.md docs/mash/review-escapes.md; do
   assert_eq "$(bash "$path_script" "$linked" 2>/dev/null)" "$paths_main/$old"
   # shellcheck disable=SC2016  # the single quotes are meant: $1 and $2 expand in the inner bash
   run_capturing bash -c 'bash "$1" "$2" 2>&1 >/dev/null' _ "$path_script" "$linked"
-  assert_contains "$captured_output" "old ledger file in use: $old"
-  assert_not_contains "$captured_output" "escape-migrate"
+  assert_contains "$captured_output" "old ledger format in use: $old; run escape-migrate.sh"
 done
 
-# Finding 2: escape-add.sh --create and --file <relative> from a linked worktree write into the main worktree, where a
-# plain record and the report find the ledger again.
+# Finding 2: escape-add.sh from a linked worktree writes into the main worktree's escapes folder, where a plain record
+# and the report find it again.
 add_script="$PWD/plugins/review-routing/skills/add-reviewer/escape-add.sh"
 report_script="$PWD/plugins/review-routing/skills/add-reviewer/escapes-report.sh"
+printf 'When X, Y happens.\n' > "$area/body.md"
 led="$area/led"; new_repository "$led"
 git -C "$led" worktree add --quiet "$led/.claude/worktrees/w" -b w
 led_linked="$led/.claude/worktrees/w"
-bash "$add_script" --create "$led_linked" src/a wrong-result https://example.test/issues/1 >/dev/null 2>&1
-assert_file "$led/docs/mash/review-escapes.md"
-[[ ! -e "$led_linked/docs/mash" ]] || { echo "  --create wrote into the linked worktree"; exit 1; }
-run_capturing bash "$add_script" "$led_linked" src/a missing-test https://example.test/issues/2
+settings set "$led" escapes .claude/mash-workbench/escapes --local >/dev/null
+bash "$add_script" "$led_linked" src/a wrong-result one --body-file "$area/body.md" >/dev/null
+run_capturing bash "$add_script" "$led_linked" src/a missing-test two --body-file "$area/body.md"
 assert_eq "$captured_exit_code" "0"
-assert_contains "$captured_output" "recorded"
-assert_eq "$(grep -c '^- ' "$led/docs/mash/review-escapes.md")" "2"
+assert_contains "$captured_output" "recorded: .claude/mash-workbench/escapes/"
+assert_eq "$(find "$led/.claude/mash-workbench/escapes" -name '*.md' ! -name README.md | wc -l | tr -d ' ')" "2"
+[[ ! -e "$led_linked/.claude/mash-workbench" ]] || { echo "  recorded into the linked worktree"; exit 1; }
 assert_contains "$(bash "$report_script" "$led_linked" 2>/dev/null)" "src/a: 2 escapes"
-filed="$area/filed"; new_repository "$filed"
-git -C "$filed" worktree add --quiet "$filed/.claude/worktrees/w" -b w
-bash "$add_script" --file notes/escapes.md "$filed/.claude/worktrees/w" src/a wrong-result https://example.test/issues/3 >/dev/null
-assert_file "$filed/notes/escapes.md"
-[[ ! -e "$filed/.claude/worktrees/w/notes" ]] || { echo "  --file wrote into the linked worktree"; exit 1; }
 
-# Finding 11: escapes=off in a settings file also stops --create and --file.
+# Finding 11: escapes=off in a settings file stops recording.
 offrepo="$area/offrepo"; new_repository "$offrepo"
 settings set "$offrepo" escapes off --local >/dev/null
-for option in --create "--file notes/e.md"; do
-  # shellcheck disable=SC2086  # split on purpose: "--file notes/e.md" is two arguments
-  run_capturing bash "$add_script" $option "$offrepo" src/a wrong-result https://example.test/issues/4
-  assert_eq "$captured_exit_code" "0"
-  assert_contains "$captured_output" "off"
-done
-[[ ! -e "$offrepo/docs" && ! -e "$offrepo/notes" ]] || { echo "  recorded while off"; exit 1; }
+run_capturing bash "$add_script" "$offrepo" src/a wrong-result off --body-file "$area/body.md"
+assert_eq "$captured_exit_code" "0"
+assert_contains "$captured_output" "off"
+[[ ! -e "$offrepo/.claude/mash-workbench/escapes" ]] || { echo "  recorded while off"; exit 1; }

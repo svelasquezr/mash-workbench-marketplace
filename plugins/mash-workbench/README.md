@@ -48,7 +48,7 @@ When the form is unclear at capture time, the entry says `unsure` and `/forge` d
 
 ## Optional integrations
 
-- **review-routing** plugin: when the project keeps a review-escape ledger (`docs/mash/review-escapes.md`), `/forge` counts bugs reviews missed per area and proposes a specialist reviewer for an area with two or more.
+- **review-routing** plugin: when the project keeps review escapes (one file per bug a review passed, in `.claude/mash-workbench/escapes/` by default), `/forge` counts them per area and proposes a specialist reviewer for an area that reached the escape threshold (default 3).
 - **superpowers** plugin: new skills follow its `writing-skills` method when installed.
 
 Neither is required.
