@@ -10,6 +10,9 @@ set -euo pipefail
 #   mash-settings.sh main-worktree <dir>          print the main worktree's absolute path
 #   mash-settings.sh home <dir>                   print <main>/.claude/mash-workbench (not created)
 #   mash-settings.sh get <dir> <key>              print the value: environment variable, then settings.local, then settings
+#                                                 (an empty or whitespace-only value counts as not set; set refuses one: use unset)
+#                                                 A key repeated in one file: the last line wins, so a later empty line hides an
+#                                                 earlier value in that file and the next source answers.
 #   mash-settings.sh set <dir> <key> <value> --local|--team
 #                                                 replace or append the key's line (--local: settings.local, --team: settings)
 #   mash-settings.sh unset <dir> <key> --local|--team
@@ -25,7 +28,7 @@ set -euo pipefail
 # set and unset take a lock (the folder .settings.lock in the home folder) around their read-modify-write; set --local
 # adds the exclude line before it writes settings.local. It replaces a symlinked settings file with a regular file.
 # Exit codes: 0 success; 1 another set or unset holds the lock; 2 usage error, or <dir> is not in a git repository; 3 the key
-# is not set anywhere; 5 bare repository, or the main worktree cannot be found from <dir>; 6 refused by a check (the
+# is not set anywhere, or its value is empty or only spaces and tabs; 5 bare repository, or the main worktree cannot be found from <dir>; 6 refused by a check (the
 # line says why).
 # Needs git 2.7 or later: rev-parse runs from the top level, where git 2.7 to 2.12 and later versions print the same
 # --git-common-dir. Plain bash 3.2 (macOS) and Git Bash: no associative arrays, no ${var,,}, no mapfile.
@@ -193,7 +196,7 @@ command_get() {
   variable=$(env_name "$key")
   if [[ -n "$variable" ]]; then
     value=${!variable:-}
-    if [[ -n "$value" ]]; then printf '%s\n' "$value"; exit 0; fi
+    if [[ -n "${value//[[:space:]]/}" ]]; then printf '%s\n' "$value"; exit 0; fi
   fi
   need_main "$dir"
   for file in settings.local settings; do
@@ -201,7 +204,8 @@ command_get() {
     if [[ -f "$file" ]]; then
       status=0
       value=$(read_key "$file" "$key") || status=$?
-      if ((status == 0)); then printf '%s\n' "$value"; exit 0; fi
+      # An empty value, or one of only spaces and tabs, counts as not set: the next source answers.
+      if ((status == 0)) && [[ -n "${value//[[:space:]]/}" ]]; then printf '%s\n' "$value"; exit 0; fi
     fi
   done
   exit 3
@@ -214,6 +218,7 @@ command_set() {
   [[ -n "$key" && "$key" != *=* && "$key" != \#* && "$key" != *$'\n'* && "$key" != *$'\r'* ]] \
     || fail 2 "a key is not empty, holds no = and no line break, and does not start with #: $key"
   [[ "$value" != *$'\n'* && "$value" != *$'\r'* ]] || fail 2 "the value must be on one line"
+  if [[ "$mode" == set && -z "${value//[[:space:]]/}" ]]; then fail 2 "the value is empty: an empty value counts as not set; use unset <dir> <key> --local|--team"; fi
   case "$scope" in
     --local) file=settings.local ;;
     --team) file=settings ;;
@@ -281,6 +286,7 @@ command_check() {
   esac
   if ! is_absolute "$path"; then path="$main/$path"; fi
   target=$(normalize "$path")
+  if [[ -n "$main" && "$target" == "$(normalize "$main")" ]]; then echo "refused: the escapes folder must not be the repository root"; exit 6; fi
   # 1. A linked worktree (every entry but the first, which is the main worktree or the bare git dir).
   while IFS= read -r worktree; do
     worktree=${worktree%$'\r'}

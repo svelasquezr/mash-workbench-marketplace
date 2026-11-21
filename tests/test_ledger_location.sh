@@ -176,3 +176,69 @@ run_capturing bash "$path_script" "$fixture/missing"
 assert_eq "$captured_exit_code" "2"
 run_capturing bash "$add" "$fixture/missing" src/a wrong-result s --body-file "$body"
 assert_eq "$captured_exit_code" "2"
+
+# An empty escapes setting counts as not set; a value that is the repository root is refused. Nothing is written.
+set_local() { mkdir -p "$1/.claude/mash-workbench"; printf '%s\n' "$2" > "$1/.claude/mash-workbench/settings.local"; }
+for empty_line in "escapes=" $'escapes=\r'; do
+  root=$(fresh empty)
+  set_local "$root" "$empty_line"
+  run_capturing bash "$path_script" "$root"
+  assert_eq "$captured_exit_code" "3"
+  run_capturing record "$root" first
+  assert_eq "$captured_exit_code" "3"
+  assert_contains "$captured_output" "no escapes folder chosen yet: ask the user where to keep it"
+  [[ ! -e "$root/README.md" ]] || { echo "  wrote README.md into the repository root"; exit 1; }
+  [[ -z "$(find "$root" -mindepth 1 -maxdepth 1 ! -name .git ! -name .claude | head -1)" ]] || { echo "  wrote into the repository root"; exit 1; }
+done
+# An empty setting with an old ledger present: the old-ledger handling, as with no setting.
+root=$(fresh empty-old)
+mkdir -p "$root/docs/mash"; printf 'old\n' > "$root/docs/mash/review-escapes.md"
+set_local "$root" "escapes="
+run_capturing bash "$path_script" "$root"
+assert_eq "$captured_exit_code" "0"
+assert_contains "$captured_output" "$root/docs/mash/review-escapes.md"
+assert_contains "$captured_output" "old ledger format in use"
+# An empty environment variable is the same as an unset one.
+root=$(fresh empty-env)
+run_capturing env REVIEW_ROUTING_ESCAPES= bash "$path_script" "$root"
+assert_eq "$captured_exit_code" "3"
+# A value that resolves to the repository root is refused with exit 6.
+for root_value in . ./ "@ROOT@" "@ROOT@/"; do
+  root=$(fresh rootvalue)
+  set_local "$root" "escapes=${root_value//@ROOT@/$root}"
+  run_capturing bash "$path_script" "$root"
+  assert_eq "$captured_exit_code" "6"
+  assert_contains "$captured_output" "the escapes folder must not be the repository root"
+  run_capturing record "$root" first
+  assert_eq "$captured_exit_code" "6"
+  [[ -z "$(find "$root" -mindepth 1 -maxdepth 1 ! -name .git ! -name .claude | head -1)" ]] || { echo "  wrote into the repository root"; exit 1; }
+done
+# A repository with no setting at all still gets exit 3.
+root=$(fresh nosetting)
+run_capturing bash "$path_script" "$root"
+assert_eq "$captured_exit_code" "3"
+
+# A whitespace-only setting counts as not set too; nothing is created in the root.
+for blank_line in "escapes= " $'escapes=\t' $'escapes= \t '; do
+  root=$(fresh blank)
+  set_local "$root" "$blank_line"
+  run_capturing bash "$path_script" "$root"
+  assert_eq "$captured_exit_code" "3"
+  run_capturing record "$root" first
+  assert_eq "$captured_exit_code" "3"
+  [[ -z "$(find "$root" -mindepth 1 -maxdepth 1 ! -name .git ! -name .claude | head -1)" ]] || { echo "  wrote into the repository root"; exit 1; }
+done
+# Other spellings of the root: src/.. and a symlink to it are refused with exit 6.
+root=$(fresh rootspell)
+ln -s "$root" "$fixture/link-to-root-$$"
+for root_value in src/.. "$fixture/link-to-root-$$"; do
+  set_local "$root" "escapes=$root_value"
+  run_capturing bash "$path_script" "$root"
+  assert_eq "$captured_exit_code" "6"
+  assert_contains "$captured_output" "the escapes folder must not be the repository root"
+done
+# A near miss still resolves.
+set_local "$root" "escapes=docs/escapes"
+run_capturing bash "$path_script" "$root"
+assert_eq "$captured_exit_code" "0"
+assert_eq "$captured_output" "$root/docs/escapes"
