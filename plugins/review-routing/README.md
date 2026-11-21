@@ -54,7 +54,7 @@ Only when you or Claude run the matching skill: `docs/mash/review-escapes.md` (`
 
 ## Where the escape ledger lives
 
-The first time a bug needs recording, the skill asks whether to create `docs/mash/review-escapes.md`, use another file, or keep none. To answer once, set `REVIEW_ROUTING_ESCAPES` (a path relative to the repository, or `off`) in the `env` block of `.claude/settings.local.json` (only you) or `.claude/settings.json` (everyone). A ledger already at `docs/review-escapes.md` keeps working where it is; move it with `git mv` when you like. It offers to add a new ledger to `.gitignore`; an ignored ledger counts only your own escapes, so the default is to commit it and let the whole team's misses add up.
+The first time a bug needs recording, the skill asks whether to create `docs/mash/review-escapes.md`, use another file, or keep none. To answer once, set `REVIEW_ROUTING_ESCAPES` (a path relative to the main worktree, the folder where you cloned the repository, or `off`) in the `env` block of `.claude/settings.local.json` (only you) or `.claude/settings.json` (everyone). A ledger already at `docs/review-escapes.md` keeps working where it is; move it with `git mv` when you like. It offers to add a new ledger to `.gitignore`; an ignored ledger counts only your own escapes, so the default is to commit it and let the whole team's misses add up.
 
 ## Why reviewers are routed
 

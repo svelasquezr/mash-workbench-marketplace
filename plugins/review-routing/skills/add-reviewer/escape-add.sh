@@ -8,6 +8,9 @@
 # escapes-report.sh uses to say when an area has earned a specialist reviewer; when the area is at or over
 # the threshold (default 2) after this entry, that area's report line is printed too.
 # The area is the directory a [[routes]] pattern would claim (src/payments), never a file.
+# A relative --create or --file path is from the main worktree (scripts/mash-settings.sh), so a linked worktree writes
+# where escapes-path.sh finds it; outside a git repository it is from <repo-root>. "off" from the environment or the
+# settings files records nothing, with or without --create and --file.
 set -euo pipefail
 usage="usage: escape-add.sh [--create | --file <path>] <repo-root> <area-directory> <class> <issue link>"
 refuse() { echo "escape-add: $*" >&2; echo "$usage" >&2; exit 2; }
@@ -79,11 +82,25 @@ elif [[ "$link" =~ ^#([0-9]+)$ ]]; then
   fi
 fi
 [[ "$link" =~ ^https?://[^[:space:]]+$ ]] || refuse "the link must be a GitHub issue or pull request, owner/repo#N, #N, or an http(s) URL: $link"
-if [[ "${REVIEW_ROUTING_ESCAPES:-}" == off ]]; then
-  echo "the escape ledger is off for this project (REVIEW_ROUTING_ESCAPES=off): nothing recorded"; exit 0
+settings="$(dirname "${BASH_SOURCE[0]}")/../../scripts/mash-settings.sh"
+# "off" counts from the environment and from the settings files, also for --create and --file.
+if [[ "$(bash "$settings" get "$root" escapes 2>/dev/null || true)" == off ]]; then
+  echo "the escape ledger is off for this project (escapes=off): nothing recorded"; exit 0
 fi
 if [[ -n "$explicit" ]]; then
-  if [[ "$explicit" == /* ]]; then ledger="$explicit"; else ledger="$root/$explicit"; fi
+  if [[ "$explicit" == /* ]]; then
+    ledger="$explicit"
+  else
+    # A relative path is from the main worktree, where escapes-path.sh looks, also from a linked worktree.
+    main_status=0
+    main=$(bash "$settings" main-worktree "$root" 2>/dev/null) || main_status=$?
+    case "$main_status" in
+      0) ;;
+      2) main="$root" ;;  # not a git repository: the folder given stands in
+      *) echo "escape-add: no main worktree to put $explicit in: pass --file with an absolute path" >&2; exit "$main_status" ;;
+    esac
+    ledger="$main/$explicit"
+  fi
   # A second ledger would split the evidence the report counts: refuse when the project already uses another one.
   status=0
   current=$(bash "$(dirname "${BASH_SOURCE[0]}")/escapes-path.sh" "$root" 2>/dev/null) || status=$?
@@ -110,7 +127,7 @@ else
     *) exit "$status" ;;
   esac
 fi
-ledger_name="${ledger#"$root"/}"
+ledger_name="${ledger#"${main:-$root}"/}"
 mkdir -p "$(dirname "$ledger")"
 if [[ ! -f "$ledger" ]]; then
   printf '%s\n\n%s\n%s\n\n' "# Review escapes" \
