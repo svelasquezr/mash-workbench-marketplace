@@ -17,16 +17,31 @@ set -euo pipefail
 #                                                 replace or append the key's line (--local: settings.local, --team: settings)
 #   mash-settings.sh unset <dir> <key> --local|--team
 #                                                 remove the key's lines from that file (a key not there is not an error)
+#   mash-settings.sh source <dir> <key>           print where get's value comes from: env, local or team
+#   mash-settings.sh path <dir> escapes|backlog   print the absolute path the key names (a relative value is from the main
+#                                                 worktree), with . and .. removed as text. Exit 4 when the value is "off". Refused with exit 6: the
+#                                                 repository root; a path outside the main worktree that the committed
+#                                                 team file (settings) names, because only the user's own settings.local
+#                                                 or the environment variable may choose a place outside the repository;
+#                                                 a path written inside the main worktree that a symbolic link leads
+#                                                 out of.
 #   mash-settings.sh check-escapes-path <dir> <path>
 #                                                 print one line with the consequence of keeping escapes at <path>
+#   mash-settings.sh check-backlog-path <dir> <path>
+#                                                 the same for the tooling backlog file (the owner is the file's repo: line)
 #   mash-settings.sh repo-key <dir>               print host/owner/repo of the origin remote, or local/<folder>
 # Environment variables: escapes = REVIEW_ROUTING_ESCAPES, backlog = MASH_WORKBENCH_BACKLOG; other keys have none.
 #
 # Outside a git repository every command exits 2, except get when the key's environment variable is set (get reads
 # it first). Callers such as escapes-path.sh then let the project folder stand in for the main worktree and read only
 # the environment variable.
+# The home folder must be a real folder inside the main worktree: when .claude/mash-workbench is a symbolic link, or
+# .claude leads outside the main worktree, home, get (for the files), source, path, set and unset exit 6. A repository
+# can commit a symbolic link, and it would move the settings and the review log to another place.
 # set and unset take a lock (the folder .settings.lock in the home folder) around their read-modify-write; set --local
-# adds the exclude line before it writes settings.local. It replaces a symlinked settings file with a regular file.
+# adds the exclude line before it writes settings.local. A settings file that is a symbolic link is refused (exit 6) by
+# get, source, path, set and unset. settings.local counts as the user's own file only while git does not track it: a
+# tracked one is read as a committed file (source prints team), and set --local refuses to write it.
 # Exit codes: 0 success; 1 another set or unset holds the lock; 2 usage error, or <dir> is not in a git repository; 3 the key
 # is not set anywhere, or its value is empty or only spaces and tabs; 5 bare repository, or the main worktree cannot be found from <dir>; 6 refused by a check (the
 # line says why).
@@ -40,7 +55,10 @@ usage() {
     echo "       mash-settings.sh get <dir> <key>"
     echo "       mash-settings.sh set <dir> <key> <value> --local|--team"
     echo "       mash-settings.sh unset <dir> <key> --local|--team"
+    echo "       mash-settings.sh source <dir> <key>"
+    echo "       mash-settings.sh path <dir> escapes|backlog"
     echo "       mash-settings.sh check-escapes-path <dir> <path>"
+    echo "       mash-settings.sh check-backlog-path <dir> <path>"
     echo "       mash-settings.sh repo-key <dir>"
   } >&2
   exit 2
@@ -136,7 +154,7 @@ append_line() {
 
 # normalize <path>: an absolute path with symlinks resolved in its existing part and . and .. removed.
 normalize() {
-  local path=$1 rest="" parent joined part count=0 index result=""
+  local path=$1 rest="" parent
   while [[ ! -d "$path" ]]; do
     parent=$(dirname "$path")
     rest="$(basename "$path")${rest:+/$rest}"
@@ -144,7 +162,11 @@ normalize() {
     path=$parent
   done
   if [[ -d "$path" ]]; then path=$(cd "$path" && pwd -P); fi
-  joined="$path${rest:+/$rest}"
+  squash "$path${rest:+/$rest}"
+}
+# squash <path>: the path as written, with . and .. and doubled slashes removed; no symbolic link is resolved.
+squash() {
+  local joined=$1 part count=0 index result=""
   local -a parts stack
   IFS=/ read -r -a parts <<< "$joined"
   for part in ${parts[@]+"${parts[@]}"}; do
@@ -164,10 +186,49 @@ under() {
   [[ -z "$folder" || "$1" == "$folder" || "$1" == "$folder"/* ]]
 }
 
+# need_home: the home folder is a real folder inside the main worktree, or exit 6 (see the header).
+# refuse_backslash <path>: the path code splits on "/" only, so a name with "\" would pass as one name in a folder
+# while Git Bash reads it as a path.
+refuse_backslash() {
+  case "$1" in *\\*) fail 6 "refused: the path holds a backslash: write it with / (C:/Users/me/escapes): $1" ;; esac
+}
+need_home() {
+  local home_folder="$main/.claude/mash-workbench"
+  if [[ -L "$home_folder" ]]; then
+    fail 6 "refused: $home_folder is a symbolic link: the home folder must be a real folder in the main worktree"
+  fi
+  if ! under "$(normalize "$home_folder")" "$(normalize "$main")"; then
+    fail 6 "refused: $main/.claude is a symbolic link that leads outside the main worktree"
+  fi
+}
+
+# refuse_linked_file <settings file>: exit 6 when it is a symbolic link. The file is never read or written through a
+# link: a committed link to a private file would put that file's lines into the settings.
+refuse_linked_file() {
+  if [[ -L "$1" ]]; then fail 6 "refused: $1 is a symbolic link: a settings file must be a regular file"; fi
+}
+# local_is_tracked: git tracks settings.local in the main worktree (someone committed it, so it is not private).
+local_is_tracked() {
+  # :(icase): on a file system that ignores case, a tracked SETTINGS.LOCAL is the file that gets opened.
+  git -C "$main" ls-files --error-unmatch -- ':(icase).claude/mash-workbench/settings.local' >/dev/null 2>&1
+}
+
+# leaves_repository <absolute path>: the path is written inside the main worktree, and a symbolic link on it leads out.
+leaves_repository() {
+  local written real main_real
+  [[ -n "$main" ]] || return 1
+  main_real=$(normalize "$main")
+  written=$(squash "$1")
+  real=$(normalize "$1")
+  { under "$written" "$main" || under "$written" "$main_real"; } && ! under "$real" "$main_real"
+}
+
 repo_key() {
   local dir=$1 url host_part rest host after name
   url=$(git -C "$dir" remote get-url origin 2>/dev/null || true)
   url=${url%$'\r'}
+  # A remote that is a path on this machine is no name for the repository, and the key goes into committed files.
+  case "$url" in /* | .* | "~"* | file://* | [A-Za-z]:[/\\]*) url="" ;; esac
   if [[ -z "$url" ]]; then
     if [[ -n "$main" ]]; then name=$(basename "$main"); else name=$(basename "$common" .git); fi
     printf 'local/%s\n' "$(lower "$name")"
@@ -191,24 +252,66 @@ repo_key() {
   printf '%s\n' "$(lower "$url")"
 }
 
-command_get() {
+# lookup <dir> <key>: sets found_value and found_source (env, local or team), or exits 3 when the key is not set.
+found_value=""
+found_source=""
+lookup() {
   local dir=$1 key=$2 variable value file status=0
   variable=$(env_name "$key")
   if [[ -n "$variable" ]]; then
     value=${!variable:-}
-    if [[ -n "${value//[[:space:]]/}" ]]; then printf '%s\n' "$value"; exit 0; fi
+    if [[ -n "${value//[[:space:]]/}" ]]; then found_value=$value; found_source="env"; return 0; fi
   fi
   need_main "$dir"
+  need_home
   for file in settings.local settings; do
-    file="$main/.claude/mash-workbench/$file"
-    if [[ -f "$file" ]]; then
+    refuse_linked_file "$main/.claude/mash-workbench/$file"
+    if [[ -f "$main/.claude/mash-workbench/$file" ]]; then
       status=0
-      value=$(read_key "$file" "$key") || status=$?
+      value=$(read_key "$main/.claude/mash-workbench/$file" "$key") || status=$?
       # An empty value, or one of only spaces and tabs, counts as not set: the next source answers.
-      if ((status == 0)) && [[ -n "${value//[[:space:]]/}" ]]; then printf '%s\n' "$value"; exit 0; fi
+      if ((status == 0)) && [[ -n "${value//[[:space:]]/}" ]]; then
+        found_value=$value
+        # settings.local is the user's own file only when git does not track it: a repository can commit one.
+        if [[ "$file" == settings ]] || local_is_tracked; then found_source="team"; else found_source="local"; fi
+        return 0
+      fi
     fi
   done
   exit 3
+}
+
+# command_path <dir> <key>: see the header.
+command_path() {
+  local dir=$1 key=$2 status=0 path noun
+  case "$key" in
+    escapes) noun="escapes folder" ;;
+    backlog) noun="backlog file" ;;
+    *) usage ;;
+  esac
+  lookup "$dir" "$key"
+  if [[ "$found_value" == off ]]; then exit 4; fi
+  path=$found_value
+  refuse_backslash "$path"
+  if [[ "$found_source" == env ]]; then find_main "$dir" 2>/dev/null || status=$?; fi
+  if ((status == 2)); then need_main "$dir"; fi
+  if ! is_absolute "$path"; then
+    [[ -n "$main" ]] || fail 5 "the $key setting is relative, but no main worktree was found: set it to an absolute path"
+    path="$main/$path"
+  fi
+  # No ".." after this line: the text that is checked is the text that is printed and written. Otherwise
+  # "<no such name>/../<link>" would pass as text while the write follows the link.
+  path=$(squash "$path")
+  if [[ -n "$main" ]]; then
+    if [[ "$(normalize "$path")" == "$(normalize "$main")" ]]; then fail 6 "refused: the $noun must not be the repository root"; fi
+    if leaves_repository "$path"; then
+      fail 6 "refused: a symbolic link on $path leads outside the repository. If the user wants that place, name it directly: mash-settings.sh set <dir> $key <the real path> --local"
+    fi
+    if [[ "$found_source" == team ]] && ! under "$(normalize "$path")" "$(normalize "$main")"; then
+      fail 6 "refused: the committed settings file puts the $noun outside the repository: $path. A committed file cannot choose that. Ask the user; on a yes, run: mash-settings.sh set <dir> $key $(printf '%q' "$found_value") --local"
+    fi
+  fi
+  printf '%s\n' "$path"
 }
 
 # command_set <dir> <key> <value> <scope> [unset]: replace or append the key's line; with "unset", remove its lines.
@@ -225,8 +328,14 @@ command_set() {
     *) usage ;;
   esac
   need_main "$dir"
+  need_home
   home="$main/.claude/mash-workbench"
   file="$home/$file"
+  refuse_linked_file "$home/settings"
+  refuse_linked_file "$home/settings.local"
+  if [[ "$scope" == --local ]] && local_is_tracked; then
+    fail 6 "refused: git tracks $file, so it is not private: remove it from the index first (git rm --cached), then run this again"
+  fi
   if [[ "$mode" == unset && ! -f "$file" ]]; then printf '%s was not set in %s\n' "$key" "$file"; return 0; fi
   mkdir -p "$home"
   if [[ "$scope" == --local && "$mode" == set ]]; then
@@ -275,8 +384,11 @@ command_set() {
   printf '%s %s in %s\n' "$mode" "$key" "$file"
 }
 
+# command_check <dir> <path> <kind>: kind is escapes (a folder) or backlog (a file).
 command_check() {
-  local dir=$1 path=$2 status=0 target worktree first=1 home relative owner key temporary_root
+  local dir=$1 path=$2 kind=$3 noun="escapes folder" status=0 target worktree first=1 home relative owner key temporary_root owner_file
+  if [[ "$kind" == backlog ]]; then noun="backlog file"; fi
+  case "$path" in *\\*) echo "refused: the path holds a backslash: write it with /"; exit 6 ;; esac
   find_main "$dir" 2>/dev/null || status=$?
   case "$status" in
     0) ;;
@@ -285,8 +397,13 @@ command_check() {
     *) need_main "$dir" ;;  # prints why, and exits
   esac
   if ! is_absolute "$path"; then path="$main/$path"; fi
+  path=$(squash "$path")  # see command_path: ".." is removed before any check
   target=$(normalize "$path")
-  if [[ -n "$main" && "$target" == "$(normalize "$main")" ]]; then echo "refused: the escapes folder must not be the repository root"; exit 6; fi
+  if [[ -n "$main" && "$target" == "$(normalize "$main")" ]]; then echo "refused: the $noun must not be the repository root"; exit 6; fi
+  if leaves_repository "$path"; then echo "refused: a symbolic link on this path leads outside the repository: name the real place instead"; exit 6; fi
+  # A link that normalize left in place is dangling or names a file: a write would follow it.
+  if [[ -L "$target" ]]; then echo "refused: the $noun is a symbolic link"; exit 6; fi
+  if [[ "$kind" == backlog && -d "$target" ]]; then echo "refused: the backlog path is a folder: name a file"; exit 6; fi
   # 1. A linked worktree (every entry but the first, which is the main worktree or the bare git dir).
   while IFS= read -r worktree; do
     worktree=${worktree%$'\r'}
@@ -299,7 +416,7 @@ command_check() {
   if under "$target" "$common"; then echo "refused: inside the git directory: cannot be committed or shared"; exit 6; fi
   # 2. Temporary folders: /tmp, /private/tmp, $TMPDIR, and the Claude Code scratchpad (/claude-<digits>/) under them.
   # A root that resolves to / is skipped: it would refuse every path.
-  for temporary_root in /tmp /private/tmp "${TMPDIR:-}"; do
+  for temporary_root in /tmp /private/tmp /var/tmp /private/var/tmp "${TMPDIR:-}"; do
     [[ -n "$temporary_root" ]] || continue
     temporary_root=$(normalize "$temporary_root")
     [[ "$temporary_root" != / ]] || continue
@@ -326,9 +443,11 @@ command_check() {
     fi
     exit 0
   fi
-  # 6. Outside the repo, the folder's README.md names its owning repository.
-  if [[ -f "$target/README.md" ]]; then
-    owner=$(awk '{ sub(/\r$/, "") } /^repo:/ { sub(/^repo:[ \t]*/, ""); sub(/[ \t]+$/, ""); print; exit }' "$target/README.md")
+  # 6. Outside the repo, the folder's README.md (for the backlog, the file itself) names its owning repository.
+  owner_file="$target/README.md"
+  if [[ "$kind" == backlog ]]; then owner_file=$target; fi
+  if [[ -f "$owner_file" ]]; then
+    owner=$(awk '{ sub(/\r$/, "") } /^repo:/ { sub(/^repo:[ \t]*/, ""); sub(/[ \t]+$/, ""); print; exit }' "$owner_file")
     key=$(repo_key "$dir")
     if [[ -n "$owner" && "$(lower "$owner")" != "$key" ]]; then echo "refused: owned by $owner"; exit 6; fi
   fi
@@ -361,11 +480,22 @@ case "$command" in
   home)
     [[ $# -eq 1 ]] || usage
     need_main "$1"
+    need_home
     printf '%s\n' "$main/.claude/mash-workbench"
     ;;
   get)
     [[ $# -eq 2 ]] || usage
-    command_get "$1" "$2"
+    lookup "$1" "$2"
+    printf '%s\n' "$found_value"
+    ;;
+  source)
+    [[ $# -eq 2 ]] || usage
+    lookup "$1" "$2"
+    printf '%s\n' "$found_source"
+    ;;
+  path)
+    [[ $# -eq 2 ]] || usage
+    command_path "$1" "$2"
     ;;
   set)
     [[ $# -eq 4 ]] || usage
@@ -377,7 +507,11 @@ case "$command" in
     ;;
   check-escapes-path)
     [[ $# -eq 2 ]] || usage
-    command_check "$1" "$2"
+    command_check "$1" "$2" escapes
+    ;;
+  check-backlog-path)
+    [[ $# -eq 2 ]] || usage
+    command_check "$1" "$2" backlog
     ;;
   repo-key)
     [[ $# -eq 1 ]] || usage

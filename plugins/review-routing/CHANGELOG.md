@@ -2,6 +2,46 @@
 
 Newest first. "Changed scripts" lists the scripts and hooks whose behavior changed, so you know what to re-read before you update.
 
+## 0.6.0 - 2026-11-22
+
+Security hardening, and the audit documentation. Six security bugs are corrected; `docs/decisions/0006-scripts-trust-no-input.md` in the marketplace repository has the conditions, the incorrect result and the expected result of each one.
+
+**Do this after you update.** If you accepted allow rules from an earlier version, run step 3 of "Setting up escapes" (in the `review-changes` `reference.md`) again. Claude Code keeps the folder of the old version in its plugin cache, and your old rules continue to approve the old scripts, with their bugs, with no prompt. `permission-rules.sh` now lists those rules as `remove:` lines and offers no new rule until they are gone.
+
+**The interface of `escape-add.sh` changed.** `--body-file <file>` is gone: pass the text with `--body "<text>"`. One record reads no file and no standard input. `--batch` reads standard input only (`--batch - <repo-root>`). A session that uses the old form gets exit code 2 and the new form.
+
+Fixed:
+
+- When you had an allow rule for `escape-add.sh`, a session ran `escape-add.sh ... --body-file <file>` with no prompt, and the script copied that file, for example a private key, into the escapes folder. The script must not open a file that an argument names. It now takes the body as text.
+- When the committed file `.claude/mash-workbench/settings` named an escapes folder outside the repository (for example `escapes=../victim/.claude/rules`), `escape-add.sh` wrote there with no question. Only your own `settings.local` or the environment variable can select a place outside the repository. The scripts now stop with exit code 6, and the session asks you. A `settings.local` that git tracks is not your own file: a repository can commit one, so the scripts read it as a committed file.
+- When a repository contained a symbolic link at `.claude/mash-workbench`, at the escapes folder, at its `README.md` or at `reviews.log`, the scripts wrote to the place that the link named. They now stop with exit code 6. The reports do not read an escape file that is a symbolic link. When `settings` or `settings.local` was a symbolic link to a private file, `mash-settings.sh set` copied the lines of that file into the settings file. A settings file and an old ledger file that are symbolic links are now refused.
+- When a project folder contained `datetime.py`, `re.py` or a different module name of the standard library, plugin Python could import and run it. `scripts/python.sh` now starts Python, and its version probe, isolated (`-I`).
+- When you updated the plugin and kept the old allow rules, the scripts of the old version in the plugin cache continued to run with no prompt. From this version on, `escape-add.sh` and `review-log.sh` stop with exit code 6 when their copy is not an installed version.
+- When the range given to the router started with `-` (for example `--output=<file>`), git read it as an option and wrote the file. The router now refuses such a range.
+- When `.claude/reviewers.toml` named a reviewer with `/` or `..` in the name, the router read an agent file outside the agents folders. It now reads no file for such a name.
+
+Changed scripts:
+
+- `scripts/python.sh` (the same file in both plugins): runs the interpreter with `-I -B`, and sets `PYTHONSAFEPATH=1` and `PYTHONDONTWRITEBYTECODE=1`. Python does not import from the current folder or from `PYTHONPATH`, and writes no `__pycache__`.
+- `scripts/mash-settings.sh` (the same file in both plugins): new `source <dir> <key>` (prints `env`, `local` or `team`), `path <dir> escapes|backlog` (the place a key names, with `.` and `..` removed as text before the checks, and with the refusals above) and `check-backlog-path <dir> <path>`. `home`, `get`, `source`, `path`, `set` and `unset` exit 6 when `.claude/mash-workbench` is a symbolic link or `.claude` leads outside the main worktree. `check-escapes-path` also refuses a symbolic link that leads from inside the repository to outside, a link as the folder, a path with a backslash, and `/var/tmp`. `get`, `source`, `path`, `set` and `unset` exit 6 when a settings file is a symbolic link; a tracked `settings.local` is read as a committed file (`source` prints `team`), and `set --local` refuses to write it.
+- New `scripts/plugin-current.sh` (the same file in both plugins): exit 6 when the copy it is in is in Claude Code's plugin cache and `installed_plugins.json` does not list it for you or for the project of the current folder (an entry of another project does not count). It reads only that file, and asks git for the main worktree of the current folder.
+- `skills/add-reviewer/escape-add.sh`: `--body <text>` replaces `--body-file` (no file and no standard input is read for one record); `--batch -` reads standard input only; it refuses a `README.md` that is a symbolic link; it runs `plugin-current.sh` first; `--list` and the duplicate check skip symbolic links.
+- `skills/add-reviewer/escapes-path.sh`: uses `mash-settings.sh path`, so exit 6 now also covers a place outside the repository that the committed settings file names, a symbolic link, and an old ledger file that is a symbolic link.
+- `skills/add-reviewer/escapes-report.sh`: skips escape files that are symbolic links.
+- `skills/add-reviewer/escape-migrate.sh`: gives its entries to `escape-add.sh` on standard input.
+- `skills/review-changes/review-log.sh`: runs `plugin-current.sh` first; exits 6 when the home folder or `reviews.log` is a symbolic link; refuses a revision that starts with `-`; gives only full commit ids from the log to git.
+- `skills/review-changes/permission-rules.sh` (now the same file as `skills/scout/permission-rules.sh` in mash-workbench): reads which list each rule is in, so `present:` and `remove:` are about `allow` lists only, and a note names a current rule that a `deny` or `ask` list also holds; prints no `add:` line while a `remove:` line is there; says which other settings files to clean by hand.
+- `skills/review-changes/reviewers-for-change.py`: refuses a range that starts with `-` or holds whitespace (exit 2). `route_models.py`: a reviewer name with `/`, `\` or a leading `.` names no agent file, and an agent file that is a symbolic link is not read.
+- `scripts/mash-settings.sh repo-key`: an origin that is a path on your machine gives `local/<folder name>`, not the path.
+- `skills/review-changes/find-checks.sh`: drops control characters from the command lines it prints.
+- `hooks/reviewer-guard.py`: only its docstring changed (two more known gaps are listed).
+
+Other:
+
+- The README has a new section, "Audit this plugin": what each script reads and writes, who can choose the escapes folder, what the hook refuses, the permission prompt and its exceptions, the allow rules and their limits, the Python 3.11 note, the sandbox settings, and a prompt you can give your own agent. A second new section, "Pin a version", says how to stay on one commit of the marketplace.
+- The marketplace repository has two new tripwire tests, `tests/test_no_network.sh` (no plugin file holds a network word outside a list of accepted lines) and `tests/test_write_scope.sh` (each script changes only the places the README lists, in the four folders the test watches). Neither is proof; the README says what they do not see.
+- `record-escape` and the `review-changes` reference use `--body`, say what each exit 6 message means, and make removing old allow rules the first part of setup step 3.
+
 ## 0.5.1 - 2026-11-21
 
 Security fix. When you had added the allow rules that "Setting up escapes" offered in 0.4.0 to 0.5.0, Claude Code ran each command that started with `bash` and contained the script name, with no prompt. Examples are `bash -c '<a command>' /review-routing/add-reviewer/escape-add.sh` and `bash <a different script> /x/review-routing/add-reviewer/escape-add.sh`. The cause is that `*` in a rule matches all text, spaces included, and the rules had a wildcard before the script path. Only the plugin's own scripts must run with no prompt.

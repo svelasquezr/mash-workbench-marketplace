@@ -5,7 +5,7 @@ set -euo pipefail
 #   area: N escapes (class 1, class 2)[ (K from one source: <link>)][ -> add a reviewer for area (add-reviewer skill)]
 # Each escape file counts once, except that files of one area with the same source count once (a GitHub /pull/N and
 # /issues/N with no fragment are the same source). Files without
-# frontmatter, README.md and processed/ do not count.
+# frontmatter, README.md, processed/ and symbolic links do not count.
 # The threshold is --threshold N, else the escapes.threshold setting (scripts/mash-settings.sh), else 3.
 # Concentration: when more than half of an area's escapes, and at least two, share one source without its #fragment
 # (one pull request, shown as first spelled), the line says so: they may be one bug, not several.
@@ -56,7 +56,7 @@ if [[ -f "$ledger" ]]; then
 elif [[ -d "$ledger" ]]; then
   files=()
   for file in "$ledger"/*.md; do
-    if [[ -f "$file" && "${file##*/}" != README.md ]]; then files+=("$file"); fi
+    if [[ -f "$file" && ! -L "$file" && "${file##*/}" != README.md ]]; then files+=("$file"); fi
   done
   if ((${#files[@]} > 0)); then rows=$(awk -f "$here/escape-fields.awk" "${files[@]}"); fi
 fi

@@ -71,7 +71,7 @@ if [[ -s "$work/batch" ]]; then
   status=0
   # The variable points escape-add.sh at the target folder for this run only. Its escapes-path.sh warnings about the old
   # files are left out: the steps below say what to do with them.
-  REVIEW_ROUTING_ESCAPES="$target" bash "$here/escape-add.sh" --batch "$work/batch" "$root" 2> "$work/errors" || status=$?
+  REVIEW_ROUTING_ESCAPES="$target" bash "$here/escape-add.sh" --batch - "$root" < "$work/batch" 2> "$work/errors" || status=$?
   # escape-add.sh names a bad block by its number: name the old file and line instead.
   awk 'NR == FNR { line[FNR] = $0; next }
     /^escapes-path: / { next }

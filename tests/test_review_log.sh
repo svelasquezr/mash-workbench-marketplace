@@ -342,3 +342,34 @@ bash "$log_script" add "$repo" "$base" HEAD >/dev/null
 run_capturing stubbed 1 0 bash "$log_script" reviewed "$repo" HEAD
 assert_eq "$captured_exit_code" "0"
 assert_eq "$captured_output" ""
+
+# A repository can commit symbolic links. reviews.log, or the home folder, as a link would send the appended line to
+# another file: refused with exit 6, and the other file stays as it was.
+repo=$(new_repo links)
+base=$(git -C "$repo" rev-parse HEAD)
+commit_file "$repo" a a1 "feat: a"
+printf 'keep\n' > "$fixture/outside-target"
+mkdir -p "$repo/.claude/mash-workbench"
+ln -s "$fixture/outside-target" "$repo/.claude/mash-workbench/reviews.log"
+for arguments in "add $repo $base HEAD" "reviewed $repo HEAD"; do
+  # shellcheck disable=SC2086  # the words are split on purpose
+  run_capturing bash "$log_script" $arguments
+  assert_eq "$captured_exit_code" "6"
+  assert_contains "$captured_output" "symbolic link"
+done
+rm -r "$repo/.claude/mash-workbench"; mkdir -p "$fixture/outside-home"
+ln -s "$fixture/outside-home" "$repo/.claude/mash-workbench"
+run_capturing bash "$log_script" add "$repo" "$base" HEAD
+assert_eq "$captured_exit_code" "6"
+assert_contains "$captured_output" "symbolic link"
+assert_eq "$(cat "$fixture/outside-target")" "keep"
+assert_eq "$(find "$fixture/outside-home" -type f | wc -l | tr -d ' ')" "0"
+# A revision that starts with "-" is not read as a git option.
+rm "$repo/.claude/mash-workbench"
+for option in --all -q --git-dir=/x; do
+  run_capturing bash "$log_script" add "$repo" "$option" HEAD
+  assert_eq "$captured_exit_code" "2"
+  assert_contains "$captured_output" "not a commit"
+  run_capturing bash "$log_script" reviewed "$repo" "$option"
+  assert_eq "$captured_exit_code" "2"
+done

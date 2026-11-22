@@ -337,8 +337,8 @@ led="$area/led"; new_repository "$led"
 git -C "$led" worktree add --quiet "$led/.claude/worktrees/w" -b w
 led_linked="$led/.claude/worktrees/w"
 settings set "$led" escapes .claude/mash-workbench/escapes --local >/dev/null
-bash "$add_script" "$led_linked" src/a wrong-result one --body-file "$area/body.md" >/dev/null
-run_capturing bash "$add_script" "$led_linked" src/a missing-test two --body-file "$area/body.md"
+bash "$add_script" "$led_linked" src/a wrong-result one --body "$(cat "$area/body.md")" >/dev/null
+run_capturing bash "$add_script" "$led_linked" src/a missing-test two --body "$(cat "$area/body.md")"
 assert_eq "$captured_exit_code" "0"
 assert_contains "$captured_output" "recorded: .claude/mash-workbench/escapes/"
 assert_eq "$(find "$led/.claude/mash-workbench/escapes" -name '*.md' ! -name README.md | wc -l | tr -d ' ')" "2"
@@ -348,7 +348,7 @@ assert_contains "$(bash "$report_script" "$led_linked" 2>/dev/null)" "src/a: 2 e
 # Finding 11: escapes=off in a settings file stops recording.
 offrepo="$area/offrepo"; new_repository "$offrepo"
 settings set "$offrepo" escapes off --local >/dev/null
-run_capturing bash "$add_script" "$offrepo" src/a wrong-result off --body-file "$area/body.md"
+run_capturing bash "$add_script" "$offrepo" src/a wrong-result off --body "$(cat "$area/body.md")"
 assert_eq "$captured_exit_code" "0"
 assert_contains "$captured_output" "off"
 [[ ! -e "$offrepo/.claude/mash-workbench/escapes" ]] || { echo "  recorded while off"; exit 1; }
@@ -388,3 +388,239 @@ done
 printf 'last=early\nlast=\n' > "$empty_repo/.claude/mash-workbench/settings.local"
 printf 'last=team\n' > "$empty_repo/.claude/mash-workbench/settings"
 assert_eq "$(settings get "$empty_repo" last)" "team"
+
+# 12. source: where get's value comes from.
+src_repo="$area/source"; new_repository "$src_repo"; mkdir -p "$src_repo/.claude/mash-workbench"
+run_capturing settings source "$src_repo" escapes
+assert_eq "$captured_exit_code" "3"
+printf 'escapes=a\n' > "$src_repo/.claude/mash-workbench/settings"
+assert_eq "$(settings source "$src_repo" escapes)" "team"
+printf 'escapes=b\n' > "$src_repo/.claude/mash-workbench/settings.local"
+assert_eq "$(settings source "$src_repo" escapes)" "local"
+assert_eq "$(REVIEW_ROUTING_ESCAPES=c settings source "$src_repo" escapes)" "env"
+# An empty local value does not answer, so the team file is the source.
+printf 'escapes=\n' > "$src_repo/.claude/mash-workbench/settings.local"
+assert_eq "$(settings source "$src_repo" escapes)" "team"
+
+# 13. path: the folder or file a key names, and who may choose a place outside the repository.
+path_repo="$area/pathrepo"; new_repository "$path_repo"; mkdir -p "$path_repo/.claude/mash-workbench" "$area/victim/.claude"
+path_main=$(normalized "$path_repo")
+team="$path_repo/.claude/mash-workbench/settings"; local_file="$path_repo/.claude/mash-workbench/settings.local"
+run_capturing settings path "$path_repo" escapes
+assert_eq "$captured_exit_code" "3"
+printf 'escapes=off\n' > "$team"
+run_capturing settings path "$path_repo" escapes
+assert_eq "$captured_exit_code" "4"
+printf 'escapes=.claude/mash-workbench/escapes\nbacklog=docs/mash/tooling-backlog.md\n' > "$team"
+assert_eq "$(settings path "$path_repo" escapes)" "$path_main/.claude/mash-workbench/escapes"
+assert_eq "$(settings path "$path_repo" backlog)" "$path_main/docs/mash/tooling-backlog.md"
+# The committed team file cannot choose a place outside the main worktree: relative with .., or absolute.
+for outside in ../victim/.claude/rules "$area/victim/.claude/rules"; do
+  for key in escapes backlog; do
+    printf '%s=%s\n' "$key" "$outside" > "$team"
+    run_capturing settings path "$path_repo" "$key"
+    assert_eq "$captured_exit_code" "6"
+    assert_contains "$captured_output" "outside the repository"
+    assert_contains "$captured_output" "--local"
+  done
+done
+# The same place from settings.local (the user's own file) or from the environment variable is accepted.
+printf 'escapes=../victim/.claude/rules\n' > "$local_file"
+assert_eq "$(settings path "$path_repo" escapes)" "$area/victim/.claude/rules"
+rm "$local_file"
+assert_eq "$(REVIEW_ROUTING_ESCAPES="$area/victim/x" settings path "$path_repo" escapes)" "$area/victim/x"
+assert_eq "$(MASH_WORKBENCH_BACKLOG="$area/victim/b.md" settings path "$path_repo" backlog)" "$area/victim/b.md"
+# The repository root itself is refused, whoever chose it.
+printf 'escapes=.\n' > "$local_file"
+run_capturing settings path "$path_repo" escapes
+assert_eq "$captured_exit_code" "6"
+assert_contains "$captured_output" "repository root"
+# A path written inside the repository whose symbolic link leads outside is refused for every source: a committed link
+# must not move the writes of a user who chose a folder inside the repository.
+ln -s "$area/victim" "$path_repo/.claude/mash-workbench/escapes"
+printf 'escapes=.claude/mash-workbench/escapes\n' > "$local_file"
+run_capturing settings path "$path_repo" escapes
+assert_eq "$captured_exit_code" "6"
+assert_contains "$captured_output" "symbolic link"
+run_capturing env REVIEW_ROUTING_ESCAPES=.claude/mash-workbench/escapes bash "$settings_script" path "$path_repo" escapes
+assert_eq "$captured_exit_code" "6"
+run_capturing settings check-escapes-path "$path_repo" .claude/mash-workbench/escapes
+assert_eq "$captured_exit_code" "6"
+assert_contains "$captured_output" "symbolic link"
+rm "$path_repo/.claude/mash-workbench/escapes" "$local_file"
+# A link that stays inside the repository is fine.
+mkdir -p "$path_repo/docs/real"; ln -s real "$path_repo/docs/link"
+printf 'escapes=docs/link\n' > "$team"
+assert_eq "$(settings path "$path_repo" escapes)" "$path_main/docs/link"
+# Unknown keys have no path.
+run_capturing settings path "$path_repo" escapes.threshold
+assert_eq "$captured_exit_code" "2"
+
+# 14. A symbolic link at the home folder is refused: a committed link would move the settings and the review log.
+link_repo="$area/linkhome"; new_repository "$link_repo"; mkdir -p "$link_repo/.claude" "$area/elsewhere"
+printf 'escapes=x\n' > "$area/elsewhere/settings"
+ln -s "$area/elsewhere" "$link_repo/.claude/mash-workbench"
+for arguments in "home $link_repo" "get $link_repo escapes" "source $link_repo escapes" "path $link_repo escapes" \
+  "set $link_repo escapes x --local" "set $link_repo escapes x --team" "unset $link_repo escapes --team"; do
+  # shellcheck disable=SC2086  # the words are split on purpose
+  run_capturing settings $arguments
+  assert_eq "$captured_exit_code" "6"
+  assert_contains "$captured_output" "symbolic link"
+done
+assert_eq "$(cat "$area/elsewhere/settings")" "escapes=x"
+assert_eq "$(find "$area/elsewhere" -type f | wc -l | tr -d ' ')" "1"
+# The environment variable still answers get: it reads no file.
+assert_eq "$(REVIEW_ROUTING_ESCAPES=/somewhere settings get "$link_repo" escapes)" "/somewhere"
+# A link inside the repository is refused too (the home folder is one real folder), and so is a linked .claude that
+# leads outside.
+rm "$link_repo/.claude/mash-workbench"; mkdir -p "$link_repo/other"; ln -s ../other "$link_repo/.claude/mash-workbench"
+run_capturing settings home "$link_repo"
+assert_eq "$captured_exit_code" "6"
+rm -r "$link_repo/.claude"; mkdir -p "$area/elsewhere/claude"; ln -s "$area/elsewhere/claude" "$link_repo/.claude"
+run_capturing settings set "$link_repo" escapes x --local
+assert_eq "$captured_exit_code" "6"
+assert_eq "$(find "$area/elsewhere/claude" -type f | wc -l | tr -d ' ')" "0"
+
+# 15. check-backlog-path: the rules of check-escapes-path, for a file.
+back_repo="$area/backrepo"; new_repository "$back_repo"; git -C "$back_repo" remote add origin git@github.com:Acme/Shop.git
+run_capturing settings check-backlog-path "$back_repo" docs/mash/tooling-backlog.md
+assert_eq "$captured_exit_code" "0"
+assert_contains "$captured_output" "inside the repo"
+run_capturing settings check-backlog-path "$back_repo" .
+assert_eq "$captured_exit_code" "6"
+assert_contains "$captured_output" "the backlog file must not be the repository root"
+mkdir -p "$back_repo/docs/folder"
+run_capturing settings check-backlog-path "$back_repo" docs/folder
+assert_eq "$captured_exit_code" "6"
+assert_contains "$captured_output" "is a folder"
+run_capturing settings check-backlog-path "$back_repo" /tmp/backlog.md
+assert_eq "$captured_exit_code" "6"
+run_capturing settings check-backlog-path "$back_repo" .git/backlog.md
+assert_eq "$captured_exit_code" "6"
+# A symbolic link as the file is refused: an append would follow it.
+printf 'x\n' > "$area/elsewhere/target.md"; ln -s "$area/elsewhere/target.md" "$back_repo/docs/linked.md"
+run_capturing settings check-backlog-path "$back_repo" docs/linked.md
+assert_eq "$captured_exit_code" "6"
+assert_contains "$captured_output" "symbolic link"
+# Outside the repository, the file's own repo: line names its owner.
+printf '# Tooling backlog\nrepo: github.com/other/thing\n' > "$area/elsewhere/backlog.md"
+run_capturing settings check-backlog-path "$back_repo" "$area/elsewhere/backlog.md"
+assert_eq "$captured_exit_code" "6"
+assert_contains "$captured_output" "owned by github.com/other/thing"
+printf '# Tooling backlog\nrepo: GitHub.com/Acme/Shop\n' > "$area/elsewhere/backlog.md"
+run_capturing settings check-backlog-path "$back_repo" "$area/elsewhere/backlog.md"
+assert_eq "$captured_exit_code" "0"
+assert_contains "$captured_output" "outside the repo"
+# A dangling symbolic link as the escapes folder is refused too.
+ln -s "$area/elsewhere/nowhere" "$back_repo/docs/dangling"
+run_capturing settings check-escapes-path "$back_repo" docs/dangling
+assert_eq "$captured_exit_code" "6"
+assert_contains "$captured_output" "symbolic link"
+
+# 16. settings.local is the user's own file only when git does not track it. A repository can commit one: a fresh
+#     clone then has it, and it must not be able to choose a place outside the repository.
+tracked="$area/tracked"; new_repository "$tracked"; mkdir -p "$tracked/.claude/mash-workbench"
+printf 'escapes=%s\nbacklog=%s\n' "$area/victim/.claude/rules" "$area/victim/startup-file" > "$tracked/.claude/mash-workbench/settings.local"
+git -C "$tracked" add -f .claude/mash-workbench/settings.local
+git -C "$tracked" commit --quiet -m "chore: a committed settings.local"
+git clone --quiet "$tracked" "$area/tracked-clone"
+for copy in "$tracked" "$area/tracked-clone"; do
+  assert_eq "$(settings source "$copy" escapes)" "team"
+  for key in escapes backlog; do
+    run_capturing settings path "$copy" "$key"
+    assert_eq "$captured_exit_code" "6"
+    assert_contains "$captured_output" "outside the repository"
+  done
+done
+# set --local refuses to write a tracked settings.local: the value would be committed with it.
+run_capturing settings set "$area/tracked-clone" escapes x --local
+assert_eq "$captured_exit_code" "6"
+assert_contains "$captured_output" "tracked"
+# The same file, not tracked (the normal case), is the user's own.
+git -C "$tracked" rm --quiet --cached .claude/mash-workbench/settings.local
+git -C "$tracked" commit --quiet -m "chore: untrack"
+assert_eq "$(settings source "$tracked" escapes)" "local"
+assert_eq "$(settings path "$tracked" escapes)" "$area/victim/.claude/rules"
+
+# 17. A settings file that is a symbolic link is never read and never written through: a committed link to a private
+#     file would copy that file into the settings, and a link to a folder would send the write there.
+linked_settings="$area/linked-settings"; new_repository "$linked_settings"; mkdir -p "$linked_settings/.claude/mash-workbench" "$area/private"
+printf 'SECRET-KEY-MATERIAL\nescapes=stolen\n' > "$area/private/key"
+for name in settings settings.local; do
+  ln -s "$area/private/key" "$linked_settings/.claude/mash-workbench/$name"
+  for arguments in "get $linked_settings escapes" "source $linked_settings escapes" "path $linked_settings escapes" \
+    "set $linked_settings escapes x --team" "set $linked_settings escapes x --local" "unset $linked_settings escapes --team" "unset $linked_settings escapes --local"; do
+    # shellcheck disable=SC2086  # the words are split on purpose
+    run_capturing settings $arguments
+    assert_eq "$captured_exit_code" "6"
+    assert_contains "$captured_output" "symbolic link"
+    assert_not_contains "$captured_output" "SECRET"
+  done
+  [[ -L "$linked_settings/.claude/mash-workbench/$name" ]] || { echo "  a linked settings file was replaced"; exit 1; }
+  rm "$linked_settings/.claude/mash-workbench/$name"
+done
+ln -s "$area/private" "$linked_settings/.claude/mash-workbench/settings.local"
+run_capturing settings set "$linked_settings" escapes.threshold 3 --local
+assert_eq "$captured_exit_code" "6"
+assert_eq "$(cat "$area/private/key")" "$(printf 'SECRET-KEY-MATERIAL\nescapes=stolen')"
+assert_eq "$(find "$area/private" -mindepth 1 | wc -l | tr -d ' ')" "1"
+rm "$linked_settings/.claude/mash-workbench/settings.local"
+
+# 18. A value with a backslash is refused: the path code splits on "/" only, so "C:\Users\x" or "..\..\x" would pass
+#     as a name inside the repository, and Git Bash reads it as a path.
+slash_repo="$area/backslash"; new_repository "$slash_repo"; mkdir -p "$slash_repo/.claude/mash-workbench"
+for value in 'C:\Users\victim\.claude\rules' '..\..\victim\file'; do
+  printf 'escapes=%s\nbacklog=%s\n' "$value" "$value" > "$slash_repo/.claude/mash-workbench/settings"
+  for key in escapes backlog; do
+    run_capturing settings path "$slash_repo" "$key"
+    assert_eq "$captured_exit_code" "6"
+    assert_contains "$captured_output" "backslash"
+  done
+  run_capturing settings check-escapes-path "$slash_repo" "$value"
+  assert_eq "$captured_exit_code" "6"
+  run_capturing settings check-backlog-path "$slash_repo" "$value"
+  assert_eq "$captured_exit_code" "6"
+done
+# /var/tmp is a temporary folder too.
+run_capturing settings check-escapes-path "$slash_repo" /var/tmp/escapes
+assert_eq "$captured_exit_code" "6"
+
+# 19. "<a name that does not exist>/../<committed link>": removing ".." as text must not hide the link. The path that
+#     is checked is the path that is printed and written, with no ".." in it.
+dots="$area/dots"; new_repository "$dots"; mkdir -p "$dots/.claude/mash-workbench" "$area/victim/.claude"
+ln -s ../victim/.claude "$dots/link"
+dots_main=$(normalized "$dots")
+for source_file in settings settings.local; do
+  printf 'escapes=nope/../link/rules\nbacklog=nope2/../link/CLAUDE.md\n' > "$dots/.claude/mash-workbench/$source_file"
+  for key in escapes backlog; do
+    run_capturing settings path "$dots" "$key"
+    assert_eq "$captured_exit_code" "6"
+    assert_contains "$captured_output" "symbolic link"
+  done
+  rm "$dots/.claude/mash-workbench/$source_file"
+done
+for value in nope/../link/rules link/rules "$dots/nope/../link/rules"; do
+  run_capturing settings check-escapes-path "$dots" "$value"
+  assert_eq "$captured_exit_code" "6"
+  run_capturing settings check-backlog-path "$dots" "$value"
+  assert_eq "$captured_exit_code" "6"
+done
+# What path prints holds no "..": the same text goes to the checks and to the write.
+printf 'escapes=a/../b/./c\n' > "$dots/.claude/mash-workbench/settings"
+assert_eq "$(settings path "$dots" escapes)" "$dots_main/b/c"
+printf 'escapes=../outside-escapes\n' > "$dots/.claude/mash-workbench/settings.local"
+assert_eq "$(settings path "$dots" escapes)" "$(dirname "$dots_main")/outside-escapes"
+# A tracked settings.local in another letter case (a file system that ignores case opens it) is still tracked.
+git -C "$dots" add -f .claude/mash-workbench/settings.local; git -C "$dots" commit --quiet -m "chore: local"
+git -C "$dots" mv .claude/mash-workbench/settings.local .claude/mash-workbench/SETTINGS.LOCAL 2>/dev/null || true
+if [[ -f "$dots/.claude/mash-workbench/SETTINGS.LOCAL" && ! -f "$dots/.claude/mash-workbench/settings.local" ]]; then
+  cp "$dots/.claude/mash-workbench/SETTINGS.LOCAL" "$dots/.claude/mash-workbench/settings.local"
+  assert_eq "$(settings source "$dots" escapes)" "team"
+fi
+# 20. A local path as the origin gives local/<folder>, not the path: the key goes into files that people commit.
+keyrepo="$area/keyrepo"; new_repository "$keyrepo"
+for url in "$area/some/origin.git" ../origin "file://$area/some/origin.git"; do
+  git -C "$keyrepo" remote remove origin 2>/dev/null || true
+  git -C "$keyrepo" remote add origin "$url"
+  assert_eq "$(settings repo-key "$keyrepo")" "local/keyrepo"
+done

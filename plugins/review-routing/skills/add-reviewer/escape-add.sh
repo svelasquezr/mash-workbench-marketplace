@@ -7,16 +7,19 @@ set -euo pipefail
 # README.md whose repo: line names the owning repository (scripts/mash-settings.sh repo-key).
 #
 # Usage:
-#   escape-add.sh <repo-root> <area> <class> <slug> --body-file <file> [--source <link>]
-#       Record one escape. The area is the directory a [[routes]] pattern would claim (src/payments), never a file;
+#   escape-add.sh <repo-root> <area> <class> <slug> --body <text> [--source <link>]
+#       Record one escape. The body is the text itself (the conditions, the incorrect result, the expected result).
+#       The script opens no file that an argument names and reads no standard input for one record: with an allow rule
+#       it runs with no prompt, so it must not be able to copy a file (a private key, a .env) into the escapes folder.
+#       The area is the directory a [[routes]] pattern would claim (src/payments), never a file;
 #       the class and the slug are lowercase words joined by "-" (the slug at most 60 characters). The date is
 #       ESCAPE_DATE or today in UTC; a name that exists, also in processed/, gets -2, -3 and so on. The same
 #       area with the same source already in the folder (not in processed/) prints "already recorded: <file>"; a
 #       GitHub /pull/N and /issues/N with no fragment count as the same source. When the area is at or over the threshold after the record, and
 #       not declined, its escapes-report.sh line is printed too. The same source already recorded in another area is
 #       still recorded (the report counts per area); "also recorded in <area>: <file>" follows the "recorded" line.
-#   escape-add.sh --batch <file> <repo-root>
-#       Record several: blocks separated by a line "---8<---", each an escape file's frontmatter (plus "slug:"; "date:"
+#   escape-add.sh --batch - <repo-root>
+#       Record several, read from standard input (never from a file that an argument names): blocks separated by a line "---8<---", each an escape file's frontmatter (plus "slug:"; "date:"
 #       and "source:" optional) and its body. Every block is checked first; one bad block writes nothing. Prints
 #       "recorded N, already recorded M", then the threshold lines.
 #   escape-add.sh --list <repo-root> <area>
@@ -31,12 +34,16 @@ set -euo pipefail
 # Exit codes: 0 recorded, already recorded, listed, or the ledger is off (escapes=off: nothing recorded); 2 usage error
 # or a field that fails its check, or <repo-root> is not in a git repository (nothing written); 3 no escapes folder
 # chosen yet, or an old one-file ledger is in use (the message says what to ask the user); 5 no main worktree (bare
-# repository) and no absolute path set; 6 the folder is refused by mash-settings.sh check-escapes-path.
+# repository) and no absolute path set; 6 refused: the folder fails mash-settings.sh path or check-escapes-path (a
+# linked worktree, a temporary folder, a folder another repository owns, a place outside the repository that the
+# committed settings file chose, a symbolic link that leads out of the repository), the folder's README.md is a
+# symbolic link, or this copy of the plugin is an old version in Claude Code's plugin cache (scripts/plugin-current.sh).
 # Plain bash 3.2 (macOS) and Git Bash: no python3 (on Windows it is often the Microsoft Store stub); lowercase with tr.
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
+bash "$here/../../scripts/plugin-current.sh" < /dev/null || exit $?
 settings=$(cd "$here/../../scripts" && pwd -P)/mash-settings.sh
-usage_text="usage: escape-add.sh <repo-root> <area> <class> <slug> --body-file <file> [--source <link>]
-       escape-add.sh --batch <file> <repo-root>
+usage_text="usage: escape-add.sh <repo-root> <area> <class> <slug> --body <text> [--source <link>]
+       escape-add.sh --batch - <repo-root>      (the blocks on standard input)
        escape-add.sh --list <repo-root> <area>"
 refuse() { echo "escape-add: $*" >&2; echo "$usage_text" >&2; exit 2; }
 lower() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
@@ -188,6 +195,11 @@ prepare_folder() {
   message=$(bash "$settings" check-escapes-path "$root" "$folder" 2>&1) || status=$?
   if ((status != 0)); then echo "escape-add: $folder: $message" >&2; exit "$status"; fi
   mkdir -p "$folder"
+  # Once more, now that the folder exists: every name on the path can be resolved.
+  message=$(bash "$settings" check-escapes-path "$root" "$folder" 2>&1) || status=$?
+  if ((status != 0)); then echo "escape-add: $folder: $message" >&2; exit "$status"; fi
+  # A repository can commit a symbolic link: the README.md would be written where it points.
+  if [[ -L "$folder/README.md" ]]; then echo "escape-add: $folder/README.md is a symbolic link: nothing recorded" >&2; exit 6; fi
   if [[ ! -f "$folder/README.md" ]]; then
     key=$(bash "$settings" repo-key "$root")
     printf '%s\n' "# Review escapes" "repo: $key" "" \
@@ -195,12 +207,13 @@ prepare_folder() {
   fi
 }
 
-# escape_rows: escape-fields.awk over the folder's escape files (not README.md, not processed/).
+# escape_rows: escape-fields.awk over the folder's escape files (not README.md, not processed/, not a symbolic link:
+# a repository can commit a link to a file elsewhere, and --list would print its first body line).
 escape_rows() {
   local file
   local -a files=()
   for file in "$folder"/*.md; do
-    if [[ -f "$file" && "${file##*/}" != README.md ]]; then files+=("$file"); fi
+    if [[ -f "$file" && ! -L "$file" && "${file##*/}" != README.md ]]; then files+=("$file"); fi
   done
   if ((${#files[@]} > 0)); then awk -f "$here/escape-fields.awk" "${files[@]}"; fi
 }
@@ -270,9 +283,8 @@ case "$1" in
     exit 0
     ;;
   --batch)
-    [[ $# -eq 3 ]] || refuse "--batch needs <file> <repo-root>"
-    batch_file=$2
-    [[ -f "$batch_file" && -r "$batch_file" ]] || refuse "cannot read the batch file: $batch_file"
+    [[ $# -eq 3 ]] || refuse "--batch needs - <repo-root>, with the blocks on standard input"
+    [[ "$2" == - ]] || refuse "--batch reads the blocks from standard input only: pass - and send the text on standard input (a file that an argument names is never opened)"
     set_root "$3"
     check_date "$default_date" || refuse "ESCAPE_DATE: $problem"
     # Parse every block, then check every block; nothing is written until all pass.
@@ -305,7 +317,7 @@ case "$1" in
         body) b_body[count]="${b_body[count]}$line"$'\n' ;;
         bad) ;;
       esac
-    done < "$batch_file"
+    done
     blocks=0
     for ((index = 1; index <= count; index++)); do
       # A block with nothing in it (a trailing separator) is not a block.
@@ -352,17 +364,18 @@ case "$1" in
 esac
 
 # One record.
-positional=(); body_file=""; source_given=""; source=""
+positional=(); body_given=""; body_text=""; source_given=""; source=""
 while (($# > 0)); do
   case "$1" in
-    --body-file) (($# >= 2)) || refuse "--body-file needs a file"; body_file=$2; shift 2 ;;
+    --body) (($# >= 2)) || refuse "--body needs the text"; body_text=$2; body_given=1; shift 2 ;;
+    --body-file) refuse "--body-file is gone: pass the text itself with --body <text> (no file is opened, and no standard input is read)" ;;
     --source) (($# >= 2)) || refuse "--source needs a link"; source=$2; source_given=1; shift 2 ;;
     --*) refuse "unknown option: $1" ;;
     *) positional+=("$1"); shift ;;
   esac
 done
 [[ ${#positional[@]} -eq 4 ]] || refuse "four arguments needed: <repo-root> <area> <class> <slug>"
-[[ -n "$body_file" ]] || refuse "--body-file is needed: the conditions, the incorrect result and the expected result"
+[[ -n "$body_given" ]] || refuse "--body is needed: the conditions, the incorrect result and the expected result"
 set_root "${positional[0]}"
 check_area "${positional[1]}" || refuse "$problem"
 area=$area_checked
@@ -371,8 +384,8 @@ check_class "$class" || refuse "$problem"
 check_slug "${positional[3]}" || refuse "$problem"
 check_date "$default_date" || refuse "ESCAPE_DATE: $problem"
 if [[ -n "$source_given" ]]; then check_source "$source" || refuse "$problem"; source=$source_checked; fi
-[[ -f "$body_file" && -r "$body_file" ]] || refuse "cannot read the body file: $body_file"
-body=$(normalize_body < "$body_file")
+[[ "$body_text" != - ]] || refuse "--body takes the text itself: standard input is not read (a redirect could copy a file)"
+body=$(printf '%s\n' "$body_text" | normalize_body)
 [[ -n "${body//[[:space:]]/}" ]] || refuse "the body needs at least one non-empty line"
 resolve_folder record
 prepare_folder

@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
-# Print the Claude Code allow rules that let a session with no user (claude -p in a linked worktree) record escapes
-# and log reviews without a prompt, and name the old rules to remove. It only prints: the user decides, and the
+# Print the Claude Code allow rules that let a session with no user (claude -p in a linked worktree) run this plugin's
+# recording scripts without a prompt, and name the old rules to remove. It only prints: the user decides, and the
 # session edits the settings file with its edit tool, so Claude Code asks the user to approve that write.
+# The same file ships in review-routing (skills/review-changes/) and in mash-workbench (skills/scout/); the folder it
+# is in says which plugin's rules it prints (tests/test_permission_rules.sh compares the copies).
 #
 # Usage: permission-rules.sh <repo-root>
 #
@@ -9,11 +11,13 @@
 #   file: <path>      a .claude/settings.local.json: first the main worktree's (where the rules go), then, from a
 #                     linked worktree that has its own file with rules to remove, that file. The lines below a
 #                     "file:" line are about that file.
-#   present: <rule>   a current rule that the file already holds
-#   add: <rule>       a current rule that the file does not hold
-#   remove: <rule>    a "Bash(bash ...)" rule in the file that is not a current rule and names one of this plugin's
-#                     scripts, either under a review-routing folder (a rule for another plugin version) or after a
-#                     wildcard. The rules of review-routing 0.4.0 to 0.5.0 started with a wildcard
+#   present: <rule>   a current rule that the file's allow list already holds
+#   add: <rule>       a current rule that the allow list does not hold. No "add:" line is printed while a "remove:"
+#                     line is: the old rules go first, then this script offers the new ones.
+#   remove: <rule>    a "Bash(bash ...)" rule in an allow list that is not a current rule and names one of this
+#                     plugin's scripts, either under a folder with the plugin's name (a rule for another plugin
+#                     version: it still approves that version's scripts, which stay in Claude Code's plugin cache)
+#                     or after a wildcard. The rules of review-routing 0.4.0 to 0.5.0 started with a wildcard
 #                     ("Bash(bash */review-routing/*add-reviewer/escape-add.sh*)"), and "*" matches any text, spaces
 #                     too, so they allowed any command that mentions the script's name. A rule for a script of the
 #                     same name elsewhere, with an exact path, is left alone.
@@ -22,17 +26,20 @@
 # The rules. Claude Code compares a rule with the command text letter for letter, and a rule is safe only when
 # nothing but the arguments can vary. So each rule is "Bash(bash <script path> *)": the exact path of this installed
 # copy, and one wildcard, at the end. There is one rule for each spelling a skill writes ("<skills>/record-escape/../
-# add-reviewer/escape-add.sh" and "<skills>/add-reviewer/escape-add.sh" are two texts), for the two scripts a session
-# with no user needs: escape-add.sh and review-log.sh. The steps that need a user's answer first (escape-migrate.sh,
-# mash-settings.sh set) get no rule. A path with a space is spelled in double quotes, as a session must write it.
+# add-reviewer/escape-add.sh" and "<skills>/add-reviewer/escape-add.sh" are two texts), for the scripts a session
+# with no user needs: escape-add.sh and review-log.sh in review-routing, backlog-add.sh in mash-workbench. The steps
+# that need a user's answer first (escape-migrate.sh, mash-settings.sh set) get no rule. A path with a space is
+# spelled in double quotes, as a session must write it.
 # The path holds the plugin's version folder, so the rules stop matching after a plugin update, on purpose: run
-# this script again, then add the new rules and remove the old ones.
-# What a rule still allows: any arguments to that one script. escape-add.sh copies the --body-file it is given into
-# the escapes folder, and review-log.sh add writes a line to reviews.log.
+# this script again, remove the old rules, run it once more and add the new ones. The old rules must go: they keep
+# approving the old version's scripts. (From this version on, those scripts also refuse to run from an old copy:
+# scripts/plugin-current.sh.)
+# What a rule still allows: any arguments to that one script. The scripts open no file that an argument names, but
+# <repo-root> is an argument, so a rule approves a record in any repository on the machine that has a place chosen.
 #
-# Reads: the two settings.local.json files named above, only their "Bash(...)" strings. It does not tell the allow,
-# deny and ask lists apart: a "present" rule may sit in a deny list, and a "remove" rule may be a deny rule the user
-# wrote (the note says so). Writes nothing. No network.
+# Reads: the two settings.local.json files named above, only the "Bash(...)" strings of their arrays, with the name of
+# each array (allow, deny, ask). A rule in a deny or ask list is never printed as "present" or "remove"; a current
+# rule that is also in one gets a note, because a deny or ask rule wins. Writes nothing. No network.
 # Exit codes: 0 success; 2 usage error, or <repo-root> is not in a git repository; 5 bare repository, or the main
 # worktree cannot be found; 6 no rules offered: the plugin folder, or a symbolic link on the path to it, is inside a
 # worktree of the repository (a session that edits files there could change the scripts, or point the link at other
@@ -57,8 +64,25 @@ case "$here" in
   /*) case "$here/" in */./* | */../* | *//*) here=$(cd "$here" && pwd) ;; esac ;;
   *) here=$(cd "$here" && pwd) ;;
 esac
-[[ "$here" == */skills/review-changes ]] || fail 6 "not in a plugin's skills/review-changes folder: $here"
-skills=${here%/review-changes}
+# Which plugin: the skill folder this copy is in. plugin_name is the folder name that an installed copy has on its
+# path; our_scripts are the scripts that have, or had, a rule; named_only are scripts that count as ours only under a
+# folder with the plugin's name (the name is too common after a bare wildcard).
+case "$here" in
+  */skills/review-changes)
+    plugin_name=review-routing
+    spellings="add-reviewer/escape-add.sh review-changes/../add-reviewer/escape-add.sh record-escape/../add-reviewer/escape-add.sh review-changes/review-log.sh record-escape/../review-changes/review-log.sh"
+    our_scripts="escape-add.sh escape-migrate.sh review-log.sh"
+    named_only="mash-settings.sh"
+    ;;
+  */skills/scout)
+    plugin_name=mash-workbench
+    spellings="scout/backlog-add.sh"
+    our_scripts="backlog-add.sh"
+    named_only=""
+    ;;
+  *) fail 6 "not in a plugin's skills/review-changes or skills/scout folder: $here" ;;
+esac
+skills=$(dirname "$here")
 
 safe_path='^[A-Za-z0-9 _./:@%+=,~-]+$'
 [[ "$skills" =~ $safe_path ]] || fail 6 "no rules offered: the plugin path holds a character that a rule cannot spell safely: $skills"
@@ -111,69 +135,89 @@ rule_for() {
   esac
 }
 # One line per spelling in a SKILL.md or reference.md (tests/test_permission_rules.sh compares them with the skills).
-current=$(
-  rule_for add-reviewer/escape-add.sh
-  rule_for review-changes/../add-reviewer/escape-add.sh
-  rule_for record-escape/../add-reviewer/escape-add.sh
-  rule_for review-changes/review-log.sh
-  rule_for record-escape/../review-changes/review-log.sh
-)
+current=$(for spelling in $spellings; do rule_for "$spelling"; done)
 
-# rules_in <file>: prints each "Bash(...)" string in a JSON file, one per line, without the JSON quotes and escapes.
+# rules_in <file>: prints "<list>	<rule>" for each "Bash(...)" string that is an item of an array in a JSON file, one
+# per line, without the JSON quotes and escapes. <list> is the key of the array (allow, deny, ask), or "-" when the
+# array has no key. The file is read as tokens (strings and the characters []{}:,), so line breaks do not matter.
 rules_in() {
   [[ -f "$1" ]] || return 0
-  { tr -d '\r' < "$1" | grep -oE '"Bash\(([^"\\]|\\.)*\)"' || true; } \
-    | sed -e 's/^"//' -e 's/"$//' -e 's/\\"/"/g' -e 's/\\\\/\\/g'
+  { tr -d '\r' < "$1" | grep -oE '"([^"\\]|\\.)*"|[][{}:]' || true; } | awk '
+    {
+      if ($0 == "[") { stack[++depth] = (before == ":" && before2 ~ /^"/) ? substr(before2, 2, length(before2) - 2) : "-" }
+      else if ($0 == "{") { stack[++depth] = "{" }
+      else if ($0 == "]" || $0 == "}") { if (depth > 0) depth-- }
+      else if ($0 ~ /^"Bash\(.*\)"$/ && depth > 0 && stack[depth] != "{") {
+        rule = substr($0, 2, length($0) - 2)
+        gsub(/\\"/, "\"", rule); gsub(/\\\\/, "\\", rule)
+        print stack[depth] "\t" rule
+      }
+      before2 = before; before = $0
+    }'
 }
-# names_our_script <rule>: a "Bash(bash ...)" rule that names a script this plugin had, or has, a rule for, under a
-# review-routing folder or after a wildcard. An exact path to a script of the same name elsewhere is not ours.
+# allowed_in <file>: the rules of its allow lists. blocked_in <file>: the rules of its deny and ask lists.
+allowed_in() { rules_in "$1" | sed -n 's/^allow	//p'; }
+blocked_in() { rules_in "$1" | sed -n -e 's/^deny	//p' -e 's/^ask	//p'; }
+# names_our_script <rule>: a "Bash(bash ...)" rule that names a script this plugin has, or had, a rule for, under a
+# folder with the plugin's name or after a wildcard. An exact path to a script of the same name elsewhere is not ours.
 names_our_script() {
+  local name
   case "$1" in
     "Bash(bash "*) ;;
     *) return 1 ;;
   esac
-  case "$1" in
-    *review-routing*escape-add.sh* | *review-routing*escape-migrate.sh* | *review-routing*review-log.sh*) return 0 ;;
-    *review-routing*mash-settings.sh*) return 0 ;;
-    *"*"*escape-add.sh* | *"*"*escape-migrate.sh* | *"*"*review-log.sh*) return 0 ;;
-  esac
+  for name in $our_scripts $named_only; do
+    case "$1" in *"$plugin_name"*"$name"*) return 0 ;; esac
+  done
+  for name in $our_scripts; do
+    case "$1" in *"*"*"$name"*) return 0 ;; esac
+  done
   return 1
 }
-# stale_rules <file>: prints the rules in the file to remove.
+# stale_rules <file>: prints the rules in the file's allow lists to remove.
 stale_rules() {
   local rule
-  rules_in "$1" | while IFS= read -r rule; do
+  allowed_in "$1" | while IFS= read -r rule; do
     names_our_script "$rule" || continue
     grep -Fx -- "$rule" <<< "$current" > /dev/null || printf '%s\n' "$rule"
   done
 }
 
 main_file="$main/.claude/settings.local.json"
-in_main=$(rules_in "$main_file")
+own_file="$root/.claude/settings.local.json"
+in_main=$(allowed_in "$main_file")
+blocked=$(blocked_in "$main_file")
+stale=$(stale_rules "$main_file")
+own_stale=""
+if [[ "$root" != "$main" ]]; then own_stale=$(stale_rules "$own_file"); fi
+
 echo "file: $main_file"
 missing=0
+has_present=0
 while IFS= read -r rule; do
   if grep -Fx -- "$rule" <<< "$in_main" > /dev/null; then
     echo "present: $rule"
-  else
+    has_present=1
+  elif [[ -z "$stale$own_stale" ]]; then
     echo "add: $rule"
     missing=1
+  else
+    missing=2
+  fi
+  if grep -Fx -- "$rule" <<< "$blocked" > /dev/null; then
+    echo "note: this rule is also in a deny or ask list of the file, and that list wins: $rule"
   fi
 done <<< "$current"
-stale=$(stale_rules "$main_file")
 [[ -z "$stale" ]] || printf '%s\n' "$stale" | sed 's/^/remove: /'
-found_stale=$stale
-
-own_file="$root/.claude/settings.local.json"
-if [[ "$root" != "$main" ]]; then
-  stale=$(stale_rules "$own_file")
-  if [[ -n "$stale" ]]; then
-    echo "file: $own_file"
-    printf '%s\n' "$stale" | sed 's/^/remove: /'
-    found_stale+=$stale
-  fi
+if [[ -n "$own_stale" ]]; then
+  echo "file: $own_file"
+  printf '%s\n' "$own_stale" | sed 's/^/remove: /'
 fi
 
-[[ "$missing" -eq 0 ]] || echo "note: show the user the \"add\" rules; only on a yes, put them in permissions.allow of the first file."
-[[ -z "$found_stale" ]] || echo "note: tell the user to remove the \"remove\" rules from permissions.allow: they are not among the rules offered now (another plugin version, or a script that gets no rule any more), or they have a wildcard before the script path, and such a rule allows any command. A rule in a deny or ask list can stay."
-[[ "$missing" -eq 1 ]] || echo "note: a \"present\" rule works only in permissions.allow; this script does not tell the allow, deny and ask lists apart."
+if [[ -n "$stale$own_stale" ]]; then
+  echo "note: the \"remove\" rules must go from permissions.allow before anything else: they are not among the rules offered now. A rule for another plugin version still approves that version's scripts, which stay on disk after an update, with no prompt; a rule with a wildcard before the script path allows any command. Show them to the user, say why, and delete them."
+  [[ "$missing" -ne 2 ]] || echo "note: no \"add\" rule is offered while a \"remove\" rule is there. Run this script again after the old rules are gone."
+  echo "note: this script reads only the two files named above. Tell the user to remove the same rules from any other settings file they copied them to (another worktree's .claude/settings.local.json, .claude/settings.json, ~/.claude/settings.json)."
+fi
+[[ "$missing" -ne 1 ]] || echo "note: show the user the \"add\" rules; only on a yes, put them in permissions.allow of the first file."
+[[ "$has_present" -eq 0 ]] || echo "note: a \"present\" rule is in an allow list of the file."

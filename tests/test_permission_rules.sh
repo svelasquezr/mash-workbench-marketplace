@@ -96,7 +96,12 @@ EOF
 run_capturing bash "$rules_script" "$repo"
 assert_eq "$captured_exit_code" 0
 assert_eq "$(lines_with present "$captured_output")" "$current"
-assert_eq "$(lines_with add "$captured_output" | wc -l | tr -d ' ')" 4
+# Removing the old rules is not optional: while one is there, no new rule is offered.
+assert_eq "$(lines_with add "$captured_output")" ""
+assert_contains "$captured_output" "must go"
+assert_contains "$captured_output" "Run this script again after the old rules are gone"
+assert_contains "$captured_output" "still approves that version's scripts"
+assert_contains "$captured_output" "any other settings file"
 assert_eq "$(lines_with remove "$captured_output" | sort)" "Bash(bash */review-routing/*add-reviewer/escape-add.sh*)
 Bash(bash */review-routing/*add-reviewer/escape-migrate.sh*)
 Bash(bash */review-routing/*review-changes/review-log.sh*)
@@ -107,6 +112,18 @@ assert_not_contains "$captured_output" "mash-workbench/"
 assert_not_contains "$captured_output" "tools/review-log.sh"
 assert_not_contains "$captured_output" "Bash(cat"
 assert_contains "$captured_output" "allows any command"
+# 4b. With the old rules gone, the missing rules are offered.
+cat > "$repo/.claude/clean.json" <<EOF
+{"permissions": {"allow": ["Bash(git status *)", "$current"], "deny": ["$other_version"]}}
+EOF
+cp "$repo/.claude/settings.local.json" "$repo/.claude/with-old.json"
+cp "$repo/.claude/clean.json" "$repo/.claude/settings.local.json"
+run_capturing bash "$rules_script" "$repo"
+assert_eq "$(lines_with present "$captured_output")" "$current"
+assert_eq "$(lines_with add "$captured_output" | wc -l | tr -d ' ')" 4
+assert_eq "$(lines_with remove "$captured_output")" ""
+cp "$repo/.claude/with-old.json" "$repo/.claude/settings.local.json"
+rm "$repo/.claude/clean.json" "$repo/.claude/with-old.json"
 
 # 5. The same file on one line (no line breaks between the rules).
 tr -d '\n' < "$repo/.claude/settings.local.json" > "$repo/.claude/one-line"
@@ -125,6 +142,14 @@ assert_eq "$(lines_with file "$captured_output")" "$repo/.claude/settings.local.
 $repo/.claude/worktrees/w1/.claude/settings.local.json"
 assert_eq "$(lines_with present "$captured_output")" "$current"
 assert_contains "$captured_output" "remove: Bash(bash *escape-add.sh *)"
+# An old rule only in the linked worktree's own file also holds the new rules back.
+printf '{"permissions":{"allow":["%s"]}}\n' "$current" > "$repo/.claude/settings.local.json"
+run_capturing bash "$rules_script" "$repo/.claude/worktrees/w1"
+assert_eq "$(lines_with add "$captured_output")" ""
+assert_contains "$captured_output" "remove: Bash(bash *escape-add.sh *)"
+rm "$repo/.claude/worktrees/w1/.claude/settings.local.json"
+run_capturing bash "$rules_script" "$repo/.claude/worktrees/w1"
+assert_eq "$(lines_with add "$captured_output" | wc -l | tr -d ' ')" 4
 
 # 7. A plugin path with a space: the rule spells the path in double quotes, and a rule stored with JSON escapes is found.
 spaced="$fixture/sp ace/review-routing"
@@ -204,17 +229,60 @@ run_capturing bash "$fixture/gone-worktree/review-routing/skills/review-changes/
 assert_eq "$captured_exit_code" 6
 assert_not_contains "$captured_output" "Bash("
 
-# 9d. The notes say that the lists are not told apart: a current rule in a deny list still prints "present".
+# 9d. The lists are told apart: a current rule in a deny or ask list is not "present" (a note says the list wins), and
+#     an old rule in a deny list is not a rule to remove, so it holds nothing back. Other arrays do not count.
 denied=$(new_repo denied)
 mkdir -p "$denied/.claude"
+first_rule=$(bash "$rules_script" "$denied" | sed -n 's/^add: //p' | head -n 1)
+cat > "$denied/.claude/settings.local.json" <<EOF
 {
-  printf '{"permissions":{"deny":['
-  bash "$rules_script" "$denied" | sed -n 's/^add: \(.*\)$/"\1"/p' | paste -sd, -
-  printf ']}}\n'
-} > "$denied/.claude/settings.local.json"
+  "permissions": {
+    "deny": ["$first_rule", "Bash(bash */review-routing/*add-reviewer/escape-add.sh*)"],
+    "ask": [ "Bash(bash */review-routing/*review-changes/review-log.sh*)" ],
+    "allow": []
+  },
+  "notes": { "list": ["Bash(bash */review-routing/*add-reviewer/escape-migrate.sh*)"], "allow": "Bash(bash *escape-add.sh *)" },
+  "nested": [ { "allow": "Bash(bash *review-log.sh *)" } ]
+}
+EOF
 run_capturing bash "$rules_script" "$denied"
-assert_eq "$(lines_with present "$captured_output" | wc -l | tr -d ' ')" 5
-assert_contains "$captured_output" "does not tell the allow, deny and ask lists apart"
+assert_eq "$captured_exit_code" 0
+assert_eq "$(lines_with present "$captured_output")" ""
+assert_eq "$(lines_with remove "$captured_output")" ""
+assert_eq "$(lines_with add "$captured_output" | wc -l | tr -d ' ')" 5
+assert_contains "$captured_output" "note: this rule is also in a deny or ask list of the file, and that list wins: $first_rule"
+
+# 9f. mash-workbench ships the same script, in skills/scout: there it offers the one rule for backlog-add.sh, in the
+#     spelling the scout skill writes, and names an old version's rule to remove.
+assert_eq "$(cmp plugins/review-routing/skills/review-changes/permission-rules.sh plugins/mash-workbench/skills/scout/permission-rules.sh && echo same)" "same"
+mash_installed="$fixture/cache/mash-workbench/0.0.1"
+mkdir -p "$mash_installed"
+cp -R "$PWD/plugins/mash-workbench/skills" "$PWD/plugins/mash-workbench/scripts" "$mash_installed/"
+mash=$(new_repo mash)
+run_capturing bash "$mash_installed/skills/scout/permission-rules.sh" "$mash"
+assert_eq "$captured_exit_code" 0
+mash_rule="Bash(bash $mash_installed/skills/scout/backlog-add.sh *)"
+assert_eq "$(lines_with add "$captured_output")" "$mash_rule"
+from_docs=""
+for document in plugins/mash-workbench/skills/*/SKILL.md plugins/mash-workbench/skills/*/reference.md; do
+  [[ -f "$document" ]] || continue
+  skill=$(basename "$(dirname "$document")")
+  while IFS= read -r match; do
+    [[ -n "$match" ]] || continue
+    from_docs+="Bash(bash $mash_installed/skills/$skill/${match#"<this skill's base directory>/"} *)"$'\n'
+  done <<< "$(grep -o "<this skill's base directory>/[^][:space:]\`'\"<>()]*backlog-add\.sh" "$document" || true)"
+done
+assert_eq "$(printf '%s' "$from_docs" | sort -u)" "$mash_rule"
+mkdir -p "$mash/.claude"
+printf '{"permissions":{"allow":["Bash(bash %s/cache/mash-workbench/0.0.0/skills/scout/backlog-add.sh *)","Bash(bash /x/review-routing/1/skills/add-reviewer/escape-add.sh *)"]}}\n' "$fixture" > "$mash/.claude/settings.local.json"
+run_capturing bash "$mash_installed/skills/scout/permission-rules.sh" "$mash"
+assert_eq "$(lines_with remove "$captured_output")" "Bash(bash $fixture/cache/mash-workbench/0.0.0/skills/scout/backlog-add.sh *)"
+assert_eq "$(lines_with add "$captured_output")" ""
+# A copy in any other folder says so and offers nothing.
+mkdir -p "$fixture/odd-place/skills/other"; cp "$rules_script" "$fixture/odd-place/skills/other/"
+run_capturing bash "$fixture/odd-place/skills/other/permission-rules.sh" "$mash"
+assert_eq "$captured_exit_code" 6
+assert_not_contains "$captured_output" "Bash("
 
 # 10. Usage errors, and a folder that is not in a git repository.
 run_capturing bash "$rules_script"

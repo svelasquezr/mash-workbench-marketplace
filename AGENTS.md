@@ -18,6 +18,8 @@ Plugin marketplace (brand MASH: Memories, Agents, Skills, Hooks) of general-purp
 - `tests/test_reviewer_guard.sh` builds its fixture repositories under `$HOME` (the hook treats `/tmp` as throwaway), removes them on exit, and refuses to run when `$HOME` is under `/tmp`.
 - `pre-commit` can run as `uvx pre-commit run --all-files`.
 - Scripts and hooks need Python 3.11 or newer, and call it only through the plugin's `scripts/python.sh`: on Windows, `python3` is often the Microsoft Store alias, which fails every call. The file is the same in every plugin (`tests/test_find_python.sh`).
+- Three more files are identical copies in both plugins, because an installed plugin cannot read another plugin's files: `scripts/mash-settings.sh` (`tests/test_find_python.sh`), `scripts/plugin-current.sh` (`tests/test_plugin_current.sh`) and `permission-rules.sh` (`tests/test_permission_rules.sh`). Change one, copy it to the other.
+- `tests/test_no_network.sh` keeps its accepted lines in `tests/no_network_allowed.txt`, by file and line number: after you edit a file that has entries, run `NO_NETWORK_LIST=1 bash tests/test_no_network.sh` and update them.
 
 ## Skill and agent conventions
 
@@ -36,4 +38,5 @@ Plugin marketplace (brand MASH: Memories, Agents, Skills, Hooks) of general-purp
 - Bump the plugin's `version` in `plugin.json` on every change that consumers should receive.
 - Test a plugin locally without publishing: `claude --plugin-dir plugins/<name>` from a consumer repo.
 - No absolute paths in committed files. Explain reasoning with pros and cons in docs.
+- Scripts do not trust their input (`docs/decisions/0006-scripts-trust-no-input.md`): no argument names a file to read or write, a committed file cannot move a write outside the repository, a symbolic link is refused where a write would follow it, and text that goes to git cannot start with `-`. A script that can get an allow rule runs `scripts/plugin-current.sh` first. Each such rule has a test that plants the attack.
 - Commits use Conventional Commits (enforced by the commitizen commit-msg hook).

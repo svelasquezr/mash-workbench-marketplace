@@ -71,3 +71,30 @@ assert_eq "$captured_output" ""
 # Usage error.
 run_finder "$bin"
 assert_eq "$captured_exit_code" "2"
+
+# The finder sets PYTHONDONTWRITEBYTECODE, so the plugins' Python never writes __pycache__.
+printf 'import os\nprint(os.environ.get("PYTHONDONTWRITEBYTECODE"))\n' > "$scratch/env.py"
+run_capturing bash "$finder" "$scratch/env.py"
+assert_eq "$captured_output" "1"
+
+# The plugins' Python never imports from the current folder, from the script's folder by default, or from PYTHONPATH:
+# a project that holds datetime.py or re.py must not run it (backlog-stale.sh and find-checks.sh pass a script on stdin).
+planted="$scratch/planted"; mkdir -p "$planted/path"
+for module in datetime re json; do printf 'open("%s", "w").write("ran")\n' "$planted/$module.ran" > "$planted/$module.py"; done
+cp "$planted/json.py" "$planted/path/tomllib.py"
+printf 'import datetime, re, json, tomllib, sys\nprint("clean", sys.flags.safe_path, sys.flags.dont_write_bytecode)\n' > "$planted/script.py"
+finder_path="$PWD/$finder"
+# shellcheck disable=SC2016  # the inner bash expands $1 and $2
+run_capturing bash -c 'cd "$1" && bash "$2" - <<< "import datetime, re, json; print(\"clean\")"' _ "$planted" "$finder_path"
+assert_eq "$captured_output" "clean"
+# shellcheck disable=SC2016  # the inner bash expands $1 and $2
+run_capturing bash -c 'cd "$1" && PYTHONPATH="$1/path" bash "$2" "$1/script.py"' _ "$planted" "$finder_path"
+assert_eq "$captured_output" "clean True 1"
+assert_eq "$(find "$planted" -name '*.ran')" ""
+# The version probe is isolated too: with PYTHONPATH set, a sitecustomize.py of the project must not run (the hook
+# calls python.sh on every Bash call).
+printf 'open("%s", "w").write("ran")\n' "$planted/sitecustomize.ran" > "$planted/sitecustomize.py"
+# shellcheck disable=SC2016  # the inner bash expands $1 and $2
+run_capturing bash -c 'cd "$1" && PYTHONPATH=. bash "$2" "$1/script.py"' _ "$planted" "$finder_path"
+assert_eq "$captured_output" "clean True 1"
+assert_eq "$(find "$planted" -name '*.ran')" ""

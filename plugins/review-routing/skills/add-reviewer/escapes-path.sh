@@ -10,9 +10,11 @@
 # above, or an escapes setting that still names a file. escape-add.sh then refuses to record until it is migrated.
 # Exit 0 with the path; 3 when nothing has been chosen yet (not set and no old file), so nothing is created before
 # the user says where; 4 when it is off; 5 when the repository has no main worktree to read (bare, or a linked
-# worktree of a --separate-git-dir repository) and no absolute path is set; 6 when the setting is the main worktree
-# itself (the repository-root refusal applies inside a git repository only; outside one, a path equal to <repo-root>
-# is printed as it is). An empty setting counts as not set.
+# worktree of a --separate-git-dir repository) and no absolute path is set; 6 when mash-settings.sh path refuses the
+# setting: it is the main worktree itself, the committed settings file names a place outside the repository (only
+# settings.local or the environment variable may), a symbolic link leads from inside the repository to outside, or
+# the home folder is a symbolic link. These refusals apply inside a git repository only; outside one, the path is
+# printed as it is. An empty setting counts as not set.
 # Outside a git repository, <repo-root> stands in for the main worktree and only REVIEW_ROUTING_ESCAPES is read
 # (no settings files).
 set -euo pipefail
@@ -32,9 +34,13 @@ esac
 status=0
 if (( main_status == 2 )); then
   choice="${REVIEW_ROUTING_ESCAPES:-}"
-  [[ -n "$choice" ]] || status=3
+  if [[ -z "$choice" ]]; then status=3
+  elif [[ "$choice" == off ]]; then exit 4
+  elif ! is_absolute "$choice"; then choice="$main/$choice"
+  fi
 else
-  choice=$(bash "$settings" get "$root" escapes) || status=$?
+  # mash-settings.sh says why on stderr when it refuses (exit 5 or 6).
+  choice=$(bash "$settings" path "$root" escapes) || status=$?
 fi
 case "$status" in
   0) ;;
@@ -42,21 +48,6 @@ case "$status" in
   *) exit "$status" ;;
 esac
 if (( status == 0 )); then
-  if [[ "$choice" == off ]]; then exit 4; fi
-  if ! is_absolute "$choice"; then
-    if [[ -z "$main" ]]; then
-      echo "escapes-path: the escapes setting is relative, but no main worktree was found: set it to an absolute path" >&2
-      exit 5
-    fi
-    choice="$main/$choice"
-  fi
-  # mash-settings.sh resolves .., ./ and symlinks, also in a folder that does not exist yet.
-  if [[ -n "$main" ]]; then
-    root_check=$(bash "$settings" check-escapes-path "$root" "$choice" 2>/dev/null || true)
-    case "$root_check" in
-      *"must not be the repository root"*) echo "escapes-path: the escapes folder must not be the repository root" >&2; exit 6 ;;
-    esac
-  fi
   if [[ -n "$main" ]]; then
     for other in docs/mash/review-escapes.md docs/review-escapes.md; do
       if [[ -f "$main/$other" && ! "$choice" -ef "$main/$other" ]]; then
@@ -72,6 +63,11 @@ if [[ -f "$main/docs/mash/review-escapes.md" && -f "$main/docs/review-escapes.md
   echo "escapes-path: both docs/mash/review-escapes.md and docs/review-escapes.md exist; using the first. escape-migrate.sh moves both into the escapes folder." >&2
 fi
 for candidate in docs/mash/review-escapes.md docs/review-escapes.md; do
+  # A repository can commit a symbolic link: the report and the migration would read the file it names.
+  if [[ -L "$main/$candidate" ]]; then
+    echo "escapes-path: refused: $candidate is a symbolic link" >&2
+    exit 6
+  fi
   if [[ -f "$main/$candidate" ]]; then
     echo "escapes-path: old ledger format in use: $candidate; run escape-migrate.sh" >&2
     printf '%s\n' "$main/$candidate"

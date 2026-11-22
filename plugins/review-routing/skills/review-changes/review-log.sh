@@ -30,9 +30,13 @@ set -euo pipefail
 # Exit codes: 0 added, already logged, or reviewed; 1 not reviewed (reviewed only: no log, or no line matches);
 # 2 usage error, a commit that does not exist, a base that is not an ancestor of the head, a range with no changes,
 # or <repo-root> not in a git repository; 5 no main worktree (bare repository, or a linked worktree of a
-# --separate-git-dir repository); 6 a patch-id could not be computed, or the record is not one line of five fields (nothing logged).
+# --separate-git-dir repository); 6 a patch-id could not be computed, or the record is not one line of five fields
+# (nothing logged), or refused: the home folder or reviews.log is a symbolic link (a repository can commit one, and the
+# line would go where it points), or this copy of the plugin is an old version in Claude Code's plugin cache
+# (scripts/plugin-current.sh).
 # Plain bash 3.2 (macOS) and Git Bash: no python3, no mapfile.
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
+bash "$here/../../scripts/plugin-current.sh" < /dev/null || exit $?
 settings=$(cd "$here/../../scripts" && pwd -P)/mash-settings.sh
 usage_text="usage: review-log.sh add <repo-root> <base> <head>
        review-log.sh reviewed <repo-root> <commit>"
@@ -59,11 +63,15 @@ if ((status != 0)); then
   echo "review-log: $(bash "$settings" main-worktree "$root" 2>&1 >/dev/null || true)" >&2
   exit "$status"
 fi
+# The home folder must be a real folder in the main worktree, and the log a real file.
+bash "$settings" home "$root" >/dev/null || exit $?
 log="$main/$log_entry"
+if [[ -L "$log" ]]; then echo "review-log: $log is a symbolic link: nothing read or logged" >&2; exit 6; fi
 
 # commit_of <rev>: the full commit id, or exit 2.
 commit_of() {
   local id
+  [[ "$1" != -* ]] || refuse "not a commit: $1"
   id=$(git -C "$root" rev-parse --verify --quiet "$1^{commit}" 2>/dev/null) || refuse "not a commit: $1"
   printf '%s' "${id%$'\r'}"
 }
@@ -143,6 +151,8 @@ while IFS= read -r line || [[ -n "$line" ]]; do
   base="" head="" commit_ids=""
   read -r _ base head _ commit_ids _ <<< "$line"
   [[ -n "$commit_ids" ]] || continue
+  # Only commit ids reach git: a line that someone wrote by hand could hold anything.
+  [[ "$base" =~ ^[0-9a-f]{40,64}$ && "$head" =~ ^[0-9a-f]{40,64}$ ]] || continue
   if git -C "$root" cat-file -e "$base^{commit}" 2>/dev/null && git -C "$root" cat-file -e "$head^{commit}" 2>/dev/null \
     && git -C "$root" merge-base --is-ancestor "$commit" "$head" 2>/dev/null \
     && ! git -C "$root" merge-base --is-ancestor "$commit" "$base" 2>/dev/null; then
