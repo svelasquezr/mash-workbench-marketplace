@@ -118,6 +118,43 @@ printf '{"version": 3, "plugins": []}\n' > "$config/plugins/installed_plugins.js
 run_capturing bash "$old/scripts/plugin-current.sh"
 assert_eq "$captured_exit_code" "0"
 
+# 5b. When the copy is in a cache-shaped folder and the check cannot answer, it says so on stderr (one line), and
+#     the copy runs: no registry, an empty registry, a registry cut in the middle of a write.
+rm "$config/plugins/installed_plugins.json"
+run_capturing bash "$old/scripts/plugin-current.sh"
+assert_eq "$captured_exit_code" "0"
+assert_contains "$captured_output" "cannot tell"
+: > "$config/plugins/installed_plugins.json"
+run_capturing bash "$old/scripts/plugin-current.sh"
+assert_eq "$captured_exit_code" "0"
+assert_contains "$captured_output" "cannot tell"
+printf '{"version": 2, "plugins": {"x@m": [{"scope": "user", "installPa' > "$config/plugins/installed_plugins.json"
+run_capturing bash "$old/scripts/plugin-current.sh"
+assert_eq "$captured_exit_code" "0"
+assert_eq "$(printf '%s\n' "$captured_output" | wc -l | tr -d ' ')" "1"
+assert_contains "$captured_output" "cannot tell"
+# A copy outside every cache folder stays silent.
+run_capturing bash plugins/review-routing/scripts/plugin-current.sh
+assert_eq "$captured_output" ""
+# null, true, false and numbers are values: "projectPath": null is a user entry, and the key after it is a key.
+printf '{"version": 2, "plugins": {"x@m": [{"projectPath": null, "enabled": true, "size": 12.5, "installPath": "%s"}]}}\n' "$new" > "$config/plugins/installed_plugins.json"
+run_capturing bash "$new/scripts/plugin-current.sh"
+assert_eq "$captured_exit_code" "0"
+assert_eq "$captured_output" ""
+run_capturing bash "$old/scripts/plugin-current.sh"
+assert_eq "$captured_exit_code" "6"
+# 5c. The project comes from where the current folder really is. A folder of project B that is shaped like a git
+#     directory whose core.worktree names project A does not make B count as A.
+project_registry "$old" "$project"
+fake_git="$fixture/other-project/fake"
+git init --quiet --bare "$fake_git"
+git --git-dir="$fake_git" config core.bare false
+git --git-dir="$fake_git" config core.worktree "$project"
+run_in "$fake_git" "$old/scripts/plugin-current.sh"
+assert_eq "$captured_exit_code" "6"
+run_in "$project" "$old/scripts/plugin-current.sh"
+assert_eq "$captured_exit_code" "0"
+
 # 6. The scripts that get allow rules stop in an old copy, before they read an argument or write a file.
 registry "$config" "$new"
 repo="$fixture/repo"; git init --quiet "$repo"; git -C "$repo" commit --quiet --allow-empty -m "chore: base"

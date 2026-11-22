@@ -15,7 +15,8 @@ set -euo pipefail
 # and mash-settings.sh set when the setting must name the new folder).
 # Exit codes: 0 migrated, or no old ledger found; 2 usage error, not in a git repository, or an entry that fails
 # escape-add.sh's checks (nothing written); 4 the escapes ledger is off; 5 no main worktree (bare repository); 6 the
-# target folder is refused by mash-settings.sh check-escapes-path.
+# target folder is refused by mash-settings.sh check-escapes-path, or an old ledger file (or a folder on its path) is a
+# symbolic link.
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
 settings=$(cd "$here/../../scripts" && pwd -P)/mash-settings.sh
 usage() { echo "usage: escape-migrate.sh <repo-root>" >&2; exit 2; }
@@ -36,7 +37,8 @@ current=$(bash "$here/escapes-path.sh" "$root" 2>/dev/null) || status=$?
 case "$status" in
   0 | 3) ;;
   4) echo "the escapes ledger is off for this project: nothing migrated"; exit 4 ;;
-  *) exit "$status" ;;
+  *) bash "$here/escapes-path.sh" "$root" >/dev/null || true  # once more, for its message on stderr
+    exit "$status" ;;
 esac
 old_files=()
 target=""
@@ -44,6 +46,12 @@ if ((status == 0)); then
   if [[ -f "$current" ]]; then old_files+=("$current"); else target=$current; fi
 fi
 for candidate in docs/mash/review-escapes.md docs/review-escapes.md; do
+  # escapes-path.sh checked only the file it named. Each old file is read, so each one must be a real file inside the
+  # main worktree: a repository can commit a link.
+  if [[ -L "$main/$candidate" ]]; then echo "escape-migrate: refused: $candidate is a symbolic link" >&2; exit 6; fi
+  if [[ -f "$main/$candidate" ]]; then
+    message=$(bash "$settings" check-escapes-path "$root" "$main/$candidate" 2>&1) || { echo "escape-migrate: $candidate: $message" >&2; exit 6; }
+  fi
   if [[ -f "$main/$candidate" ]] && { ((${#old_files[@]} == 0)) || ! [[ "${old_files[0]}" -ef "$main/$candidate" ]]; }; then
     old_files+=("$main/$candidate")
   fi

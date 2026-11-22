@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Print the review escapes this project keeps, as an absolute path. The answer is the same from every worktree:
 # the setting and the old ledgers are read from the main worktree (scripts/mash-settings.sh), never from <repo-root>.
-#   The escapes setting (mash-settings.sh get <repo-root> escapes: REVIEW_ROUTING_ESCAPES, then
+#   The escapes setting (mash-settings.sh path <repo-root> escapes: REVIEW_ROUTING_ESCAPES, then
 #   <main>/.claude/mash-workbench/settings.local, then settings): that path, a relative one from the main worktree;
 #   "off": the project keeps none.
 #   Not set: docs/mash/review-escapes.md in the main worktree when it exists, else the older docs/review-escapes.md;
@@ -13,7 +13,7 @@
 # worktree of a --separate-git-dir repository) and no absolute path is set; 6 when mash-settings.sh path refuses the
 # setting: it is the main worktree itself, the committed settings file names a place outside the repository (only
 # settings.local or the environment variable may), a symbolic link leads from inside the repository to outside, or
-# the home folder is a symbolic link. These refusals apply inside a git repository only; outside one, the path is
+# the home folder is a symbolic link, or an old ledger file (or a folder on its path) is a symbolic link. These refusals apply inside a git repository only; outside one, the path is
 # printed as it is. An empty setting counts as not set.
 # Outside a git repository, <repo-root> stands in for the main worktree and only REVIEW_ROUTING_ESCAPES is read
 # (no settings files).
@@ -69,6 +69,10 @@ for candidate in docs/mash/review-escapes.md docs/review-escapes.md; do
     exit 6
   fi
   if [[ -f "$main/$candidate" ]]; then
+    if (( main_status == 0 )); then
+      # A repository can commit docs, or docs/mash, as a link: the file must be inside the main worktree.
+      message=$(bash "$settings" check-escapes-path "$root" "$main/$candidate" 2>&1) || { echo "escapes-path: $candidate: $message" >&2; exit 6; }
+    fi
     echo "escapes-path: old ledger format in use: $candidate; run escape-migrate.sh" >&2
     printf '%s\n' "$main/$candidate"
     exit 0

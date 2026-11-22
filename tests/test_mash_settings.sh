@@ -624,3 +624,66 @@ for url in "$area/some/origin.git" ../origin "file://$area/some/origin.git"; do
   git -C "$keyrepo" remote add origin "$url"
   assert_eq "$(settings repo-key "$keyrepo")" "local/keyrepo"
 done
+
+# 21. A committed settings.local reached in a way that the main worktree's index does not show at the literal path.
+#     In each case the file is not the user's own: source prints team, and a place outside the repository is refused.
+# a. The repository commits .claude as a symbolic link to a folder that holds mash-workbench/settings.local. The home
+#    folder must be the real <main>/.claude/mash-workbench, so every command that reads or writes it stops.
+via_link="$area/via-link"; new_repository "$via_link"; mkdir -p "$via_link/stuff/mash-workbench"
+printf 'escapes=../victim/.claude/rules\n' > "$via_link/stuff/mash-workbench/settings.local"
+ln -s stuff "$via_link/.claude"
+git -C "$via_link" add -f .claude stuff; git -C "$via_link" commit --quiet -m "chore: a linked .claude"
+git clone --quiet "$via_link" "$area/via-link-clone"
+for arguments in "source $area/via-link-clone escapes" "path $area/via-link-clone escapes" "get $area/via-link-clone escapes" \
+  "home $area/via-link-clone" "set $area/via-link-clone escapes.threshold 4 --local"; do
+  # shellcheck disable=SC2086  # the words are split on purpose
+  run_capturing settings $arguments
+  assert_eq "$captured_exit_code" "6"
+  assert_contains "$captured_output" "symbolic link"
+done
+assert_eq "$(cat "$area/via-link-clone/stuff/mash-workbench/settings.local")" "escapes=../victim/.claude/rules"
+# b. .claude/mash-workbench is a submodule that holds settings.local: the file is tracked, in another repository.
+sub_source="$area/sub-source"; new_repository "$sub_source"
+printf 'escapes=../victim/.claude/rules\n' > "$sub_source/settings.local"
+git -C "$sub_source" add settings.local; git -C "$sub_source" commit --quiet -m "chore: settings"
+with_sub="$area/with-sub"; new_repository "$with_sub"
+git -C "$with_sub" -c protocol.file.allow=always submodule --quiet add "$sub_source" .claude/mash-workbench
+git -C "$with_sub" commit --quiet -m "chore: a submodule as the home folder"
+git -c protocol.file.allow=always clone --quiet --recurse-submodules "$with_sub" "$area/with-sub-clone" 2>/dev/null
+assert_file "$area/with-sub-clone/.claude/mash-workbench/settings.local"
+assert_eq "$(settings source "$area/with-sub-clone" escapes)" "team"
+run_capturing settings path "$area/with-sub-clone" escapes
+assert_eq "$captured_exit_code" "6"
+assert_contains "$captured_output" "outside the repository"
+run_capturing settings set "$area/with-sub-clone" escapes.threshold 4 --local
+assert_eq "$captured_exit_code" "6"
+assert_eq "$(cat "$area/with-sub-clone/.claude/mash-workbench/settings.local")" "escapes=../victim/.claude/rules"
+# An untracked file in a nested repository that is not this repository is not this user's private file either.
+nested="$area/nested"; new_repository "$nested"; mkdir -p "$nested/.claude/mash-workbench"
+git init --quiet "$nested/.claude/mash-workbench"
+printf 'escapes=../victim/.claude/rules\n' > "$nested/.claude/mash-workbench/settings.local"
+assert_eq "$(settings source "$nested" escapes)" "team"
+# c. GIT_LITERAL_PATHSPECS (and the other pathspec variables) in the user's environment do not change the answer.
+plain_tracked="$area/plain-tracked"; new_repository "$plain_tracked"; mkdir -p "$plain_tracked/.claude/mash-workbench"
+printf 'escapes=../outside\n' > "$plain_tracked/.claude/mash-workbench/settings.local"
+git -C "$plain_tracked" add -f .claude/mash-workbench/settings.local; git -C "$plain_tracked" commit --quiet -m "chore: local"
+for variable in GIT_LITERAL_PATHSPECS GIT_NOGLOB_PATHSPECS GIT_GLOB_PATHSPECS GIT_ICASE_PATHSPECS; do
+  assert_eq "$(env "$variable=1" bash "$settings_script" source "$plain_tracked" escapes)" "team"
+  run_capturing env "$variable=1" bash "$settings_script" path "$plain_tracked" escapes
+  assert_eq "$captured_exit_code" "6"
+done
+# An index that the environment names (an empty one) does not make the file private.
+assert_eq "$(env GIT_INDEX_FILE="$area/empty-index" bash "$settings_script" source "$plain_tracked" escapes)" "team"
+# The normal case still works: an untracked settings.local in the repository's own home folder is the user's.
+own="$area/own"; new_repository "$own"
+settings set "$own" escapes ../own-outside --local >/dev/null
+assert_eq "$(settings source "$own" escapes)" "local"
+assert_eq "$(GIT_LITERAL_PATHSPECS=1 settings source "$own" escapes)" "local"
+assert_eq "$(settings path "$own" escapes)" "$area/own-outside"
+
+# 22. A drive-letter path keeps its spelling: the refusal of a backslash tells the user to write C:/..., and that
+#     text must come back as written, not as /C:/...
+settings set "$own" escapes 'C:/Users/me/x/../escapes' --local >/dev/null
+assert_eq "$(settings path "$own" escapes)" "C:/Users/me/escapes"
+assert_eq "$(REVIEW_ROUTING_ESCAPES='d:/a/./b' settings path "$own" escapes)" "d:/a/b"
+settings set "$own" escapes ../own-outside --local >/dev/null

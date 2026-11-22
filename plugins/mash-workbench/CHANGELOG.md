@@ -14,7 +14,8 @@ Fixed:
 
 - When a project folder contained `datetime.py` or `re.py`, `backlog-stale.sh` ran it: the script gave its Python program to the interpreter with the current folder on the module path. `backlog-stale.sh` is now plain bash, and `scripts/python.sh` starts Python isolated (`-I -B`).
 - When a repository contained a symbolic link at `docs/mash/tooling-backlog.md`, at `docs/tooling-backlog.md` or at a folder on that path, `backlog-add.sh` appended its line to the file that the link named, for example a shell startup file. The script now stops with exit code 6.
-- When `MASH_WORKBENCH_BACKLOG` or `--file` named a path, `backlog-add.sh` wrote there with no check. The path now gets the checks of the escapes folder: no linked worktree, no temporary folder, no git directory, no file that a different repository owns. The committed settings file cannot select a file outside the repository.
+- When `MASH_WORKBENCH_BACKLOG` or `--file` named a path, `backlog-add.sh` wrote there with no check. The path now gets the checks of the escapes folder: no linked worktree, no temporary folder, no git directory, no file that a different repository owns. The committed settings file cannot select a file outside the repository. A committed `settings.local` (also behind a `.claude` link or in a submodule) is read as a committed file.
+- When the committed settings file named a different file of the repository (for example `backlog=.env`), `backlog-add.sh` put a `repo:` line and its entry into that file. The script now writes only to a new or empty file, or to a file whose first line is `# Tooling backlog`; for each other file it stops with exit code 6.
 
 Changed scripts:
 

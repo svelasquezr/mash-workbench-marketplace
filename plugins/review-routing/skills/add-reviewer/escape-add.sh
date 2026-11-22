@@ -342,7 +342,7 @@ case "$1" in
       if [[ -n "$message" ]]; then problems="${problems}escape-add: block $index: $message"$'\n'; b_problem[index]=$message; fi
     done
     if [[ -n "$problems" ]]; then printf '%s' "$problems" >&2; echo "nothing recorded" >&2; exit 2; fi
-    if ((blocks == 0)); then refuse "the batch file holds no blocks"; fi
+    if ((blocks == 0)); then refuse "the standard input holds no blocks"; fi
     resolve_folder record
     prepare_folder
     recorded=0; already=0; areas=(); also_lines=""

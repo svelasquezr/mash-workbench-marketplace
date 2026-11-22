@@ -98,3 +98,14 @@ printf 'open("%s", "w").write("ran")\n' "$planted/sitecustomize.ran" > "$planted
 run_capturing bash -c 'cd "$1" && PYTHONPATH=. bash "$2" "$1/script.py"' _ "$planted" "$finder_path"
 assert_eq "$captured_output" "clean True 1"
 assert_eq "$(find "$planted" -name '*.ran')" ""
+# Only MASH_PYTHON may name a file with spaces. A file of the project that is named like a built-in candidate ("py -3")
+# must not change how that candidate is read: with only the launcher on PATH, the launcher still runs.
+bin=$(new_bin)
+make_fake "$bin" py "#!/bin/sh
+[ \"\$1\" = -3 ] || exit 9
+shift; exec \"$real_python\" \"\$@\""
+mkdir -p "$scratch/project"; printf 'not a program\n' > "$scratch/project/py -3"
+# shellcheck disable=SC2016  # the inner bash expands its arguments
+run_capturing env -i HOME="$HOME" PATH="$bin" "$bash_path" -c 'cd "$1" && "$2" "$3" "$4" 0' _ "$scratch/project" "$bash_path" "$finder_path" "$scratch/echo.py" < /dev/null
+assert_eq "$captured_exit_code" "0"
+assert_contains "$captured_output" "ran ['0']"

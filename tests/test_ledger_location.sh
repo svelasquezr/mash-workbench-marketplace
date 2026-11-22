@@ -252,3 +252,37 @@ for script in "$path_script" "$report" "$PWD/plugins/review-routing/skills/add-r
   assert_not_contains "$captured_output" "SECRET"
 done
 [[ ! -e "$root/.claude" ]] || { echo "  migrated a linked ledger"; exit 1; }
+
+# The old-ledger reads follow no committed link either: docs as a link to a folder outside the repository, and a
+# setting that names a ledger file which is a link. Nothing of the outside file is counted, copied or named.
+migrate_script="$PWD/plugins/review-routing/skills/add-reviewer/escape-migrate.sh"
+mkdir -p "$fixture/outside-docs/mash"
+printf -- '- 2026-10-11 · src/a · wrong-result · https://example.test/OUTSIDE-1\n- 2026-10-12 · src/a · wrong-result · https://example.test/OUTSIDE-2\n' > "$fixture/outside-docs/mash/review-escapes.md"
+root=$(fresh linked-docs)
+ln -s "$fixture/outside-docs" "$root/docs"
+for script in "$path_script" "$report" "$migrate_script"; do
+  run_capturing bash "$script" "$root"
+  assert_eq "$captured_exit_code" "6"
+  assert_not_contains "$captured_output" "OUTSIDE"
+  assert_not_contains "$captured_output" "rm "
+done
+[[ ! -e "$root/.claude" ]] || { echo "  migrated a ledger behind a linked docs folder"; exit 1; }
+# The second candidate is checked too when the first is a real file.
+root=$(fresh linked-second)
+mkdir -p "$root/docs/mash"; printf -- '- 2026-10-11 · src/a · wrong-result · https://example.test/REAL\n' > "$root/docs/mash/review-escapes.md"
+ln -s "$fixture/outside-docs/mash/review-escapes.md" "$root/docs/review-escapes.md"
+run_capturing bash "$migrate_script" "$root"
+assert_eq "$captured_exit_code" "6"
+assert_not_contains "$captured_output" "OUTSIDE"
+[[ ! -e "$root/.claude" ]] || { echo "  migrated beside a linked second ledger"; exit 1; }
+# A committed setting that names a ledger file which is a link.
+root=$(fresh linked-setting)
+mkdir -p "$root/docs" "$root/.claude/mash-workbench"
+ln -s "$fixture/outside-docs/mash/review-escapes.md" "$root/docs/ledger.md"
+printf 'escapes=docs/ledger.md\n' > "$root/.claude/mash-workbench/settings"
+for script in "$path_script" "$report" "$migrate_script"; do
+  run_capturing bash "$script" "$root"
+  assert_eq "$captured_exit_code" "6"
+  assert_contains "$captured_output" "symbolic link"
+  assert_not_contains "$captured_output" "OUTSIDE"
+done

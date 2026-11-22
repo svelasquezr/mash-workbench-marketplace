@@ -303,3 +303,19 @@ ln -s "$temporary_directory/plain-victim" "$plain/docs"
 run_capturing env MASH_WORKBENCH_BACKLOG=docs/notes.md bash "$script" "$plain" script "A title" "why"
 assert_eq "$captured_exit_code" "6"
 [[ ! -e "$temporary_directory/plain-victim/notes.md" ]] || { echo "  wrote through a linked folder outside git"; exit 1; }
+# A committed setting can name any file inside the repository. The script writes only to a new file, an empty file,
+# or a file whose first line is the backlog title: a .env or a source file gets no line.
+other_file=$(new_repo other-file); mkdir -p "$other_file/.claude/mash-workbench"
+printf 'API_KEY=abc\n' > "$other_file/.env"
+printf 'backlog=.env\n' > "$other_file/.claude/mash-workbench/settings"
+run_capturing add "$other_file" script "A title" "why"
+assert_eq "$captured_exit_code" "6"
+assert_contains "$captured_output" "# Tooling backlog"
+assert_eq "$(cat "$other_file/.env")" "API_KEY=abc"
+# An empty file is a new backlog; a backlog with a CRLF title is a backlog.
+: > "$other_file/notes.md"; printf 'backlog=notes.md\n' > "$other_file/.claude/mash-workbench/settings"
+add "$other_file" script "A title" "why" >/dev/null
+assert_eq "$(head -n 1 "$other_file/notes.md")" "# Tooling backlog"
+printf '# Tooling backlog\r\n\r\n' > "$other_file/crlf.md"; printf 'backlog=crlf.md\n' > "$other_file/.claude/mash-workbench/settings"
+add "$other_file" script "A title" "why" >/dev/null
+assert_contains "$(cat "$other_file/crlf.md")" "A title"

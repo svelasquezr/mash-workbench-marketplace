@@ -23,7 +23,9 @@ candidates=()
 if [[ -n "${MASH_PYTHON:-}" ]]; then candidates+=("$MASH_PYTHON"); fi
 candidates+=("python3" "python" "py -3")
 for candidate in "${candidates[@]}"; do
-  if [[ -f "$candidate" ]]; then command_words=("$candidate")  # a path, possibly with spaces
+  # Only MASH_PYTHON can be a path with spaces. The built-in candidates are always split into words: a file of the
+  # project that is named "py -3" must not change how they are read.
+  if [[ "$candidate" == "${MASH_PYTHON:-}" && -f "$candidate" ]]; then command_words=("$candidate")
   else read -r -a command_words <<< "$candidate"; fi
   [[ ${#command_words[@]} -gt 0 ]] || continue
   command -v "${command_words[0]}" >/dev/null 2>&1 || continue

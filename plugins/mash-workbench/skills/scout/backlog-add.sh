@@ -11,6 +11,8 @@
 # No argument names the file to write: the place comes from the backlog setting (scripts/mash-settings.sh), which the
 # user chose. With an allow rule this script runs with no prompt, so an argument must not be able to send the line to
 # another file. (--create and --file are gone for that reason.)
+# The script writes only to a new or empty file, or to a file whose first line is the title "# Tooling backlog"
+# (exit 6 otherwise): a setting cannot make it add a line to another kind of file.
 # The file starts with a title and a "repo:" line that names the owning repository (mash-settings.sh repo-key). A file
 # that has a title and no "repo:" line gets the line on the next write. A file outside the main worktree whose "repo:"
 # line names another repository is refused.
@@ -116,7 +118,18 @@ else
     "$root"/*) case "$folder_real/" in "$root"/*) ;; *) echo "backlog-add: a symbolic link on $backlog_file leads outside $root: nothing recorded" >&2; exit 6 ;; esac ;;
   esac
 fi
-if [[ ! -f "$backlog_file" ]]; then
+# The setting can name any file, and a committed setting names one inside the repository with no question. So the
+# script writes only to a new or empty file, or to a file that starts with the backlog title: never a line into a
+# .env or a source file.
+backlog_title="# Tooling backlog"
+if [[ -s "$backlog_file" ]]; then
+  IFS= read -r first_line < "$backlog_file" || true
+  if [[ "${first_line%$'\r'}" != "$backlog_title" ]]; then
+    echo "backlog-add: $backlog_file is not a tooling backlog: its first line is not \"$backlog_title\". Nothing recorded. Name another file in the backlog setting, or add that title line to the file." >&2
+    exit 6
+  fi
+fi
+if [[ ! -s "$backlog_file" ]]; then
   {
     printf '# Tooling backlog\n'
     if [[ -n "$key" ]]; then printf 'repo: %s\n' "$key"; fi

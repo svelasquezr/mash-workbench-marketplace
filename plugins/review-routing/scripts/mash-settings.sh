@@ -35,13 +35,17 @@ set -euo pipefail
 # Outside a git repository every command exits 2, except get when the key's environment variable is set (get reads
 # it first). Callers such as escapes-path.sh then let the project folder stand in for the main worktree and read only
 # the environment variable.
-# The home folder must be a real folder inside the main worktree: when .claude/mash-workbench is a symbolic link, or
-# .claude leads outside the main worktree, home, get (for the files), source, path, set and unset exit 6. A repository
-# can commit a symbolic link, and it would move the settings and the review log to another place.
+# The home folder must be the real folder <main>/.claude/mash-workbench: when .claude or .claude/mash-workbench is a
+# symbolic link (also one that stays inside the repository), home, get (for the files), source, path, set and unset
+# exit 6. A repository can commit a symbolic link, and it would move the settings and the review log to another place,
+# or put a committed file where the private one is expected.
 # set and unset take a lock (the folder .settings.lock in the home folder) around their read-modify-write; set --local
 # adds the exclude line before it writes settings.local. A settings file that is a symbolic link is refused (exit 6) by
-# get, source, path, set and unset. settings.local counts as the user's own file only while git does not track it: a
-# tracked one is read as a committed file (source prints team), and set --local refuses to write it.
+# get, source, path, set and unset. settings.local counts as the user's own file only when git answers that it is not
+# tracked: the question goes to git from the home folder itself, that folder must belong to this repository (not to
+# a submodule or a nested repository), and the pathspec and index variables of the environment are not used. With any
+# other answer, also a git error, the file is read as a committed file (source prints team), and set --local refuses
+# to write it.
 # Exit codes: 0 success; 1 another set or unset holds the lock; 2 usage error, or <dir> is not in a git repository; 3 the key
 # is not set anywhere, or its value is empty or only spaces and tabs; 5 bare repository, or the main worktree cannot be found from <dir>; 6 refused by a check (the
 # line says why).
@@ -166,8 +170,10 @@ normalize() {
 }
 # squash <path>: the path as written, with . and .. and doubled slashes removed; no symbolic link is resolved.
 squash() {
-  local joined=$1 part count=0 index result=""
+  local joined=$1 part count=0 index result="" drive=""
   local -a parts stack
+  # A drive letter (C:/Users/me) stays in front as written: the result is C:/Users/me, not /C:/Users/me.
+  if [[ "$joined" =~ ^[A-Za-z]:/ ]]; then drive=${joined:0:2}; joined=${joined:2}; fi
   IFS=/ read -r -a parts <<< "$joined"
   for part in ${parts[@]+"${parts[@]}"}; do
     case "$part" in
@@ -177,7 +183,7 @@ squash() {
     esac
   done
   for ((index = 0; index < count; index++)); do result="$result/${stack[index]}"; done
-  printf '%s' "${result:-/}"
+  printf '%s%s' "$drive" "${result:-/}"
 }
 
 # under <path> <folder>: <path> is <folder> or inside it.
@@ -197,8 +203,10 @@ need_home() {
   if [[ -L "$home_folder" ]]; then
     fail 6 "refused: $home_folder is a symbolic link: the home folder must be a real folder in the main worktree"
   fi
-  if ! under "$(normalize "$home_folder")" "$(normalize "$main")"; then
-    fail 6 "refused: $main/.claude is a symbolic link that leads outside the main worktree"
+  # The resolved place must be exactly <main>/.claude/mash-workbench: a .claude link that stays inside the repository
+  # would put a committed folder there.
+  if [[ -L "$main/.claude" || "$(normalize "$home_folder")" != "$(normalize "$main")/.claude/mash-workbench" ]]; then
+    fail 6 "refused: $main/.claude is a symbolic link: the home folder must be the real folder .claude/mash-workbench in the main worktree"
   fi
 }
 
@@ -207,10 +215,26 @@ need_home() {
 refuse_linked_file() {
   if [[ -L "$1" ]]; then fail 6 "refused: $1 is a symbolic link: a settings file must be a regular file"; fi
 }
-# local_is_tracked: git tracks settings.local in the main worktree (someone committed it, so it is not private).
+# home_git <git arguments>: git in the home folder, without the pathspec and index variables of the environment (they
+# would change what "tracked" means).
+home_git() {
+  env -u GIT_LITERAL_PATHSPECS -u GIT_GLOB_PATHSPECS -u GIT_NOGLOB_PATHSPECS -u GIT_ICASE_PATHSPECS -u GIT_INDEX_FILE \
+    git --no-literal-pathspecs -C "$main/.claude/mash-workbench" "$@"
+}
+# local_is_tracked: settings.local is not surely the user's own file. It returns 1 (private) only on a positive
+# answer: the home folder does not exist yet, or it belongs to this repository and git says that it tracks no
+# settings.local there. A submodule or a nested repository as the home folder, a tracked file and a git error all
+# return 0.
 local_is_tracked() {
+  local top status=0
+  [[ -d "$main/.claude/mash-workbench" ]] || return 1
+  top=$(home_git rev-parse --show-toplevel 2>/dev/null) || return 0
+  top=$(cd "${top%$'\r'}" 2>/dev/null && pwd -P) || return 0
+  [[ "$top" == "$(normalize "$main")" ]] || return 0
   # :(icase): on a file system that ignores case, a tracked SETTINGS.LOCAL is the file that gets opened.
-  git -C "$main" ls-files --error-unmatch -- ':(icase).claude/mash-workbench/settings.local' >/dev/null 2>&1
+  home_git ls-files --error-unmatch -- ':(icase)settings.local' >/dev/null 2>&1 || status=$?
+  # 1 is git's "no such tracked file"; 0 is tracked; any other code is an error, which is not a "no".
+  ((status != 1))
 }
 
 # leaves_repository <absolute path>: the path is written inside the main worktree, and a symbolic link on it leads out.
@@ -307,6 +331,8 @@ command_path() {
     if leaves_repository "$path"; then
       fail 6 "refused: a symbolic link on $path leads outside the repository. If the user wants that place, name it directly: mash-settings.sh set <dir> $key <the real path> --local"
     fi
+    # A link to a file, or a dangling link: the checks above resolve folders only, and a read or a write would follow it.
+    if [[ -L "$path" && ! -d "$path" ]]; then fail 6 "refused: $path is a symbolic link"; fi
     if [[ "$found_source" == team ]] && ! under "$(normalize "$path")" "$(normalize "$main")"; then
       fail 6 "refused: the committed settings file puts the $noun outside the repository: $path. A committed file cannot choose that. Ask the user; on a yes, run: mash-settings.sh set <dir> $key $(printf '%q' "$found_value") --local"
     fi
@@ -334,7 +360,7 @@ command_set() {
   refuse_linked_file "$home/settings"
   refuse_linked_file "$home/settings.local"
   if [[ "$scope" == --local ]] && local_is_tracked; then
-    fail 6 "refused: git tracks $file, so it is not private: remove it from the index first (git rm --cached), then run this again"
+    fail 6 "refused: $file is not a private file: git tracks it, or its folder belongs to another repository (a submodule). Remove it from the index first (git rm --cached), then run this again"
   fi
   if [[ "$mode" == unset && ! -f "$file" ]]; then printf '%s was not set in %s\n' "$key" "$file"; return 0; fi
   mkdir -p "$home"
