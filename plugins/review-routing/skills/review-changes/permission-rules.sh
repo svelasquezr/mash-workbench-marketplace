@@ -34,8 +34,9 @@
 # this script again, remove the old rules, run it once more and add the new ones. The old rules must go: they keep
 # approving the old version's scripts. (From this version on, those scripts also refuse to run from an old copy:
 # scripts/plugin-current.sh.)
-# What a rule still allows: any arguments to that one script. The scripts open no file that an argument names, but
-# <repo-root> is an argument, so a rule approves a record in any repository on the machine that has a place chosen.
+# What a rule still allows: any arguments to that one script. The scripts open no file that an argument names.
+# <repo-root> is an argument, but the writing scripts refuse one that is not in the repository of the current folder
+# (mash-settings.sh same-repository), and Claude Code blocks a cd out of the session's folders.
 #
 # Reads: the two settings.local.json files named above, only the "Bash(...)" strings of their arrays, with the name of
 # each array (allow, deny, ask). A rule in a deny or ask list is never printed as "present" or "remove"; a current

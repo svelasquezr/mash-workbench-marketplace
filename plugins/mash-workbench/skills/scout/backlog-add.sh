@@ -82,6 +82,13 @@ esac
 if [[ -n "$in_git" ]]; then
   bash "$settings" same-repository "$root" || exit $?
 else
+  # Outside git means the session is outside git too: a <repo-root> above the session's repository is refused.
+  here_status=0
+  bash "$settings" main-worktree "$(pwd -P)" >/dev/null 2>&1 || here_status=$?
+  if ((here_status != 2)); then
+    echo "backlog-add: refused: $root is not in a git repository, but the current folder ($(pwd -P)) is: a line goes only to the repository the session works in." >&2
+    exit 6
+  fi
   case "$(pwd -P)/" in
     "$root"/*) ;;
     *) echo "backlog-add: refused: the current folder ($(pwd -P)) is not inside $root: a line goes only to the project the session works in. Run the command from inside it." >&2; exit 6 ;;
@@ -170,6 +177,8 @@ elif [[ -n "$key" ]] && ! grep -q '^repo:' "$backlog_file" && [[ "$(head -n 1 "$
   mv "$temporary" "$backlog_file"
 fi
 if grep -qiF -- "· $title —" "$backlog_file"; then echo "already in backlog: $title"; exit 0; fi
+# clean: no control characters in what is printed from files (a committed file can hold an escape sequence).
+clean() { LC_ALL=C tr -d '\000-\010\013-\037\177' | LC_ALL=C awk '{ gsub(/\302[\200-\237]/, ""); print }'; }
 TITLE="$title" awk '
   function words(text, set,   parts, count, i, n) {
     n = split(tolower(text), parts, /[^a-z0-9]+/); count = 0
@@ -182,8 +191,8 @@ TITLE="$title" awk '
     split("", old_words); old_count = words(line, old_words); shared = 0
     for (word in old_words) if (word in new_words) shared++
     shorter = old_count < new_count ? old_count : new_count
-    if (shared >= 2 && shared * 5 >= shorter * 3) print "near duplicate of: " line > "/dev/stderr"
-  }' "$backlog_file"
+    if (shared >= 2 && shared * 5 >= shorter * 3) print "near duplicate of: " line
+  }' "$backlog_file" | clean >&2  # the line comes from the backlog file (a commit can hold it)
 if [[ -s "$backlog_file" && -n "$(tail -c1 "$backlog_file")" ]]; then printf '\n' >> "$backlog_file"; fi  # a file without a final newline
 printf -- '- [ ] %s · %s · %s — %s\n' "$entry_date" "$form" "$title" "$why" >> "$backlog_file"
 echo "added to backlog: $title"

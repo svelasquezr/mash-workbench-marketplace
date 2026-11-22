@@ -41,6 +41,8 @@ case "$status" in
   *) echo "escape-migrate: no main worktree (bare repository): migrate from a clone with a work folder" >&2; exit "$status" ;;
 esac
 quote() { printf '%q' "$1"; }  # a path in a printed command, safe to paste
+# clean: no control characters in what is printed from files (a committed old ledger can hold an escape sequence).
+clean() { LC_ALL=C tr -d '\000-\010\013-\037\177' | LC_ALL=C awk '{ gsub(/\302[\200-\237]/, ""); print }'; }
 display() { if [[ "$1" == "$main"/* ]]; then printf '%s' "${1#"$main"/}"; else printf '%s' "$1"; fi; }
 
 status=0
@@ -78,14 +80,13 @@ for old in "${old_files[@]}"; do
   DISPLAY_NAME="$(display "$old")" LINES_FILE="$work/lines" awk -F ' · ' -v entries="$(wc -l < "$work/lines" | tr -d ' ')" '
     { sub(/\r$/, "") }
     /^- [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]( |$)/ {
-      if (NF != 4) { shown = $0; gsub(/[\001-\010\013-\037\177]/, "", shown)  # no escape sequence reaches the terminal
-        printf "skipped line %d of %s: %s\n", FNR, ENVIRON["DISPLAY_NAME"], shown > "/dev/stderr"; next }
+      if (NF != 4) { printf "skipped line %d of %s: %s\n", FNR, ENVIRON["DISPLAY_NAME"], $0 > "/dev/stderr"; next }
       for (field = 1; field <= 4; field++) gsub(/^[ \t]+|[ \t]+$/, "", $field)
       printf "---\ndate: %s\narea: %s\nclass: %s\nslug: migrated-%d\nsource: %s\n---\nMigrated; see source.\n---8<---\n", substr($1, 3), $2, $3, ++entries, $4
       print ENVIRON["DISPLAY_NAME"] ":" FNR >> ENVIRON["LINES_FILE"]
     }' "$old" >> "$work/batch" 2>> "$work/skipped"
 done
-if [[ -s "$work/skipped" ]]; then cat "$work/skipped"; fi
+if [[ -s "$work/skipped" ]]; then clean < "$work/skipped"; fi
 if [[ -s "$work/batch" ]]; then
   status=0
   # The variable points escape-add.sh at the target folder for this run only. Its escapes-path.sh warnings about the old
@@ -98,7 +99,7 @@ if [[ -s "$work/batch" ]]; then
       number = $3; sub(/:$/, "", number); text = $0; sub(/^escape-add: block [0-9]+: /, "", text)
       print "escape-migrate: " line[number] ": " text; next
     }
-    { print }' "$work/lines" "$work/errors" >&2 || true
+    { print }' "$work/lines" "$work/errors" | clean >&2 || true
   if ((status != 0)); then exit "$status"; fi
 else
   echo "no entry lines found: nothing recorded"

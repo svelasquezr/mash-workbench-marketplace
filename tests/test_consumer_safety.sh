@@ -101,7 +101,6 @@ assert_contains "$captured_output" "Planted"
 printf 'escapes.threshold=3%s[2K\n' "$esc" >> "$a/.claude/mash-workbench/settings"
 from "$a" bash "$settings_script" get "$a" escapes.threshold
 no_escape_byte "$captured_output" "get"
-printf 'escapes=x%s[2K\n' "$esc" > "$a/.claude/mash-workbench/settings.extra"
 from "$a" env "REVIEW_ROUTING_ESCAPES=x${esc}[2K" bash "$settings_script" path "$a" escapes
 assert_eq "$captured_exit_code" "6"
 assert_contains "$captured_output" "control character"
@@ -121,11 +120,47 @@ assert_eq "$captured_exit_code" "6"
 assert_contains "$captured_output" "older than 2.44"
 [[ ! -e "$a_marker" ]] || { echo "  a fetch started"; exit 1; }
 
-# 6. Windows (Git Bash, MSYS, Cygwin): no allow rule is offered.
+# 5. Windows (Git Bash, MSYS, Cygwin): no allow rule is offered.
 mkdir -p "$stub/win"; printf '#!/bin/sh\necho MINGW64_NT-10.0-19045\n' > "$stub/win/uname"; chmod +x "$stub/win/uname"
 for rules in "$rr/skills/review-changes/permission-rules.sh" "$mw/skills/scout/permission-rules.sh"; do
   from "$a" env PATH="$stub/win:$PATH" bash "$rules" "$a"
   assert_not_contains "$captured_output" "add: "
   assert_contains "$captured_output" "not tested there"
 done
+# 6. More text from committed files: the near-duplicate note of backlog-add.sh, the messages escape-migrate.sh passes
+#    on, and the file names of find-checks.sh carry no control character (C0, DEL, or C1 as UTF-8).
+from "$a" bash "$mw/skills/scout/backlog-add.sh" "$a" script "Planted entry duplicate" "why"
+assert_contains "$captured_output" "near duplicate"
+no_escape_byte "$captured_output" "backlog-add near duplicate"
+e="$area/e"; new_repository "$e"; mkdir -p "$e/docs"
+printf -- '- 2026-01-01 · src/a b%s[2K · wrong-result · https://x.test/1\n- 2026-01-02 · only two fields %s[2K \302\233\n' "$esc" "$esc" > "$e/docs/review-escapes.md"
+from "$e" bash "$rr/skills/add-reviewer/escape-migrate.sh" "$e"
+no_escape_byte "$captured_output" "escape-migrate"
+[[ "$captured_output" != *$'\302\233'* ]] || { echo "  a C1 control reached the output (escape-migrate)"; exit 1; }
+mkdir -p "$e/.github/workflows"
+printf 'jobs:\n  t:\n    steps:\n      - run: npm test\n' > "$e/.github/workflows/x${esc}]0;T${esc}\\.yml"
+from "$e" bash "$rr/skills/review-changes/find-checks.sh" "$e"
+no_escape_byte "$captured_output" "find-checks"
+
+# 7. Outside git means outside git: a <repo-root> that is not in git, above the session's repository, is refused.
+top="$area/top"; mkdir -p "$top"; new_repository "$top/r"
+from "$top/r" env MASH_WORKBENCH_BACKLOG=notes/backlog.md bash "$mw/skills/scout/backlog-add.sh" "$top" script "A title" "why"
+assert_eq "$captured_exit_code" "6"
+[[ ! -e "$top/notes/backlog.md" ]] || { echo "  backlog-add wrote above the session's repository"; exit 1; }
+
+# 8. review-log.sh add does not adopt a reviews.log that it did not start (one a patch created has no exclude line).
+f="$area/f"; new_repository "$f"; mkdir -p "$f/.claude/mash-workbench"
+fbase=$(git -C "$f" rev-parse HEAD~1); fhead=$(git -C "$f" rev-parse HEAD)
+printf '2026-01-01 %s %s - -\n' "$fbase" "$fhead" > "$f/.claude/mash-workbench/reviews.log"
+from "$f" bash "$rr/skills/review-changes/review-log.sh" add "$f" "$fbase" "$fhead"
+assert_eq "$captured_exit_code" "6"
+assert_contains "$captured_output" "did not start"
+from "$f" bash "$rr/skills/review-changes/review-log.sh" reviewed "$f" "$fhead"
+assert_eq "$captured_exit_code" "1"
+
+# 9. A record from a linked worktree of a bare repository succeeds without a "bare repository" message.
+git clone --quiet --bare "$a" "$area/bare.git"; git -C "$area/bare.git" worktree add --quiet "$area/bare-linked" -b linked
+from "$area/bare-linked" env REVIEW_ROUTING_ESCAPES="$area/bare-escapes" bash "$rr/skills/add-reviewer/escape-add.sh" "$area/bare-linked" src/x wrong-result bare-one --body "text"
+assert_eq "$captured_exit_code" "0"
+assert_not_contains "$captured_output" "bare repository"
 echo "consumer safety: ok"

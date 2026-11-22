@@ -660,8 +660,8 @@ case "$command" in
     # the current folder (pwd -P: no variable can change it).
     [[ $# -eq 1 ]] || usage
     status=0
-    find_main "$1" || status=$?
-    if ((status != 0 && status != 5)); then exit "$status"; fi
+    find_main "$1" 2>/dev/null || status=$?
+    if ((status != 0 && status != 5)); then need_main "$1"; fi  # prints why, and exits
     wanted=$common
     here_folder=$(pwd -P)
     status=0
@@ -689,8 +689,8 @@ case "$command" in
   toplevel)
     [[ $# -eq 1 ]] || usage
     status=0
-    find_main "$1" || status=$?
-    if ((status != 0 && status != 5)); then exit "$status"; fi
+    find_main "$1" 2>/dev/null || status=$?
+    if ((status != 0 && status != 5)); then need_main "$1"; fi  # prints why, and exits
     printf '%s\n' "$anchor_top"
     ;;
   repo-key)

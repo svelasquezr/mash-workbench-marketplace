@@ -38,7 +38,7 @@ set -euo pipefail
 # Exit 6 also when <repo-root> is in a folder shaped like a git directory (mash-settings.sh refuses it before git runs).
 # add also gets exit 6 when <repo-root> is not in the repository of the current folder, when reviews.log is tracked,
 # and in a partial clone with git older than 2.44 (then reviewed gives 6 too). reviewed reads only an untracked log with
-# the exclude line that add writes, and answers 1 otherwise.
+# the exclude line that add writes, and answers 1 otherwise; add does not adopt a log with lines and no exclude line.
 # Git runs without the variables that choose another repository, index or config, and with no fsmonitor program
 # (GIT_CONFIG_COUNT needs version 2.31 or later; an older version ignores it).
 # In a partial clone it downloads no missing object (GIT_NO_LAZY_FETCH, version 2.44 and later; an older version can
@@ -125,6 +125,12 @@ if [[ "$mode" == add ]]; then
   private_status=0
   private_message=$(bash "$settings" private "$root" reviews.log 2>&1 >/dev/null) || private_status=$?
   if ((private_status != 0 && private_status != 1)); then echo "review-log: $private_message" >&2; exit "$private_status"; fi
+  # add writes the exclude line before its first record, so a log with lines and no exclude line is one add did not
+  # start (a patch can create it): it is not adopted.
+  if ((private_status == 1)) && [[ -s "$log" ]]; then
+    echo "review-log: .claude/mash-workbench/reviews.log has lines that add did not start (no exclude line): nothing logged. Ask the user to move it aside." >&2
+    exit 6
+  fi
   base=$(commit_of "$3")
   head=$(commit_of "$4")
   [[ "$base" != "$head" ]] || refuse "nothing to log: the range is empty (base and head are the same commit)"
