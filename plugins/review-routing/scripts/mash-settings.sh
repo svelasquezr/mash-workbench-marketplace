@@ -287,11 +287,15 @@ under() {
 refuse_backslash() {
   case "$1" in *\\*) fail 6 "refused: the path holds a backslash: write it with / (C:/Users/me/escapes): $1" ;; esac
   # A control character (an escape sequence, say) would reach the terminal and the session in every message.
-  if [[ "$1" == *[[:cntrl:]]* ]]; then fail 6 "refused: the path holds a control character"; fi
+  has_control "$1" && fail 6 "refused: the path holds a control character"
+  return 0
 }
 # clean: standard input without control characters (C0 but tab and line feed, DEL, and the C1 range as UTF-8): text
 # that a commit can hold must not reach the terminal or the session as an escape sequence.
 clean() { LC_ALL=C tr -d '\000-\010\013-\037\177' | LC_ALL=C awk '{ gsub(/\302[\200-\237]/, ""); print }'; }
+# has_control <text>: the text holds a character that clean removes (tab and line feed aside). By bytes, so the answer
+# is the same in every locale ([[:cntrl:]] misses C1 in the C locale).
+has_control() { [[ "$(printf '%s' "$1" | clean)" != "$1" ]]; }
 need_home() {
   local home_folder="$main/.claude/mash-workbench"
   local nested
@@ -530,7 +534,7 @@ command_check() {
   local dir=$1 path=$2 kind=$3 noun="escapes folder" status=0 target worktree first=1 home relative owner key temporary_root owner_file
   if [[ "$kind" == backlog ]]; then noun="backlog file"; fi
   case "$path" in *\\*) echo "refused: the path holds a backslash: write it with /"; exit 6 ;; esac
-  if [[ "$path" == *[[:cntrl:]]* ]]; then echo "refused: the path holds a control character"; exit 6; fi
+  if has_control "$path"; then echo "refused: the path holds a control character"; exit 6; fi
   find_main "$dir" 2>/dev/null || status=$?
   case "$status" in
     0) ;;
@@ -591,7 +595,7 @@ command_check() {
   if [[ -f "$owner_file" ]]; then
     owner=$(awk '{ sub(/\r$/, "") } /^repo:/ { sub(/^repo:[ \t]*/, ""); sub(/[ \t]+$/, ""); print; exit }' "$owner_file")
     key=$(repo_key "$anchor_top")
-    if [[ -n "$owner" && "$(lower "$owner")" != "$key" ]]; then echo "refused: owned by $owner"; exit 6; fi
+    if [[ -n "$owner" && "$(lower "$owner")" != "$key" ]]; then echo "refused: owned by $(printf '%s' "$owner" | clean)"; exit 6; fi
   fi
   # A linked worktree of a --separate-git-dir repository: the main work folder exists but git does not name it.
   if [[ -n "$main_unknown" ]]; then

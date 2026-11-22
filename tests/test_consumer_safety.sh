@@ -94,7 +94,7 @@ printf -- '---\ndate: 2026-01-03\narea: src/x\nclass: wrong%s[2K-result\n---\n\n
 from "$a" bash "$rr/skills/add-reviewer/escapes-report.sh" "$a"
 no_escape_byte "$captured_output" "report"
 assert_contains "$captured_output" "src/x"
-printf -- '- [ ] 2020-01-01 · script · Planted %s[2K entry — why\n' "$esc" >> "$a/docs/backlog.md"
+printf -- '- [ ] 2020-01-01 · script · Planted %s[2K \302\233 entry — why\n' "$esc" >> "$a/docs/backlog.md"
 from "$a" bash "$mw/skills/scout/backlog-stale.sh" "$a" 1
 no_escape_byte "$captured_output" "backlog-stale"
 assert_contains "$captured_output" "Planted"
@@ -132,15 +132,17 @@ done
 from "$a" bash "$mw/skills/scout/backlog-add.sh" "$a" script "Planted entry duplicate" "why"
 assert_contains "$captured_output" "near duplicate"
 no_escape_byte "$captured_output" "backlog-add near duplicate"
+[[ "$captured_output" != *$'\302\233'* ]] || { echo "  a C1 control reached the output (backlog-add)"; exit 1; }
 e="$area/e"; new_repository "$e"; mkdir -p "$e/docs"
 printf -- '- 2026-01-01 · src/a b%s[2K · wrong-result · https://x.test/1\n- 2026-01-02 · only two fields %s[2K \302\233\n' "$esc" "$esc" > "$e/docs/review-escapes.md"
 from "$e" bash "$rr/skills/add-reviewer/escape-migrate.sh" "$e"
 no_escape_byte "$captured_output" "escape-migrate"
 [[ "$captured_output" != *$'\302\233'* ]] || { echo "  a C1 control reached the output (escape-migrate)"; exit 1; }
 mkdir -p "$e/.github/workflows"
-printf 'jobs:\n  t:\n    steps:\n      - run: npm test\n' > "$e/.github/workflows/x${esc}]0;T${esc}\\.yml"
+printf 'jobs:\n  t:\n    steps:\n      - run: npm test\n' > "$e/.github/workflows/x${esc}]0;T${esc}\\$'\302\233'.yml"
 from "$e" bash "$rr/skills/review-changes/find-checks.sh" "$e"
 no_escape_byte "$captured_output" "find-checks"
+[[ "$captured_output" != *$'\302\233'* ]] || { echo "  a C1 control reached the output (find-checks)"; exit 1; }
 
 # 7. Outside git means outside git: a <repo-root> that is not in git, above the session's repository, is refused.
 top="$area/top"; mkdir -p "$top"; new_repository "$top/r"
@@ -163,4 +165,29 @@ git clone --quiet --bare "$a" "$area/bare.git"; git -C "$area/bare.git" worktree
 from "$area/bare-linked" env REVIEW_ROUTING_ESCAPES="$area/bare-escapes" bash "$rr/skills/add-reviewer/escape-add.sh" "$area/bare-linked" src/x wrong-result bare-one --body "text"
 assert_eq "$captured_exit_code" "0"
 assert_not_contains "$captured_output" "bare repository"
+# 10. The control-character refusal for paths does not depend on the locale: a C1 control (U+009B as UTF-8) in a
+#     committed escapes path is refused under LC_ALL=C too, and nothing is recorded.
+g="$area/g"; new_repository "$g"; mkdir -p "$g/.claude/mash-workbench"
+printf 'escapes=docs/e\302\23331mRED\n' > "$g/.claude/mash-workbench/settings"
+for locale in C POSIX; do
+  from "$g" env LC_ALL="$locale" bash "$settings_script" path "$g" escapes
+  assert_eq "$captured_exit_code" "6"
+  from "$g" env LC_ALL="$locale" bash "$settings_script" check-escapes-path "$g" $'docs/e\302\23331m'
+  assert_eq "$captured_exit_code" "6"
+  from "$g" env LC_ALL="$locale" bash "$rr/skills/add-reviewer/escape-add.sh" "$g" src/x wrong-result c1 --body "text"
+  assert_eq "$captured_exit_code" "6"
+  [[ "$captured_output" != *$'\302\233'* ]] || { echo "  a C1 control reached the output ($locale)"; exit 1; }
+done
+[[ ! -e "$g/docs" ]] || { echo "  a C1 path was created"; exit 1; }
+
+# 11. Outside git, a relative backlog path that climbs out of <repo-root> is refused before any folder is created.
+from "$plain" env MASH_WORKBENCH_BACKLOG=../outside-x/x.md bash "$mw/skills/scout/backlog-add.sh" "$plain" script "A title" "why"
+assert_eq "$captured_exit_code" "6"
+[[ ! -e "$area/outside-x" ]] || { echo "  backlog-add created a folder outside <repo-root>"; exit 1; }
+
+# 12. The repo: line of an outside folder that is refused is printed without control characters.
+own_dir="$area/owned"; mkdir -p "$own_dir"; printf '# Review escapes\nrepo: github.com/other/x%s[2K\n' "$esc" > "$own_dir/README.md"
+from "$a" bash "$settings_script" check-escapes-path "$a" "$own_dir"
+assert_eq "$captured_exit_code" "6"
+no_escape_byte "$captured_output" "owner line"
 echo "consumer safety: ok"

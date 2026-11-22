@@ -195,6 +195,9 @@ stale_rules() {
   done
 }
 
+# clean: the rules come from a settings file, which a commit can hold: no control character reaches the terminal.
+clean() { LC_ALL=C tr -d '\000-\010\013-\037\177' | LC_ALL=C awk '{ gsub(/\302[\200-\237]/, ""); print }'; }
+
 main_file="$main/.claude/settings.local.json"
 own_file="$root/.claude/settings.local.json"
 in_main=$(allowed_in "$main_file")
@@ -228,11 +231,11 @@ while IFS= read -r rule; do
     echo "note: this rule is also in a deny or ask list of the file, and that list wins: $rule"
   fi
 done <<< "$current"
-[[ -z "$stale" ]] || printf '%s\n' "$stale" | sed 's/^/remove: /'
+[[ -z "$stale" ]] || printf '%s\n' "$stale" | sed 's/^/remove: /' | clean
 [[ -z "$untested" ]] || echo "note: no allow rule is offered on Windows: the scripts' path and link checks are not tested there, so each run must ask the user. Remove any \"remove\" rule above."
 if [[ -n "$own_stale" ]]; then
   echo "file: $own_file"
-  printf '%s\n' "$own_stale" | sed 's/^/remove: /'
+  printf '%s\n' "$own_stale" | sed 's/^/remove: /' | clean
 fi
 
 if [[ -n "$stale$own_stale" ]]; then

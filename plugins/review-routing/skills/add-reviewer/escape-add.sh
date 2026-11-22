@@ -412,6 +412,6 @@ resolve_folder record
 prepare_folder
 write_escape "$default_date" "$area" "$class" "${positional[3]}" "$source" "$body"
 if [[ "$written" == already ]]; then echo "already recorded: $(display "$written_file")" | clean; exit 0; fi
-echo "recorded: $(display "$written_file")"
+echo "recorded: $(display "$written_file")" | clean
 if [[ -n "$written_also" ]]; then echo "also recorded in $written_also" | clean; fi
 threshold_lines "$area" | clean

@@ -86,7 +86,7 @@ else
   here_status=0
   bash "$settings" main-worktree "$(pwd -P)" >/dev/null 2>&1 || here_status=$?
   if ((here_status != 2)); then
-    echo "backlog-add: refused: $root is not in a git repository, but the current folder ($(pwd -P)) is: a line goes only to the repository the session works in." >&2
+    echo "backlog-add: refused: $root is not in a git repository, but the current folder ($(pwd -P)) is in or under one (or in a folder git would take as one): a line goes only to the repository the session works in." >&2
     exit 6
   fi
   case "$(pwd -P)/" in
@@ -124,6 +124,11 @@ if [[ -L "$backlog_file" ]]; then echo "backlog-add: $backlog_file is a symbolic
 [[ ! -d "$backlog_file" ]] || { echo "backlog-add: the backlog path is a folder: $backlog_file" >&2; exit 6; }
 key=""
 if [[ -n "$in_git" ]]; then key=$(bash "$settings" repo-key "$root" 2>/dev/null || true); fi
+# Outside git, a path that climbs out with ".." is refused before any folder is made (inside git, the path checks
+# above have already placed it).
+if [[ -z "$in_git" ]]; then
+  case "/$backlog_file/" in */../*) echo "backlog-add: refused: the backlog path climbs out of its folder with ..: $backlog_file" >&2; exit 6 ;; esac
+fi
 mkdir -p "$(dirname "$backlog_file")"
 if [[ -n "$in_git" ]]; then
   # Once more, now that the folder exists: every name on the path can be resolved.

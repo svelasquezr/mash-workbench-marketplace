@@ -105,7 +105,7 @@ else
   echo "no entry lines found: nothing recorded"
 fi
 
-echo "The escapes are now in $(display "$target"). The old file stays until you remove it; ask the user, then run:"
+echo "The escapes are now in $(display "$target"). The old file stays until you remove it; ask the user, then run:" | clean
 for old in "${old_files[@]}"; do
   if [[ "$old" == "$main"/* ]] && git -C "$main" ls-files --error-unmatch -- "$(display "$old")" >/dev/null 2>&1; then
     echo "  git -C $(quote "$main") rm $(quote "$(display "$old")")"
