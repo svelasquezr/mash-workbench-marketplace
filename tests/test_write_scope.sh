@@ -118,7 +118,7 @@ done
 # 1. escape-add.sh: one escape into the default folder, with the setting in the environment. Only the escapes folder.
 repo=$(new_repo single)
 listing before
-REVIEW_ROUTING_ESCAPES=.claude/mash-workbench/escapes ESCAPE_DATE=2026-11-01 bash "$add" "$repo" src/billing wrong-result tax-in-total --body "$body_text" >/dev/null
+REVIEW_ROUTING_ESCAPES=.claude/mash-workbench/escapes ESCAPE_DATE=2026-11-01 bash "$in_root_script" "$add" "$repo" src/billing wrong-result tax-in-total --body "$body_text" >/dev/null
 assert_scope "escape-add" "$repo/.claude/mash-workbench/escapes/*"
 
 # 2. escape-add.sh --batch: two blocks; the folder gains two escape files and the README.
@@ -126,7 +126,7 @@ repo=$(new_repo batch)
 batch="$area/lists/batch.txt"
 printf -- '---\narea: src/a\nclass: wrong-result\nslug: one\nsource: https://github.com/o/r/issues/1\n---\n\nFirst body.\n---8<---\n---\narea: src/a\nclass: missing-test\nslug: two\n---\n\nSecond body.\n' > "$batch"
 listing before
-REVIEW_ROUTING_ESCAPES=.claude/mash-workbench/escapes ESCAPE_DATE=2026-11-01 bash "$add" --batch - "$repo" < "$batch" >/dev/null
+REVIEW_ROUTING_ESCAPES=.claude/mash-workbench/escapes ESCAPE_DATE=2026-11-01 bash "$in_root_script" "$add" --batch - "$repo" < "$batch" >/dev/null
 assert_scope "escape-add --batch" "$repo/.claude/mash-workbench/escapes/*"
 
 # 3. escape-add.sh from a linked worktree: the files land in the main worktree's folder; the worktree stays untouched.
@@ -135,7 +135,7 @@ mkdir -p "$repo/.claude"
 git -C "$repo" worktree add --quiet -b w1 "$repo/.claude/worktrees/w1"
 worktree="$repo/.claude/worktrees/w1"
 listing before
-REVIEW_ROUTING_ESCAPES=.claude/mash-workbench/escapes ESCAPE_DATE=2026-11-01 bash "$add" "$worktree" src/billing wrong-result from-worktree --body "$body_text" >/dev/null
+REVIEW_ROUTING_ESCAPES=.claude/mash-workbench/escapes ESCAPE_DATE=2026-11-01 bash "$in_root_script" "$add" "$worktree" src/billing wrong-result from-worktree --body "$body_text" >/dev/null
 assert_scope "escape-add from a linked worktree" "$repo/.claude/mash-workbench/escapes/*"
 assert_file "$(find "$repo/.claude/mash-workbench/escapes" -name '*from-worktree*.md' | head -n 1)"
 
@@ -143,7 +143,7 @@ assert_file "$(find "$repo/.claude/mash-workbench/escapes" -name '*from-worktree
 repo=$(new_repo outside)
 chosen="$fresh_home/.mash-workbench/o-r/escapes"
 listing before
-REVIEW_ROUTING_ESCAPES="$chosen" ESCAPE_DATE=2026-11-01 bash "$add" "$repo" src/billing wrong-result outside-folder --body "$body_text" >/dev/null
+REVIEW_ROUTING_ESCAPES="$chosen" ESCAPE_DATE=2026-11-01 bash "$in_root_script" "$add" "$repo" src/billing wrong-result outside-folder --body "$body_text" >/dev/null
 assert_scope "escape-add outside the repository" "$chosen/*"
 
 # 5. escape-migrate.sh: an old ledger becomes files in the default folder; the old file stays and no setting changes.
@@ -153,7 +153,7 @@ printf -- '# Review escapes\n\n- 2026-10-11 · src/a · wrong-result · https://
 git -C "$repo" add docs
 git -C "$repo" commit --quiet -m "docs: old ledger"
 listing before
-bash "$migrate" "$repo" >/dev/null
+bash "$in_root_script" "$migrate" "$repo" >/dev/null
 assert_scope "escape-migrate" "$repo/.claude/mash-workbench/escapes/*"
 
 # 6. mash-settings.sh set --team: the settings file only.
@@ -177,12 +177,12 @@ printf 'a\n' > "$repo/a"
 git -C "$repo" add a
 git -C "$repo" commit --quiet -m "feat: a"
 listing before
-bash "$review_log" add "$repo" main HEAD >/dev/null
+bash "$in_root_script" "$review_log" add "$repo" main HEAD >/dev/null
 assert_scope "review-log add" "$repo/.claude/mash-workbench/reviews.log" "$repo/.git/info/exclude"
 
 # 7b. review-log.sh reviewed and escapes-report.sh only read.
 listing before
-bash "$review_log" reviewed "$repo" HEAD
+bash "$in_root_script" "$review_log" reviewed "$repo" HEAD
 bash "$report" "$repo" >/dev/null
 assert_no_change "review-log reviewed, escapes-report"
 
@@ -190,20 +190,20 @@ assert_no_change "review-log reviewed, escapes-report"
 repo=$(new_repo backlog)
 bash "$settings_script" set "$repo" backlog docs/mash/tooling-backlog.md --team >/dev/null
 listing before
-BACKLOG_DATE=2026-11-01 bash "$backlog_add" "$repo" script "Check the lockfile" "CI failed twice" >/dev/null
+BACKLOG_DATE=2026-11-01 bash "$in_root_script" "$backlog_add" "$repo" script "Check the lockfile" "CI failed twice" >/dev/null
 assert_scope "backlog-add" "$repo/docs/mash/tooling-backlog.md"
 # 8b. From a linked worktree: the main worktree's file changes; the worktree stays untouched.
 mkdir -p "$repo/.claude"
 git -C "$repo" worktree add --quiet -b w1 "$repo/.claude/worktrees/w1"
 listing before
-BACKLOG_DATE=2026-11-01 bash "$backlog_add" "$repo/.claude/worktrees/w1" hook "Block force pushes" "twice" >/dev/null
+BACKLOG_DATE=2026-11-01 bash "$in_root_script" "$backlog_add" "$repo/.claude/worktrees/w1" hook "Block force pushes" "twice" >/dev/null
 assert_scope "backlog-add from a linked worktree" "$repo/docs/mash/tooling-backlog.md"
 # 8c. An old backlog with no setting and no owner line: the file is rewritten in place (the owner line, the entry),
 # and the temporary copy next to it is gone.
 repo=$(new_repo backlogold)
 mkdir -p "$repo/docs"; printf '# Tooling backlog\n\n' > "$repo/docs/tooling-backlog.md"
 listing before
-BACKLOG_DATE=2026-11-01 bash "$backlog_add" "$repo" script "Check the lockfile" "CI failed twice" >/dev/null 2>&1
+BACKLOG_DATE=2026-11-01 bash "$in_root_script" "$backlog_add" "$repo" script "Check the lockfile" "CI failed twice" >/dev/null 2>&1
 assert_scope "backlog-add to an old backlog" "$repo/docs/tooling-backlog.md"
 assert_contains "$(cat "$repo/docs/tooling-backlog.md")" "repo: local/"
 # 8d. backlog-stale.sh only reads.

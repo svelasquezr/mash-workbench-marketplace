@@ -55,6 +55,17 @@ for mode in "--models HEAD~1..HEAD" "--check"; do
   assert_not_contains "$captured_output" "SECRET-VALUE"
 done
 rm .claude/agents/linked.md
+# A committed .claude/agents that is a symbolic link to a folder outside the repository is not read either: the agent
+# files must be inside the repository.
+mkdir -p "$temporary_directory/outside-agents"; cp "$temporary_directory/outside.md" "$temporary_directory/outside-agents/outside.md"
+mv .claude/agents .claude/agents-real; ln -s "$temporary_directory/outside-agents" .claude/agents
+printf '[[routes]]\npattern = "^src/"\nreviewers = ["outside"]\n' > .claude/reviewers.toml
+for mode in "--models HEAD~1..HEAD" "--check"; do
+  # shellcheck disable=SC2086  # the words are split on purpose
+  run_capturing route $mode
+  assert_not_contains "$captured_output" "SECRET-VALUE"
+done
+rm .claude/agents; mv .claude/agents-real .claude/agents
 # A project agent on haiku is still found and refused (the check above did not switch the model check off).
 printf -- '---\nname: slow\nmodel: haiku\n---\n' > .claude/agents/slow.md
 printf '[[routes]]\npattern = "^src/"\nreviewers = ["slow"]\n' > .claude/reviewers.toml

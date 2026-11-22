@@ -33,12 +33,24 @@ set -euo pipefail
 #
 # Exit codes: 0 recorded, already recorded, listed, or the ledger is off (escapes=off: nothing recorded); 2 usage error
 # or a field that fails its check, or <repo-root> is not in a git repository (nothing written); 3 no escapes folder
-# chosen yet, or an old one-file ledger is in use (the message says what to ask the user); 5 no main worktree (bare
-# repository) and no absolute path set; 6 refused: the folder fails mash-settings.sh path or check-escapes-path (a
+# chosen yet, or an old one-file ledger is in use (the message says what to ask the user); 5 no main worktree (a linked
+# worktree of a bare repository) and no absolute path set; 6 refused: the folder fails mash-settings.sh path or check-escapes-path (a
 # linked worktree, a temporary folder, a folder another repository owns, a place outside the repository that the
 # committed settings file chose, a symbolic link that leads out of the repository), the folder's README.md is a
 # symbolic link, or this copy of the plugin is an old version in Claude Code's plugin cache (scripts/plugin-current.sh).
 # Plain bash 3.2 (macOS) and Git Bash: no python3 (on Windows it is often the Microsoft Store stub); lowercase with tr.
+# Exit 6 also when <repo-root> is in a folder shaped like a git directory (mash-settings.sh refuses it before git runs).
+# A record (and --batch) also gets exit 6 when <repo-root> is not in the repository of the current folder: an allow
+# rule approves any arguments, so a write goes only to the repository the session works in.
+# Git runs without the variables that choose another repository, index or config, and with no fsmonitor program
+# (GIT_CONFIG_COUNT needs version 2.31 or later; an older version ignores it).
+# In a partial clone it downloads no missing object (GIT_NO_LAZY_FETCH, version 2.44 and later; an older version can
+# download one, which is a network call).
+# Each git call runs in a folder that mash-settings.sh checked: the main worktree, or the top folder of <repo-root>
+# (mash-settings.sh toplevel), with -C.
+unset GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR GIT_INDEX_FILE GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES \
+  GIT_NAMESPACE GIT_LITERAL_PATHSPECS GIT_GLOB_PATHSPECS GIT_NOGLOB_PATHSPECS GIT_ICASE_PATHSPECS GIT_CONFIG_PARAMETERS
+export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.fsmonitor GIT_CONFIG_VALUE_0='' GIT_NO_LAZY_FETCH=1
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
 bash "$here/../../scripts/plugin-current.sh" < /dev/null || exit $?
 settings=$(cd "$here/../../scripts" && pwd -P)/mash-settings.sh
@@ -151,9 +163,16 @@ set_root() {
   case "$status" in
     0) ;;
     5) main="" ;;
+    6) bash "$settings" main-worktree "$root" >/dev/null || true; exit 6 ;;  # once more, for its message on stderr
     *) echo "escape-add: not in a git repository: $root (escapes belong to a git repository)" >&2; exit 2 ;;
   esac
+  root=$(bash "$settings" toplevel "$root") || exit $?
 }
+# same_repository: a record goes only to the repository the session works in (the current folder's). An allow rule
+# approves any arguments, so a <repo-root> that names another repository on the machine is refused (exit 6).
+same_repository() { bash "$settings" same-repository "$root" || exit $?; }
+# clean: no control characters in what is printed from files (a committed escape file can hold an escape sequence).
+clean() { LC_ALL=C tr -d '\000-\010\013-\037\177' | LC_ALL=C awk '{ gsub(/\302[\200-\237]/, ""); print }'; }
 # display <path>: relative to the main worktree when inside it.
 display() { if [[ -n "$main" && "$1" == "$main"/* ]]; then printf '%s' "${1#"$main"/}"; else printf '%s' "$1"; fi; }
 
@@ -279,13 +298,14 @@ case "$1" in
     resolve_folder list
     rows=$(escape_rows | AREA="$list_area" awk -F '\t' '$3 == ENVIRON["AREA"]' | sort -t "$tab" -k2,2r -k1,1r)
     if [[ -z "$rows" ]]; then echo "no escapes in $list_area"; exit 0; fi
-    printf '%s\n' "$rows" | awk -F '\t' 'NR <= 20 { print $1 "  " $6 } END { if (NR > 20) print "and " NR - 20 " more" }'
+    printf '%s\n' "$rows" | awk -F '\t' 'NR <= 20 { print $1 "  " $6 } END { if (NR > 20) print "and " NR - 20 " more" }' | clean
     exit 0
     ;;
   --batch)
     [[ $# -eq 3 ]] || refuse "--batch needs - <repo-root>, with the blocks on standard input"
     [[ "$2" == - ]] || refuse "--batch reads the blocks from standard input only: pass - and send the text on standard input (a file that an argument names is never opened)"
     set_root "$3"
+    same_repository
     check_date "$default_date" || refuse "ESCAPE_DATE: $problem"
     # Parse every block, then check every block; nothing is written until all pass.
     count=0; problems=""
@@ -357,8 +377,8 @@ case "$1" in
       fi
     done
     echo "recorded $recorded, already recorded $already"
-    if [[ -n "$also_lines" ]]; then printf '%s' "$also_lines"; fi
-    if ((${#areas[@]} > 0)); then threshold_lines "${areas[@]}"; fi
+    if [[ -n "$also_lines" ]]; then printf '%s' "$also_lines" | clean; fi
+    if ((${#areas[@]} > 0)); then threshold_lines "${areas[@]}" | clean; fi
     exit 0
     ;;
 esac
@@ -377,6 +397,7 @@ done
 [[ ${#positional[@]} -eq 4 ]] || refuse "four arguments needed: <repo-root> <area> <class> <slug>"
 [[ -n "$body_given" ]] || refuse "--body is needed: the conditions, the incorrect result and the expected result"
 set_root "${positional[0]}"
+same_repository
 check_area "${positional[1]}" || refuse "$problem"
 area=$area_checked
 class=${positional[2]}
@@ -390,7 +411,7 @@ body=$(printf '%s\n' "$body_text" | normalize_body)
 resolve_folder record
 prepare_folder
 write_escape "$default_date" "$area" "$class" "${positional[3]}" "$source" "$body"
-if [[ "$written" == already ]]; then echo "already recorded: $(display "$written_file")"; exit 0; fi
+if [[ "$written" == already ]]; then echo "already recorded: $(display "$written_file")" | clean; exit 0; fi
 echo "recorded: $(display "$written_file")"
-if [[ -n "$written_also" ]]; then echo "also recorded in $written_also"; fi
-threshold_lines "$area"
+if [[ -n "$written_also" ]]; then echo "also recorded in $written_also" | clean; fi
+threshold_lines "$area" | clean

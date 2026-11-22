@@ -5,37 +5,37 @@ source tests/lib.sh
 export MASH_WORKBENCH_BACKLOG=docs/tooling-backlog.md
 script=plugins/mash-workbench/skills/scout/backlog-add.sh
 temporary_directory=$(mktemp -d); trap 'rm -rf "$temporary_directory"' EXIT
-output=$(BACKLOG_DATE=2026-10-04 bash "$script" "$temporary_directory" script "Check uv pin matches CI" "drifted twice")
+output=$(BACKLOG_DATE=2026-10-04 bash "$in_root_script" "$script" "$temporary_directory" script "Check uv pin matches CI" "drifted twice")
 assert_contains "$output" "added to backlog"
 backlog_file="$temporary_directory/docs/tooling-backlog.md"
 assert_contains "$(cat "$backlog_file")" "# Tooling backlog"
 assert_contains "$(cat "$backlog_file")" "- [ ] 2026-10-04 · script · Check uv pin matches CI — drifted twice"
-output=$(bash "$script" "$temporary_directory" hook "check UV pin matches ci" "again")
+output=$(bash "$in_root_script" "$script" "$temporary_directory" hook "check UV pin matches ci" "again")
 assert_contains "$output" "already in backlog"
 assert_eq "$(grep -c '^- \[ \]' "$backlog_file")" "1"
-set +e; bash "$script" "$temporary_directory" wizard "x" "y" 2>/dev/null; exit_code=$?; set -e
+set +e; bash "$in_root_script" "$script" "$temporary_directory" wizard "x" "y" 2>/dev/null; exit_code=$?; set -e
 assert_eq "$exit_code" "2"
 # Near duplicates (60% of the shorter title's words of 3+ letters, at least 2 shared) warn on stderr but are still added.
-run_capturing bash "$script" "$temporary_directory" script "Check that the uv pin matches" "third time"
+run_capturing bash "$in_root_script" "$script" "$temporary_directory" script "Check that the uv pin matches" "third time"
 assert_contains "$captured_output" "near duplicate of: Check uv pin matches CI"
 assert_contains "$captured_output" "added to backlog"
 assert_eq "$captured_exit_code" "0"
 assert_eq "$(grep -c '^- \[ \]' "$backlog_file")" "2"
 # Unrelated titles, and titles sharing a single word, don't warn.
-run_capturing bash "$script" "$temporary_directory" hook "Block force pushes to main" "twice"
+run_capturing bash "$in_root_script" "$script" "$temporary_directory" hook "Block force pushes to main" "twice"
 assert_not_contains "$captured_output" "near duplicate"
-run_capturing bash "$script" "$temporary_directory" script "Check docs links" "broke"
+run_capturing bash "$in_root_script" "$script" "$temporary_directory" script "Check docs links" "broke"
 assert_not_contains "$captured_output" "near duplicate"
 # Closed entries are not compared.
 printf -- '- [x] 2026-10-01 · script · Rotate deploy keys monthly — done\n' >> "$backlog_file"
-run_capturing bash "$script" "$temporary_directory" script "Rotate deploy keys" "again"
+run_capturing bash "$in_root_script" "$script" "$temporary_directory" script "Rotate deploy keys" "again"
 assert_not_contains "$captured_output" "near duplicate"
 # Thresholds: exactly 60% of the shorter title (3 of 5 words) warns; 2 shared words of a 4-word title (50%) don't.
 fresh_directory="$temporary_directory/fresh"; mkdir -p "$fresh_directory"
-bash "$script" "$fresh_directory" script "alpha bravo charlie delta echo" "x" > /dev/null
-run_capturing bash "$script" "$fresh_directory" script "alpha bravo charlie foxtrot golf hotel" "x"
+bash "$in_root_script" "$script" "$fresh_directory" script "alpha bravo charlie delta echo" "x" > /dev/null
+run_capturing bash "$in_root_script" "$script" "$fresh_directory" script "alpha bravo charlie foxtrot golf hotel" "x"
 assert_contains "$captured_output" "near duplicate of: alpha bravo charlie delta echo"
-run_capturing bash "$script" "$fresh_directory" script "alpha bravo india juliet" "x"
+run_capturing bash "$in_root_script" "$script" "$fresh_directory" script "alpha bravo india juliet" "x"
 assert_not_contains "$captured_output" "near duplicate"
 
 # --- hostile or awkward input must not corrupt the backlog -------------------------------------------------------
@@ -43,14 +43,14 @@ fresh_backlog() { local d; d=$(mktemp -d "$temporary_directory/b.XXXXXX"); mkdir
 
 # A newline in the title or the reason is folded into the one line; it never starts another entry or a heading.
 root=$(fresh_backlog)
-bash "$script" "$root" script $'Title\n- [ ] 2026-01-01 · hook · INJECTED fake' $'why\n# New heading' >/dev/null
+bash "$in_root_script" "$script" "$root" script $'Title\n- [ ] 2026-01-01 · hook · INJECTED fake' $'why\n# New heading' >/dev/null
 assert_eq "$(grep -c '^- \[ \]' "$root/docs/tooling-backlog.md")" "1"
 assert_eq "$(grep -c '^# New heading' "$root/docs/tooling-backlog.md")" "0"
 assert_eq "$(grep -c '^- \[ \] 2026-01-01 · hook · INJECTED' "$root/docs/tooling-backlog.md")" "0"
 
 # The date override must be a date.
 root=$(fresh_backlog)
-run_capturing env BACKLOG_DATE='not-a-date; rm -rf /' bash "$script" "$root" script "A title" "why"
+run_capturing env BACKLOG_DATE='not-a-date; rm -rf /' bash "$in_root_script" "$script" "$root" script "A title" "why"
 assert_eq "$captured_exit_code" "2"
 assert_contains "$captured_output" "BACKLOG_DATE"
 assert_eq "$(grep -c '^- \[ \]' "$root/docs/tooling-backlog.md" 2>/dev/null || echo 0)" "0"
@@ -58,44 +58,44 @@ assert_eq "$(grep -c '^- \[ \]' "$root/docs/tooling-backlog.md" 2>/dev/null || e
 # A backlog that does not end in a newline: the next entry starts on its own line.
 root=$(fresh_backlog)
 printf '# Tooling backlog\n\n- [ ] 2026-01-01 · script · First entry — why' > "$root/docs/tooling-backlog.md"
-bash "$script" "$root" script "Second entry" "other" >/dev/null
+bash "$in_root_script" "$script" "$root" script "Second entry" "other" >/dev/null
 assert_eq "$(grep -c '^- \[ \]' "$root/docs/tooling-backlog.md")" "2"
 
 # A CRLF backlog: a repeated title is still recognised.
 root=$(fresh_backlog)
 printf '# Tooling backlog\r\n\r\n- [ ] 2026-01-01 · script · First entry — why\r\n' > "$root/docs/tooling-backlog.md"
-output=$(bash "$script" "$root" script "First entry" "again")
+output=$(bash "$in_root_script" "$script" "$root" script "First entry" "again")
 assert_contains "$output" "already in backlog"
 
 # Backslashes in a title are kept as typed.
 root=$(fresh_backlog)
-bash "$script" "$root" script 'Check C:\new\table paths' "why" >/dev/null
+bash "$in_root_script" "$script" "$root" script 'Check C:\new\table paths' "why" >/dev/null
 assert_contains "$(cat "$root/docs/tooling-backlog.md")" 'Check C:\new\table paths'
 assert_eq "$(grep -c '^- \[ \]' "$root/docs/tooling-backlog.md")" "1"
 
 # A date must be a real date (calendar rules, without Python), a title must not be blank or hold the separator.
 root=$(fresh_backlog)
 for bad_date in 2026-13-45 2026-02-29 2026-04-31 2026-00-10 2100-02-29; do
-  run_capturing env BACKLOG_DATE="$bad_date" bash "$script" "$root" script "A title" "why"
+  run_capturing env BACKLOG_DATE="$bad_date" bash "$in_root_script" "$script" "$root" script "A title" "why"
   assert_eq "$captured_exit_code" "2"
 done
 for good_date in 2028-02-29 2000-02-29; do
   root=$(fresh_backlog)
-  BACKLOG_DATE="$good_date" bash "$script" "$root" script "A title" "why" >/dev/null
+  BACKLOG_DATE="$good_date" bash "$in_root_script" "$script" "$root" script "A title" "why" >/dev/null
   assert_contains "$(cat "$root/docs/tooling-backlog.md")" "- [ ] $good_date · script · A title — why"
 done
-run_capturing bash "$script" "$root" script "   " "why"
+run_capturing bash "$in_root_script" "$script" "$root" script "   " "why"
 assert_eq "$captured_exit_code" "2"
-run_capturing bash "$script" "$root" script "Alpha — beta" "why"
+run_capturing bash "$in_root_script" "$script" "$root" script "Alpha — beta" "why"
 assert_eq "$captured_exit_code" "2"
 # After --, everything is positional: a title that reads like a flag stays a title. An unknown option stops.
 root=$(fresh_backlog)
-bash "$script" "$root" script -- "--file" "why" >/dev/null
+bash "$in_root_script" "$script" "$root" script -- "--file" "why" >/dev/null
 assert_contains "$(cat "$root/docs/tooling-backlog.md")" "· script · --file — why"
-run_capturing bash "$script" --creat "$root" script "A title" "why"
+run_capturing bash "$in_root_script" "$script" --creat "$root" script "A title" "why"
 assert_eq "$captured_exit_code" "2"
 assert_contains "$captured_output" "unknown option: --creat"
-run_capturing bash "$script" "$root" script "A title"
+run_capturing bash "$in_root_script" "$script" "$root" script "A title"
 assert_eq "$captured_exit_code" "2"
 assert_contains "$captured_output" "usage:"
 # With python3 as the Windows Store stub (prints a message, exits 9009), an entry is still added.
@@ -103,7 +103,7 @@ stub_bin=$(mktemp -d "$temporary_directory/stub.XXXXXX")
 printf '#!/bin/sh\necho "Python was not found; run without arguments to install from the Microsoft Store" >&2\nexit 9009\n' > "$stub_bin/python3"
 chmod +x "$stub_bin/python3"
 root=$(fresh_backlog)
-run_capturing env -u BACKLOG_DATE PATH="$stub_bin:$PATH" bash "$script" "$root" script "A title" "why"
+run_capturing env -u BACKLOG_DATE PATH="$stub_bin:$PATH" bash "$in_root_script" "$script" "$root" script "A title" "why"
 assert_eq "$captured_exit_code" "0"
 assert_contains "$(cat "$root/docs/tooling-backlog.md")" "- [ ] $(date -u +%F) · script · A title — why"
 
@@ -117,11 +117,11 @@ unset MASH_WORKBENCH_BACKLOG
 root=$(mktemp -d "$temporary_directory/choice.XXXXXX")
 run_capturing bash "$path_script" "$root"
 assert_eq "$captured_exit_code" "3"
-run_capturing bash "$script" "$root" script "A title" "why"
+run_capturing bash "$in_root_script" "$script" "$root" script "A title" "why"
 assert_eq "$captured_exit_code" "3"
 assert_contains "$captured_output" "MASH_WORKBENCH_BACKLOG"
 assert_eq "$(find "$root" -mindepth 1 | wc -l | tr -d ' ')" "0"
-run_capturing env MASH_WORKBENCH_BACKLOG=off bash "$script" "$root" script "A title" "why"
+run_capturing env MASH_WORKBENCH_BACKLOG=off bash "$in_root_script" "$script" "$root" script "A title" "why"
 assert_eq "$captured_exit_code" "0"
 assert_contains "$captured_output" "off"
 assert_eq "$(find "$root" -mindepth 1 | wc -l | tr -d ' ')" "0"
@@ -142,7 +142,7 @@ new_repo() {
   if [[ -n "${2:-}" ]]; then git -C "$folder" remote add origin "$2"; fi
   (cd "$folder" && pwd -P)
 }
-add() { bash "$script" "$@"; }
+add() { bash "$in_root_script" "$script" "$@"; }
 
 # Nothing chosen: exit 3 with the commands to run, and nothing is created.
 repo=$(new_repo none git@github.com:Acme/Shop.git)
@@ -168,7 +168,7 @@ done
 
 # The commands the text prints work as printed: the default file gets a title, the owner line and the entry.
 bash "$settings_script" set "$repo" backlog docs/mash/tooling-backlog.md --team >/dev/null
-run_capturing env BACKLOG_DATE=2026-11-22 bash "$script" "$repo" script "A title" "why"
+run_capturing env BACKLOG_DATE=2026-11-22 bash "$in_root_script" "$script" "$repo" script "A title" "why"
 assert_eq "$captured_exit_code" "0"
 assert_eq "$captured_output" "added to backlog: A title"
 assert_eq "$(head -n 2 "$repo/docs/mash/tooling-backlog.md")" "$(printf '# Tooling backlog\nrepo: github.com/acme/shop')"
@@ -246,13 +246,13 @@ rm "$team/.claude/mash-workbench/settings"
 add "$team" script "Mine" "why" >/dev/null
 assert_contains "$(cat "$victim/own-backlog.md")" "repo: local/$(basename "$team" | tr '[:upper:]' '[:lower:]')"
 other=$(new_repo other)
-run_capturing env MASH_WORKBENCH_BACKLOG="$victim/own-backlog.md" bash "$script" "$other" script "Theirs" "why"
+run_capturing env MASH_WORKBENCH_BACKLOG="$victim/own-backlog.md" bash "$in_root_script" "$script" "$other" script "Theirs" "why"
 assert_eq "$captured_exit_code" "6"
 assert_contains "$captured_output" "owned by"
 assert_not_contains "$(cat "$victim/own-backlog.md")" "Theirs"
 # The environment variable gets the same path checks: a temporary folder, a linked worktree and the git directory.
 for bad in /tmp/backlog-test-$$.md "$linked/backlog.md" .git/backlog.md .; do
-  run_capturing env MASH_WORKBENCH_BACKLOG="$bad" bash "$script" "$repo" script "A title" "why"
+  run_capturing env MASH_WORKBENCH_BACKLOG="$bad" bash "$in_root_script" "$script" "$repo" script "A title" "why"
   assert_eq "$captured_exit_code" "6"
 done
 [[ ! -e "/tmp/backlog-test-$$.md" && ! -e "$linked/backlog.md" && ! -e "$repo/.git/backlog.md" ]] || { echo "  wrote to a refused place"; exit 1; }
@@ -267,12 +267,12 @@ assert_contains "$captured_output" "symbolic link"
 rm "$links/docs/tooling-backlog.md"; ln -s "$victim/created-by-link" "$links/docs/tooling-backlog.md"
 run_capturing add "$links" script "A title" "why"
 assert_eq "$captured_exit_code" "6"
-run_capturing env MASH_WORKBENCH_BACKLOG=docs/tooling-backlog.md bash "$script" "$links" script "A title" "why"
+run_capturing env MASH_WORKBENCH_BACKLOG=docs/tooling-backlog.md bash "$in_root_script" "$script" "$links" script "A title" "why"
 assert_eq "$captured_exit_code" "6"
 rm -r "$links/docs"; ln -s "$victim" "$links/docs"; printf '# Tooling backlog\n' > "$victim/tooling-backlog.md"
 run_capturing add "$links" script "A title" "why"
 assert_eq "$captured_exit_code" "6"
-run_capturing env MASH_WORKBENCH_BACKLOG=docs/new.md bash "$script" "$links" script "A title" "why"
+run_capturing env MASH_WORKBENCH_BACKLOG=docs/new.md bash "$in_root_script" "$script" "$links" script "A title" "why"
 assert_eq "$captured_exit_code" "6"
 assert_contains "$captured_output" "symbolic link"
 assert_eq "$(cat "$victim/startup-file")" "keep"
@@ -300,7 +300,7 @@ assert_eq "$(cat "$victim/.claude/CLAUDE.md")" "keep"
 # Outside a git repository there are no path checks, but a linked folder must not move the write out of <repo-root>.
 plain=$(mktemp -d "$temporary_directory/plain.XXXXXX"); mkdir -p "$temporary_directory/plain-victim"
 ln -s "$temporary_directory/plain-victim" "$plain/docs"
-run_capturing env MASH_WORKBENCH_BACKLOG=docs/notes.md bash "$script" "$plain" script "A title" "why"
+run_capturing env MASH_WORKBENCH_BACKLOG=docs/notes.md bash "$in_root_script" "$script" "$plain" script "A title" "why"
 assert_eq "$captured_exit_code" "6"
 [[ ! -e "$temporary_directory/plain-victim/notes.md" ]] || { echo "  wrote through a linked folder outside git"; exit 1; }
 # A committed setting can name any file inside the repository. The script writes only to a new file, an empty file,
@@ -319,3 +319,21 @@ assert_eq "$(head -n 1 "$other_file/notes.md")" "# Tooling backlog"
 printf '# Tooling backlog\r\n\r\n' > "$other_file/crlf.md"; printf 'backlog=crlf.md\n' > "$other_file/.claude/mash-workbench/settings"
 add "$other_file" script "A title" "why" >/dev/null
 assert_contains "$(cat "$other_file/crlf.md")" "A title"
+# An existing empty file is taken only when its name ends in .md: an empty __init__.py must stay empty (it would no
+# longer be valid Python).
+mkdir -p "$other_file/pkg"; : > "$other_file/pkg/__init__.py"
+printf 'backlog=pkg/__init__.py\n' > "$other_file/.claude/mash-workbench/settings"
+run_capturing add "$other_file" script "A title" "why"
+assert_eq "$captured_exit_code" "6"
+assert_contains "$captured_output" ".md"
+assert_eq "$(wc -c < "$other_file/pkg/__init__.py" | tr -d ' ')" "0"
+# A backlog that cannot be read gives a message and exit 6, not a shell error.
+if [[ "$(id -u)" != 0 ]]; then
+  printf '# Tooling backlog\n' > "$other_file/locked.md"; chmod 000 "$other_file/locked.md"
+  printf 'backlog=locked.md\n' > "$other_file/.claude/mash-workbench/settings"
+  run_capturing add "$other_file" script "A title" "why"
+  chmod 644 "$other_file/locked.md"
+  assert_eq "$captured_exit_code" "6"
+  assert_contains "$captured_output" "cannot read"
+  assert_not_contains "$captured_output" "unbound variable"
+fi

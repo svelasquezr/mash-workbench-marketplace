@@ -99,6 +99,8 @@ summaries=$(printf '%s\n' "$rows" | awk -F '\t' '
     }
   }')
 
+# clean: no control characters in what is printed from files (a committed file can hold an escape sequence).
+clean() { LC_ALL=C tr -d '\000-\010\013-\037\177' | LC_ALL=C awk '{ gsub(/\302[\200-\237]/, ""); print }'; }
 tab=$'\t'
 while IFS="$tab" read -r total area classes note; do
   line="$area: $total $( ((total == 1)) && echo escape || echo escapes) ($classes)"
@@ -112,4 +114,4 @@ while IFS="$tab" read -r total area classes note; do
     fi
   fi
   printf '%s\t%s\n' "$total" "$line"
-done <<< "$summaries" | sort -t "$tab" -k1,1nr -s | cut -f2-
+done <<< "$summaries" | sort -t "$tab" -k1,1nr -s | cut -f2- | clean

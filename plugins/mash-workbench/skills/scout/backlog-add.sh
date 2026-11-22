@@ -27,6 +27,9 @@
 # (scripts/plugin-current.sh).
 # Plain bash 3.2 (macOS) and Git Bash, no python3: on Windows python3 is often the Microsoft Store stub.
 set -euo pipefail
+# Exit 6 also when <repo-root> is in a folder shaped like a git directory (mash-settings.sh refuses it before git runs).
+# Exit 6 also when <repo-root> is not in the repository of the current folder (outside git: when the current folder
+# is not inside <repo-root>): an allow rule approves any arguments, so a line goes only to the session's project.
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
 bash "$here/../../scripts/plugin-current.sh" < /dev/null || exit $?
 settings=$(cd "$here/../../scripts" && pwd -P)/mash-settings.sh
@@ -72,8 +75,18 @@ main=$(bash "$settings" main-worktree "$root" 2>/dev/null) || main_status=$?
 case "$main_status" in
   0) ;;
   2) in_git=""; main="$root" ;;
-  *) main="" ;;
+  *) main="" ;;  # 5, or 6 (backlog-path.sh below refuses with the message)
 esac
+# A line goes only to the project the session works in: an allow rule approves any <repo-root>, so one that names
+# another repository (or, outside git, a folder that does not hold the current folder) is refused (exit 6).
+if [[ -n "$in_git" ]]; then
+  bash "$settings" same-repository "$root" || exit $?
+else
+  case "$(pwd -P)/" in
+    "$root"/*) ;;
+    *) echo "backlog-add: refused: the current folder ($(pwd -P)) is not inside $root: a line goes only to the project the session works in. Run the command from inside it." >&2; exit 6 ;;
+  esac
+fi
 status=0
 backlog_file=$(bash "$here/backlog-path.sh" "$root") || status=$?
 case "$status" in
@@ -119,9 +132,20 @@ else
   esac
 fi
 # The setting can name any file, and a committed setting names one inside the repository with no question. So the
-# script writes only to a new or empty file, or to a file that starts with the backlog title: never a line into a
-# .env or a source file.
+# script writes only to a new file, an empty .md file, or a file that starts with the backlog title: never a line into
+# a .env or a source file (an empty __init__.py included).
 backlog_title="# Tooling backlog"
+if [[ -e "$backlog_file" && ! -r "$backlog_file" ]]; then
+  echo "backlog-add: cannot read $backlog_file: nothing recorded. Give the user read access to it, or name another file in the backlog setting." >&2
+  exit 6
+fi
+if [[ -e "$backlog_file" && ! -s "$backlog_file" ]]; then
+  case "$(printf '%s' "$backlog_file" | tr '[:upper:]' '[:lower:]')" in
+    *.md) ;;
+    *) echo "backlog-add: $backlog_file is an empty file whose name does not end in .md: it is not a tooling backlog. Nothing recorded. Name a .md file in the backlog setting." >&2
+      exit 6 ;;
+  esac
+fi
 if [[ -s "$backlog_file" ]]; then
   IFS= read -r first_line < "$backlog_file" || true
   if [[ "${first_line%$'\r'}" != "$backlog_title" ]]; then

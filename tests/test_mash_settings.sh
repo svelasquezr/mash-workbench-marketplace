@@ -13,7 +13,12 @@ isolate_git_config
 unset REVIEW_ROUTING_ESCAPES MASH_WORKBENCH_BACKLOG
 normalized() { (cd "$1" && pwd -P); }
 settings() { bash "$settings_script" "$@"; }
-new_repository() { git init --quiet "$1"; git -C "$1" commit --quiet --allow-empty -m "chore: base"; }
+# A fixture that writes settings.local by hand also gets the exclude line that set --local writes: without it the file
+# is not the user's own (tests/test_git_dir_shape.sh, case 11).
+new_repository() {
+  git init --quiet "$1"; git -C "$1" commit --quiet --allow-empty -m "chore: base"
+  printf '.claude/mash-workbench/settings.local\n' >> "$1/.git/info/exclude"
+}
 
 # 1. Same answer from the main worktree and from a linked worktree under .claude/worktrees/.
 repo="$area/repo"; new_repository "$repo"
@@ -191,16 +196,20 @@ settings set "$area/sepwork" escapes e --local >/dev/null
 assert_eq "$(grep -cx '.claude/mash-workbench/settings.local' "$area/sep.git/info/exclude")" "1"
 assert_file "$area/sepwork/.claude/mash-workbench/settings.local"
 
-# 7. Bare repository with a worktree: exit 5 from both; an environment value still answers get.
+# 7. Bare repository with a worktree: exit 5 from its linked worktree; an environment value still answers get. The bare
+#    folder itself has no .git entry, so it looks like a folder a commit can hold (tests/test_git_dir_shape.sh): exit 6,
+#    and no git runs there.
 git clone --quiet --bare "$repo" "$area/bare.git"
 git -C "$area/bare.git" worktree add --quiet "$area/bare-linked" -b linked
-for folder in "$area/bare.git" "$area/bare-linked"; do
-  run_capturing settings main-worktree "$folder"
-  assert_eq "$captured_exit_code" "5"
-  assert_contains "$captured_output" "bare repository"
-  run_capturing settings get "$folder" escapes
-  assert_eq "$captured_exit_code" "5"
-done
+run_capturing settings main-worktree "$area/bare-linked"
+assert_eq "$captured_exit_code" "5"
+assert_contains "$captured_output" "bare repository"
+run_capturing settings get "$area/bare-linked" escapes
+assert_eq "$captured_exit_code" "5"
+run_capturing settings main-worktree "$area/bare.git"
+assert_eq "$captured_exit_code" "6"
+assert_contains "$captured_output" "shaped like a git directory"
+assert_eq "$(settings toplevel "$area/bare-linked")" "$(normalized "$area/bare-linked")"
 assert_eq "$(REVIEW_ROUTING_ESCAPES=/abs/escapes settings get "$area/bare-linked" escapes)" "/abs/escapes"
 # Finding 3: escapes-path.sh there needs an absolute path.
 run_capturing env REVIEW_ROUTING_ESCAPES=notes/escapes bash "$path_script" "$area/bare-linked"
@@ -337,8 +346,8 @@ led="$area/led"; new_repository "$led"
 git -C "$led" worktree add --quiet "$led/.claude/worktrees/w" -b w
 led_linked="$led/.claude/worktrees/w"
 settings set "$led" escapes .claude/mash-workbench/escapes --local >/dev/null
-bash "$add_script" "$led_linked" src/a wrong-result one --body "$(cat "$area/body.md")" >/dev/null
-run_capturing bash "$add_script" "$led_linked" src/a missing-test two --body "$(cat "$area/body.md")"
+bash "$in_root_script" "$add_script" "$led_linked" src/a wrong-result one --body "$(cat "$area/body.md")" >/dev/null
+run_capturing bash "$in_root_script" "$add_script" "$led_linked" src/a missing-test two --body "$(cat "$area/body.md")"
 assert_eq "$captured_exit_code" "0"
 assert_contains "$captured_output" "recorded: .claude/mash-workbench/escapes/"
 assert_eq "$(find "$led/.claude/mash-workbench/escapes" -name '*.md' ! -name README.md | wc -l | tr -d ' ')" "2"
@@ -348,7 +357,7 @@ assert_contains "$(bash "$report_script" "$led_linked" 2>/dev/null)" "src/a: 2 e
 # Finding 11: escapes=off in a settings file stops recording.
 offrepo="$area/offrepo"; new_repository "$offrepo"
 settings set "$offrepo" escapes off --local >/dev/null
-run_capturing bash "$add_script" "$offrepo" src/a wrong-result off --body "$(cat "$area/body.md")"
+run_capturing bash "$in_root_script" "$add_script" "$offrepo" src/a wrong-result off --body "$(cat "$area/body.md")"
 assert_eq "$captured_exit_code" "0"
 assert_contains "$captured_output" "off"
 [[ ! -e "$offrepo/.claude/mash-workbench/escapes" ]] || { echo "  recorded while off"; exit 1; }
@@ -651,18 +660,16 @@ git -C "$with_sub" -c protocol.file.allow=always submodule --quiet add "$sub_sou
 git -C "$with_sub" commit --quiet -m "chore: a submodule as the home folder"
 git -c protocol.file.allow=always clone --quiet --recurse-submodules "$with_sub" "$area/with-sub-clone" 2>/dev/null
 assert_file "$area/with-sub-clone/.claude/mash-workbench/settings.local"
-assert_eq "$(settings source "$area/with-sub-clone" escapes)" "team"
-run_capturing settings path "$area/with-sub-clone" escapes
-assert_eq "$captured_exit_code" "6"
-assert_contains "$captured_output" "outside the repository"
-run_capturing settings set "$area/with-sub-clone" escapes.threshold 4 --local
-assert_eq "$captured_exit_code" "6"
+# The home folder of a submodule is refused for every command that reads or writes it.
+for arguments in "source $area/with-sub-clone escapes" "path $area/with-sub-clone escapes" \
+  "set $area/with-sub-clone escapes.threshold 4 --local"; do
+  # shellcheck disable=SC2086  # the words are split on purpose
+  run_capturing settings $arguments
+  assert_eq "$captured_exit_code" "6"
+  assert_contains "$captured_output" "submodule or a nested repository"
+done
 assert_eq "$(cat "$area/with-sub-clone/.claude/mash-workbench/settings.local")" "escapes=../victim/.claude/rules"
-# An untracked file in a nested repository that is not this repository is not this user's private file either.
-nested="$area/nested"; new_repository "$nested"; mkdir -p "$nested/.claude/mash-workbench"
-git init --quiet "$nested/.claude/mash-workbench"
-printf 'escapes=../victim/.claude/rules\n' > "$nested/.claude/mash-workbench/settings.local"
-assert_eq "$(settings source "$nested" escapes)" "team"
+# A nested repository that is not this repository is refused the same way (tests/test_git_dir_shape.sh, case 4).
 # c. GIT_LITERAL_PATHSPECS (and the other pathspec variables) in the user's environment do not change the answer.
 plain_tracked="$area/plain-tracked"; new_repository "$plain_tracked"; mkdir -p "$plain_tracked/.claude/mash-workbench"
 printf 'escapes=../outside\n' > "$plain_tracked/.claude/mash-workbench/settings.local"

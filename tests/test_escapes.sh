@@ -28,13 +28,13 @@ new_repo() {
 body="$fixture/body.md"
 printf 'When the order has a discount, the total includes tax. The total must not include tax. Tax is a separate line.\n' > "$body"
 # record <repo> <area> <class> <slug> [more arguments]: escape-add.sh with the shared body file.
-record() { local repo=$1 area=$2 class=$3 slug=$4; shift 4; bash "$add" "$repo" "$area" "$class" "$slug" --body "$(cat "$body")" "$@"; }
+record() { local repo=$1 area=$2 class=$3 slug=$4; shift 4; bash "$in_root_script" "$add" "$repo" "$area" "$class" "$slug" --body "$(cat "$body")" "$@"; }
 count_files() { find "$1/$escapes_folder" -maxdepth 1 -name '*.md' ! -name README.md | wc -l | tr -d ' '; }
 sources() { cat "$1/$escapes_folder"/*-*.md | grep '^source: ' | sort; }
 
 # 1. One record: the exact file the template shows, and a README.md naming the owning repository.
 repo=$(new_repo one git@github.com:Acme/Shop.git)
-run_capturing env ESCAPE_DATE=2026-11-21 bash "$add" "$repo" src/billing wrong-result discount-tax --body "$(cat "$body")" \
+run_capturing env ESCAPE_DATE=2026-11-21 bash "$in_root_script" "$add" "$repo" src/billing wrong-result discount-tax --body "$(cat "$body")" \
   --source "https://github.com/acme/shop/pull/12#discussion_r222"
 assert_eq "$captured_exit_code" "0"
 assert_eq "$captured_output" "recorded: $escapes_folder/2026-11-21-discount-tax.md"
@@ -49,13 +49,13 @@ assert_not_contains "$(cat "$repo/$escapes_folder/$(date -u +%F)-no-source.md")"
 # 2. A folder outside the repo whose README.md names another repository is refused, and nothing is written there.
 shared="$fixture/shared-escapes"; mkdir -p "$shared"
 printf '# Review escapes\nrepo: github.com/other/thing\n' > "$shared/README.md"
-run_capturing env REVIEW_ROUTING_ESCAPES="$shared" bash "$add" "$repo" src/a wrong-result other-repo --body "$(cat "$body")"
+run_capturing env REVIEW_ROUTING_ESCAPES="$shared" bash "$in_root_script" "$add" "$repo" src/a wrong-result other-repo --body "$(cat "$body")"
 assert_eq "$captured_exit_code" "6"
 assert_contains "$captured_output" "owned by github.com/other/thing"
 assert_eq "$(find "$shared" -type f | wc -l | tr -d ' ')" "1"
 # This repository's own folder outside the repo is fine, spelled in any case.
 printf '# Review escapes\nrepo: GitHub.com/Acme/Shop\n' > "$shared/README.md"
-run_capturing env REVIEW_ROUTING_ESCAPES="$shared" bash "$add" "$repo" src/a wrong-result own-repo --body "$(cat "$body")"
+run_capturing env REVIEW_ROUTING_ESCAPES="$shared" bash "$in_root_script" "$add" "$repo" src/a wrong-result own-repo --body "$(cat "$body")"
 assert_eq "$captured_exit_code" "0"
 assert_contains "$captured_output" "recorded: $shared/"
 
@@ -78,7 +78,7 @@ run_capturing record "$repo" src/b other-class unrelated --source "https://githu
 assert_not_contains "$captured_output" "also recorded"
 rm "$repo/$escapes_folder"/*-unrelated.md
 printf -- '---\narea: src/c\nclass: wrong-result\nslug: batch-also\nsource: https://github.com/acme/shop/pull/7#discussion_r1\n---\nA body.\n' > "$fixture/also-batch.md"
-run_capturing bash "$add" --batch - "$repo" < "$fixture/also-batch.md"
+run_capturing bash "$in_root_script" "$add" --batch - "$repo" < "$fixture/also-batch.md"
 assert_contains "$captured_output" "recorded 1, already recorded 0"
 assert_contains "$captured_output" "also recorded in src/a: $escapes_folder/"
 rm "$repo/$escapes_folder"/*-batch-also.md
@@ -175,7 +175,7 @@ assert_file "$repo/$escapes_folder/2026-11-21-same-name-4.md"
 repo=$(new_repo batch git@github.com:acme/shop.git)
 batch="$fixture/batch.txt"
 printf -- '---\narea: src/a\nclass: wrong-result\nslug: one\n---\nFirst.\n---8<---\n---\narea: src/a\nclass: Bad Class\nslug: two\n---\nSecond.\n' > "$batch"
-run_capturing bash "$add" --batch - "$repo" < "$batch"
+run_capturing bash "$in_root_script" "$add" --batch - "$repo" < "$batch"
 assert_eq "$captured_exit_code" "2"
 assert_contains "$captured_output" "block 2"
 [[ ! -e "$repo/$escapes_folder" ]] || { echo "  a batch with a bad block wrote something"; exit 1; }
@@ -183,23 +183,23 @@ for bad_block in 'area: src/a\nclass: c\n---\nno slug' 'area: src/a\nclass: c\ns
   'area: src/a\nclass: c\nslug: s\ndate: 2026-02-30\n---\nx' 'area: src/a\nclass: c\nslug: s\nsource: javascript:x\n---\nx'; do
   # shellcheck disable=SC2059  # the block is the format on purpose: its \n are line breaks
   printf -- "---\n$bad_block\n" > "$batch"
-  run_capturing bash "$add" --batch - "$repo" < "$batch"
+  run_capturing bash "$in_root_script" "$add" --batch - "$repo" < "$batch"
   assert_eq "$captured_exit_code" "2"
 done
 record "$repo" src/a wrong-result known --source "https://github.com/acme/shop/issues/1" >/dev/null
 printf -- '---\ndate: 2026-11-20\narea: src/a\nclass: wrong-result\nslug: b-one\nsource: acme/shop#1\n---\nKnown.\n---8<---\n\n---\narea: ./src/b/\nclass: data-loss\nslug: b-two\n---\r\nTwo.\r\n---8<---\n---\narea: src/b\nclass: data-loss\nslug: b-three\nsource: https://github.com/acme/shop/issues/3\n---\nThree.\n---8<---\n' > "$batch"
-run_capturing env ESCAPE_DATE=2026-11-21 bash "$add" --batch - "$repo" < "$batch"
+run_capturing env ESCAPE_DATE=2026-11-21 bash "$in_root_script" "$add" --batch - "$repo" < "$batch"
 assert_eq "$captured_exit_code" "0"
 assert_eq "$captured_output" "recorded 2, already recorded 1"
 assert_eq "$(cat "$repo/$escapes_folder/2026-11-21-b-two.md")" "$(printf -- '---\ndate: 2026-11-21\narea: src/b\nclass: data-loss\n---\n\nTwo.')"
 # The block that reaches the threshold prints its area's report line after the summary.
 printf -- '---\ndate: 2026-11-22\narea: src/b\nclass: wrong-result\nslug: b-four\n---\nFour.\n' > "$batch"
-run_capturing bash "$add" --batch - "$repo" < "$batch"
+run_capturing bash "$in_root_script" "$add" --batch - "$repo" < "$batch"
 assert_contains "$captured_output" "recorded 1, already recorded 0"
 assert_contains "$captured_output" "src/b: 3 escapes (data-loss 2, wrong-result 1) -> add a reviewer for src/b (add-reviewer skill)"
 # --batch opens no file: a path is refused (exit 2) and nothing of the file is shown or written.
 printf -- '---\nsecret-key: hunter2\n---\n' > "$fixture/secret-batch"
-run_capturing bash "$add" --batch "$fixture/secret-batch" "$repo"
+run_capturing bash "$in_root_script" "$add" --batch "$fixture/secret-batch" "$repo"
 assert_eq "$captured_exit_code" "2"
 assert_contains "$captured_output" "standard input only"
 assert_not_contains "$captured_output" "hunter2"
@@ -211,18 +211,18 @@ for day in 01 02 03 04 05 06 07 08 09 10 11 12 13 14 15 16 17 18 19 20 21 22; do
   printf -- '---\ndate: 2026-10-%s\narea: src/list\nclass: wrong-result\nslug: day-%s\n---\n\nSummary of day %s.\nMore detail.\n---8<---\n' "$day" "$day" "$day" >> "$batch"
 done
 printf -- '---\narea: src/other\nclass: wrong-result\nslug: other\n---\nOther area.\n' >> "$batch"
-bash "$add" --batch - "$repo" < "$batch" >/dev/null
-run_capturing bash "$add" --list "$repo" src/list/
+bash "$in_root_script" "$add" --batch - "$repo" < "$batch" >/dev/null
+run_capturing bash "$in_root_script" "$add" --list "$repo" src/list/
 assert_eq "$captured_exit_code" "0"
 assert_eq "$(printf '%s\n' "$captured_output" | head -1)" "2026-10-22-day-22.md  Summary of day 22."
 assert_eq "$(printf '%s\n' "$captured_output" | sed -n 20p)" "2026-10-03-day-03.md  Summary of day 03."
 assert_eq "$(printf '%s\n' "$captured_output" | tail -1)" "and 2 more"
 assert_eq "$(printf '%s\n' "$captured_output" | wc -l | tr -d ' ')" "21"
 assert_not_contains "$captured_output" "Other area"
-run_capturing bash "$add" --list "$repo" src/none
+run_capturing bash "$in_root_script" "$add" --list "$repo" src/none
 assert_eq "$captured_exit_code" "0"
 assert_eq "$captured_output" "no escapes in src/none"
-run_capturing bash "$add" --list "$repo"
+run_capturing bash "$in_root_script" "$add" --list "$repo"
 assert_eq "$captured_exit_code" "2"
 
 # 8. Report: files per area with their classes, most first; the threshold is 3 by default, the setting changes it, and
@@ -297,10 +297,10 @@ assert_contains "$(bash "$report" "$repo")" "src/mixed: 2 escapes (wrong-result 
 # 11. CRLF and blank lines around the body: the file gets \n line endings and starts with the first real line.
 repo=$(new_repo crlf)
 printf '\r\n\r\nFirst line.\r\nSecond line.\r\n\r\n' > "$fixture/crlf-body.md"
-ESCAPE_DATE=2026-11-21 bash "$add" "$repo" src/a wrong-result crlf --body "$(cat "$fixture/crlf-body.md")" >/dev/null
+ESCAPE_DATE=2026-11-21 bash "$in_root_script" "$add" "$repo" src/a wrong-result crlf --body "$(cat "$fixture/crlf-body.md")" >/dev/null
 assert_eq "$(cat "$repo/$escapes_folder/2026-11-21-crlf.md")" "$(printf -- '---\ndate: 2026-11-21\narea: src/a\nclass: wrong-result\n---\n\nFirst line.\nSecond line.')"
 assert_eq "$(grep -c $'\r' "$repo/$escapes_folder/2026-11-21-crlf.md" || true)" "0"
-assert_eq "$(bash "$add" --list "$repo" src/a)" "2026-11-21-crlf.md  First line."
+assert_eq "$(bash "$in_root_script" "$add" --list "$repo" src/a)" "2026-11-21-crlf.md  First line."
 
 # Field checks, as before the move to files: areas are normalised; absolute, parent, dot, file and whitespace areas are
 # refused; the class and the slug are lowercase words joined by hyphens; a line break in any field is refused.
@@ -326,16 +326,16 @@ done
 record "$repo" src/a wrong-result "$(printf 'x%.0s' {1..60})" >/dev/null
 # The body must hold a non-empty line, on standard input or as text; --body is required.
 printf '\n  \n' > "$fixture/blank-body.md"
-run_capturing bash "$add" "$repo" src/a wrong-result bad-body --body "$(cat "$fixture/blank-body.md")"
+run_capturing bash "$in_root_script" "$add" "$repo" src/a wrong-result bad-body --body "$(cat "$fixture/blank-body.md")"
 assert_eq "$captured_exit_code" "2"
-run_capturing bash "$add" "$repo" src/a wrong-result bad-body --body "  "
+run_capturing bash "$in_root_script" "$add" "$repo" src/a wrong-result bad-body --body "  "
 assert_eq "$captured_exit_code" "2"
-run_capturing bash "$add" "$repo" src/a wrong-result no-body
+run_capturing bash "$in_root_script" "$add" "$repo" src/a wrong-result no-body
 assert_eq "$captured_exit_code" "2"
-run_capturing bash "$add" "$repo" src/a wrong-result no-body --body
+run_capturing bash "$in_root_script" "$add" "$repo" src/a wrong-result no-body --body
 assert_eq "$captured_exit_code" "2"
 # --body takes the text itself: the file is what the text says, also when the text is a path.
-run_capturing env ESCAPE_DATE=2026-11-21 bash "$add" "$repo" src/text wrong-result body-text --body "When the order has a discount, the total includes tax."
+run_capturing env ESCAPE_DATE=2026-11-21 bash "$in_root_script" "$add" "$repo" src/text wrong-result body-text --body "When the order has a discount, the total includes tax."
 assert_eq "$captured_exit_code" "0"
 assert_eq "$(tail -n 1 "$repo/$escapes_folder/2026-11-21-body-text.md")" "When the order has a discount, the total includes tax."
 # No argument makes the script open a file: --body-file is gone (it copied any readable file, a private key for
@@ -343,11 +343,11 @@ assert_eq "$(tail -n 1 "$repo/$escapes_folder/2026-11-21-body-text.md")" "When t
 # body text is recorded as text.
 printf 'PRIVATE KEY hunter2\n' > "$fixture/secret"
 files_before=$(count_files "$repo")
-run_capturing bash "$add" "$repo" src/text wrong-result steal --body-file "$fixture/secret"
+run_capturing bash "$in_root_script" "$add" "$repo" src/text wrong-result steal --body-file "$fixture/secret"
 assert_eq "$captured_exit_code" "2"
 assert_contains "$captured_output" "--body-file is gone"
 assert_eq "$(count_files "$repo")" "$files_before"
-run_capturing env ESCAPE_DATE=2026-11-21 bash "$add" "$repo" src/text wrong-result path-as-text --body "$fixture/secret"
+run_capturing env ESCAPE_DATE=2026-11-21 bash "$in_root_script" "$add" "$repo" src/text wrong-result path-as-text --body "$fixture/secret"
 assert_eq "$captured_exit_code" "0"
 assert_eq "$(tail -n 1 "$repo/$escapes_folder/2026-11-21-path-as-text.md")" "$fixture/secret"
 if grep -rq hunter2 "$repo/$escapes_folder"; then echo "  a file named in an argument was copied into the escapes folder"; exit 1; fi
@@ -370,17 +370,17 @@ assert_contains "$captured_output" "outside the repository"
 [[ ! -e "$fixture/victim/.claude/rules" ]] || { echo "  the team settings file sent an escape outside the repository"; exit 1; }
 run_capturing bash "$report" "$team_repo"
 assert_eq "$captured_exit_code" "6"
-run_capturing bash "$add" --list "$team_repo" src/x
+run_capturing bash "$in_root_script" "$add" --list "$team_repo" src/x
 assert_eq "$captured_exit_code" "6"
 # The user's own settings.local may choose it.
 bash "$settings_script" set "$team_repo" escapes "$fixture/victim/own-escapes" --local >/dev/null
 run_capturing record "$team_repo" src/x wrong-result some-slug
 assert_eq "$captured_exit_code" "0"
-run_capturing bash "$add" "$repo" src/a wrong-result s --body "$(cat "$body")" --frobnicate
+run_capturing bash "$in_root_script" "$add" "$repo" src/a wrong-result s --body "$(cat "$body")" --frobnicate
 assert_eq "$captured_exit_code" "2"
 # The date override must be a real date; 29 February only in a leap year.
 for bad_date in 'x; rm -rf /' 2026-13-45 2026-02-29 2026-04-31 2026-00-10 2026-01-00 0000-01-01 2100-02-29; do
-  run_capturing env ESCAPE_DATE="$bad_date" bash "$add" "$repo" src/a wrong-result bad-date --body "$(cat "$body")"
+  run_capturing env ESCAPE_DATE="$bad_date" bash "$in_root_script" "$add" "$repo" src/a wrong-result bad-date --body "$(cat "$body")"
   assert_eq "$captured_exit_code" "2"
 done
 for good_date in 2028-02-29 2000-02-29 2026-12-31; do
@@ -399,7 +399,7 @@ stub_bin="$fixture/stub-bin"; mkdir -p "$stub_bin"
 printf '#!/bin/sh\necho "Python was not found; run without arguments to install from the Microsoft Store" >&2\nexit 9009\n' > "$stub_bin/python3"
 chmod +x "$stub_bin/python3"
 repo=$(new_repo no-python)
-run_capturing env PATH="$stub_bin:$PATH" bash "$add" "$repo" src/a wrong-result stub --body "$(cat "$body")"
+run_capturing env PATH="$stub_bin:$PATH" bash "$in_root_script" "$add" "$repo" src/a wrong-result stub --body "$(cat "$body")"
 assert_eq "$captured_exit_code" "0"
 assert_file "$repo/$escapes_folder/$(date -u +%F)-stub.md"
 assert_eq "$(env PATH="$stub_bin:$PATH" bash "$report" "$repo")" "src/a: 1 escape (wrong-result 1)"
@@ -430,7 +430,7 @@ leak_repo=$(new_repo leak)
 record "$leak_repo" src/a wrong-result real >/dev/null
 printf -- '---\ndate: 2026-01-01\narea: src/a\nclass: wrong-result\n---\n\nTOPSECRET first body line\n' > "$fixture/elsewhere.md"
 ln -s "$fixture/elsewhere.md" "$leak_repo/$escapes_folder/2026-01-01-leak.md"
-run_capturing bash "$add" --list "$leak_repo" src/a
+run_capturing bash "$in_root_script" "$add" --list "$leak_repo" src/a
 assert_not_contains "$captured_output" "TOPSECRET"
 assert_contains "$(bash "$report" "$leak_repo")" "src/a: 1 escape "
 
@@ -449,7 +449,7 @@ assert_contains "$captured_output" "outside the repository"
 # One record reads no standard input: "--body - < .env" would copy a file of the project under an allow rule.
 stdin_repo=$(new_repo no-stdin)
 printf 'API_KEY=hunter2\n' > "$stdin_repo/.env"
-run_capturing bash "$add" "$stdin_repo" src/a wrong-result from-stdin --body - < "$stdin_repo/.env"
+run_capturing bash "$in_root_script" "$add" "$stdin_repo" src/a wrong-result from-stdin --body - < "$stdin_repo/.env"
 assert_eq "$captured_exit_code" "2"
 assert_contains "$captured_output" "standard input is not read"
 [[ ! -e "$stdin_repo/$escapes_folder" ]] || { echo "  a record was written from standard input"; exit 1; }

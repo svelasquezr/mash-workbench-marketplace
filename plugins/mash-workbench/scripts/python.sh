@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Run a Python script with the first working Python 3.11 or newer:
-#   $MASH_PYTHON (a command, such as "py -3.12" or a full path), then python3, then python, then the Windows launcher "py -3".
+#   $MASH_PYTHON (a command, such as "py -3.12", or a path with / or \ in it, which may hold spaces), then python3, then python, then the Windows launcher "py -3".
 # Each candidate must answer a version probe (run with -I as well, so the probe imports nothing from the project). On Windows, python3 and python are often the Microsoft Store
 # alias: it prints "Python was not found" and exits 9009, so the probe skips it.
 # Stdin and the script's exit code pass through (exec). The probe reads nothing from stdin, so hook input is kept.
@@ -23,9 +23,9 @@ candidates=()
 if [[ -n "${MASH_PYTHON:-}" ]]; then candidates+=("$MASH_PYTHON"); fi
 candidates+=("python3" "python" "py -3")
 for candidate in "${candidates[@]}"; do
-  # Only MASH_PYTHON can be a path with spaces. The built-in candidates are always split into words: a file of the
-  # project that is named "py -3" must not change how they are read.
-  if [[ "$candidate" == "${MASH_PYTHON:-}" && -f "$candidate" ]]; then command_words=("$candidate")
+  # Only a candidate that holds a / or a \ is a path, which may hold spaces; only MASH_PYTHON can be one. Every other
+  # candidate is split into words: a file of the project that is named "py -3" must not change how it is read.
+  if [[ ( "$candidate" == */* || "$candidate" == *\\* ) && -f "$candidate" ]]; then command_words=("$candidate")
   else read -r -a command_words <<< "$candidate"; fi
   [[ ${#command_words[@]} -gt 0 ]] || continue
   command -v "${command_words[0]}" >/dev/null 2>&1 || continue

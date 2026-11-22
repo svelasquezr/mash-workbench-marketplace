@@ -9,8 +9,8 @@
 # The path is normally the escapes folder (one file per escape). It is a file when it names an old ledger: the fallback
 # above, or an escapes setting that still names a file. escape-add.sh then refuses to record until it is migrated.
 # Exit 0 with the path; 3 when nothing has been chosen yet (not set and no old file), so nothing is created before
-# the user says where; 4 when it is off; 5 when the repository has no main worktree to read (bare, or a linked
-# worktree of a --separate-git-dir repository) and no absolute path is set; 6 when mash-settings.sh path refuses the
+# the user says where; 4 when it is off; 5 when the repository has no main worktree to read (a linked worktree of a bare
+# repository or of a --separate-git-dir repository) and no absolute path is set; 6 when mash-settings.sh path refuses the
 # setting: it is the main worktree itself, the committed settings file names a place outside the repository (only
 # settings.local or the environment variable may), a symbolic link leads from inside the repository to outside, or
 # the home folder is a symbolic link, or an old ledger file (or a folder on its path) is a symbolic link. These refusals apply inside a git repository only; outside one, the path is
@@ -18,6 +18,7 @@
 # Outside a git repository, <repo-root> stands in for the main worktree and only REVIEW_ROUTING_ESCAPES is read
 # (no settings files).
 set -euo pipefail
+# Exit 6 also when <repo-root> is in a folder shaped like a git directory (mash-settings.sh refuses it before git runs).
 usage="usage: escapes-path.sh <repo-root>"
 [[ $# -eq 1 && -d "$1" ]] || { echo "$usage" >&2; exit 2; }
 root="$(cd "$1" && pwd -P)"
@@ -29,7 +30,8 @@ case "$main_status" in
   0) ;;
   2) main="$root" ;;  # not a git repository: only the environment variable and <repo-root> can answer
   5) main="" ;;
-  *) exit "$main_status" ;;
+  *) bash "$settings" main-worktree "$root" >/dev/null || true  # once more, for its message on stderr
+    exit "$main_status" ;;
 esac
 status=0
 if (( main_status == 2 )); then
@@ -59,6 +61,8 @@ if (( status == 0 )); then
   printf '%s\n' "$choice"
   exit 0
 fi
+# No main worktree (main is empty): there is no folder to look for an old ledger in, and "$main/docs" would be /docs.
+[[ -n "$main" ]] || exit 3
 if [[ -f "$main/docs/mash/review-escapes.md" && -f "$main/docs/review-escapes.md" ]]; then
   echo "escapes-path: both docs/mash/review-escapes.md and docs/review-escapes.md exist; using the first. escape-migrate.sh moves both into the escapes folder." >&2
 fi

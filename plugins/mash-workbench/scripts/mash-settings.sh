@@ -30,25 +30,44 @@ set -euo pipefail
 #   mash-settings.sh check-backlog-path <dir> <path>
 #                                                 the same for the tooling backlog file (the owner is the file's repo: line)
 #   mash-settings.sh repo-key <dir>               print host/owner/repo of the origin remote, or local/<folder>
+#   mash-settings.sh toplevel <dir>               print the folder that holds the .git entry of <dir>'s repository
+#   mash-settings.sh same-repository <dir>        exit 0 when the current folder (pwd -P) is in <dir>'s repository, else 6
+#   mash-settings.sh private <dir> <name>         exit 0 when the home folder's file <name> is untracked and excluded, 1
+#                                                 when untracked but not excluded yet, 6 when tracked or git cannot tell
 # Environment variables: escapes = REVIEW_ROUTING_ESCAPES, backlog = MASH_WORKBENCH_BACKLOG; other keys have none.
 #
-# Outside a git repository every command exits 2, except get when the key's environment variable is set (get reads
-# it first). Callers such as escapes-path.sh then let the project folder stand in for the main worktree and read only
+# Outside a git repository every command exits 2, except get and source when the key's environment variable is set
+# (they read it first). Callers such as escapes-path.sh then let the project folder stand in for the main worktree and read only
 # the environment variable.
+# Git starts only in a repository that a real .git entry names. Before any git process, the script walks up from
+# <dir> in git's own order: the first folder with a .git entry is the repository; a folder shaped like a git directory
+# (HEAD, plus objects, refs or commondir, each a file, a folder or a symbolic link, also a dangling one) with no .git
+# entry gives exit 6. A commit can hold such a folder (only the
+# name .git cannot be committed), and git would read its committed config, which can name a program to run
+# (core.fsmonitor) or another top level (core.worktree). The git dir that git then reports must be the one that the
+# .git entry names, or exit 6. A bare repository's own folder is refused this way too (exit 6); its linked worktrees
+# give exit 5. Every git call runs without GIT_DIR, GIT_WORK_TREE, GIT_INDEX_FILE, the pathspec variables and the other
+# variables that choose a repository, and with an empty core.fsmonitor (a second guard).
 # The home folder must be the real folder <main>/.claude/mash-workbench: when .claude or .claude/mash-workbench is a
 # symbolic link (also one that stays inside the repository), home, get (for the files), source, path, set and unset
 # exit 6. A repository can commit a symbolic link, and it would move the settings and the review log to another place,
 # or put a committed file where the private one is expected.
 # set and unset take a lock (the folder .settings.lock in the home folder) around their read-modify-write; set --local
 # adds the exclude line before it writes settings.local. A settings file that is a symbolic link is refused (exit 6) by
-# get, source, path, set and unset. settings.local counts as the user's own file only when git answers that it is not
-# tracked: the question goes to git from the home folder itself, that folder must belong to this repository (not to
-# a submodule or a nested repository), and the pathspec and index variables of the environment are not used. With any
-# other answer, also a git error, the file is read as a committed file (source prints team), and set --local refuses
-# to write it.
+# get, source, path, set and unset. A submodule or a nested repository at .claude or .claude/mash-workbench (a .git
+# entry there) is refused the same way. settings.local counts as the user's own file only when git answers that the
+# main repository's index does not track .claude/mash-workbench/settings.local (any letter case), and the exclude line
+# .claude/mash-workbench/settings.local is in the repository's info/exclude (set --local writes it; a patch or a clone
+# cannot). The question names the git dir and the work folder, so git discovers no repository in a folder that a
+# commit controls. Otherwise the file is read as a committed file (source prints team). set --local refuses to write
+# a tracked file, or when git gives no answer, with the reason; it adds the exclude line otherwise.
 # Exit codes: 0 success; 1 another set or unset holds the lock; 2 usage error, or <dir> is not in a git repository; 3 the key
-# is not set anywhere, or its value is empty or only spaces and tabs; 5 bare repository, or the main worktree cannot be found from <dir>; 6 refused by a check (the
-# line says why).
+# is not set anywhere, or its value is empty or only spaces and tabs; 5 a linked worktree of a bare repository, or the main worktree cannot be found from <dir>; 6 refused by a check (the
+# line says why), also by every command but get and source with the key's environment variable set when <dir> is in
+# a folder shaped like a git directory.
+# Known limit: on a system that is not Windows, a drive-letter path (C:/x) is not absolute for the file tests, so
+# check-escapes-path can answer "outside the repo" from one folder and "inside the repo" from another. No answer lets
+# a committed file choose a place outside the repository. Git Bash is not tested.
 # Needs git 2.7 or later: rev-parse runs from the top level, where git 2.7 to 2.12 and later versions print the same
 # --git-common-dir. Plain bash 3.2 (macOS) and Git Bash: no associative arrays, no ${var,,}, no mapfile.
 
@@ -64,6 +83,9 @@ usage() {
     echo "       mash-settings.sh check-escapes-path <dir> <path>"
     echo "       mash-settings.sh check-backlog-path <dir> <path>"
     echo "       mash-settings.sh repo-key <dir>"
+    echo "       mash-settings.sh toplevel <dir>"
+    echo "       mash-settings.sh same-repository <dir>"
+    echo "       mash-settings.sh private <dir> <name>"
   } >&2
   exit 2
 }
@@ -76,8 +98,66 @@ fail() {
 lower() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
 is_absolute() { [[ "$1" == /* || "$1" =~ ^[A-Za-z]:[/\\] ]]; }
 
+# run_git <arguments>: git without the environment variables that choose another repository, another index or another
+# meaning for a pathspec, and without an fsmonitor program (an empty core.fsmonitor turns it off in every git version).
+run_git() {
+  env -u GIT_DIR -u GIT_WORK_TREE -u GIT_COMMON_DIR -u GIT_INDEX_FILE -u GIT_OBJECT_DIRECTORY \
+    -u GIT_ALTERNATE_OBJECT_DIRECTORIES -u GIT_NAMESPACE -u GIT_LITERAL_PATHSPECS -u GIT_GLOB_PATHSPECS \
+    -u GIT_NOGLOB_PATHSPECS -u GIT_ICASE_PATHSPECS -u GIT_CONFIG_PARAMETERS -u GIT_CONFIG_COUNT \
+    GIT_NO_LAZY_FETCH=1 git -c core.fsmonitor= "$@"
+}
+
+# anchor <dir>: sets anchor_top (the folder that holds the .git entry) and anchor_git_dir (where that entry leads),
+# before any git process starts. It walks up from <dir> in git's own order. A folder with a .git entry ends the walk.
+# A folder shaped like a git directory (HEAD, plus objects, refs or commondir) with no .git entry is refused: git would
+# take it as a repository, and a commit can hold such a folder, with a config that names a program to run. Returns 0,
+# 2 (no repository) or 6 (refused), with the message on stderr.
+anchor_top=""
+anchor_git_dir=""
+anchor() {
+  local folder line target
+  folder=$(cd "$1" && pwd -P) || return 2
+  while :; do
+    if [[ -e "$folder/.git" || -L "$folder/.git" ]]; then
+      anchor_top=$folder
+      anchor_git_dir=""
+      if [[ -d "$folder/.git" ]] && [[ -e "$folder/.git/HEAD" || -L "$folder/.git/HEAD" ]] \
+        && [[ ( -d "$folder/.git/objects" && -d "$folder/.git/refs" ) || -f "$folder/.git/commondir" ]]; then
+        anchor_git_dir=$(cd "$folder/.git" && pwd -P) || return 2
+      elif [[ -f "$folder/.git" ]]; then
+        line=""
+        IFS= read -r line < "$folder/.git" || true
+        line=${line%$'\r'}
+        if [[ "$line" == "gitdir: "* ]]; then
+          target=${line#gitdir: }
+          if ! is_absolute "$target"; then target="$folder/$target"; fi
+          anchor_git_dir=$(cd "$target" 2>/dev/null && pwd -P) || anchor_git_dir=""
+        fi
+      fi
+      # A .git entry that git cannot use (an empty folder, a folder without HEAD, objects and refs, a file with no
+      # gitdir: line, a dangling link): git would go on to the folders above, which this walk has not checked.
+      if [[ -z "$anchor_git_dir" ]]; then
+        echo "mash-settings: refused: $folder/.git is a .git entry that git cannot use, so git would look for a repository in the folders above. Nothing ran." >&2
+        return 6
+      fi
+      return 0
+    fi
+    # -L too: git accepts a HEAD that is a symbolic link to refs/..., also a dangling one, which -e does not see.
+    if [[ ( -e "$folder/HEAD" || -L "$folder/HEAD" ) && ( -e "$folder/objects" || -L "$folder/objects" || -e "$folder/refs" \
+      || -L "$folder/refs" || -e "$folder/commondir" || -L "$folder/commondir" ) ]]; then
+      echo "mash-settings: refused: $folder is shaped like a git directory and has no .git entry: a bare repository, or a folder that a commit can hold. Nothing ran. Run it from a work folder of the repository, or from a linked worktree." >&2
+      return 6
+    fi
+    if [[ "$folder" == / || "$folder" == "$(dirname "$folder")" ]]; then
+      echo "mash-settings: not in a git repository: $1" >&2
+      return 2
+    fi
+    folder=$(dirname "$folder")
+  done
+}
+
 # find_main <dir>: sets common (the shared git dir) and main (the main worktree, "" when it has none).
-# Returns 0, 2 (not a repository) or 5 (bare, or not findable), with the message on stderr.
+# Returns 0, 2 (not a repository), 5 (bare, or not findable) or 6 (refused by anchor), with the message on stderr.
 common=""
 main=""
 main_unknown=""
@@ -86,34 +166,43 @@ find_main() {
   main=""
   main_unknown=""
   [[ -d "$dir" ]] || { echo "mash-settings: no such folder: $dir" >&2; return 2; }
-  git -C "$dir" rev-parse --git-dir >/dev/null 2>&1 || { echo "mash-settings: not in a git repository: $dir" >&2; return 2; }
+  anchor "$dir" || return $?
+  # Git runs only from the folder that holds the .git entry, and its answer must name that entry: then no committed
+  # config chose the repository.
+  dir=$anchor_top
+  out=$(run_git -C "$dir" rev-parse --git-dir 2>/dev/null) || { echo "mash-settings: not in a git repository: $1" >&2; return 2; }
+  git_dir=$(cd "$dir" && cd "${out%$'\r'}" && pwd -P) || return 2
+  if [[ "$git_dir" != "$anchor_git_dir" ]]; then
+    echo "mash-settings: refused: git took the repository $git_dir, not the one that $dir/.git names. Nothing ran." >&2
+    return 6
+  fi
   # Ask from the top level: git 2.7 to 2.12 print --git-common-dir relative to it, later versions relative to the
-  # current folder, so both agree there. A bare repository has no top level; there <dir> is used.
-  out=$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null || true)
-  if [[ -n "${out%$'\r'}" ]]; then dir=$(cd "${out%$'\r'}" && pwd -P) || return 2; fi
-  out=$(git -C "$dir" rev-parse --git-common-dir 2>/dev/null) || { echo "mash-settings: not in a git repository: $dir" >&2; return 2; }
+  # current folder, so both agree there.
+  out=$(run_git -C "$dir" rev-parse --git-common-dir 2>/dev/null) || { echo "mash-settings: not in a git repository: $1" >&2; return 2; }
   common=$(cd "$dir" && cd "${out%$'\r'}" && pwd -P) || return 2
   # Submodules keep their work folder in core.worktree, relative to the git dir.
-  work_tree=$(git --git-dir="$common" config core.worktree 2>/dev/null || true)
+  work_tree=$(run_git --git-dir="$common" config core.worktree 2>/dev/null || true)
   work_tree=${work_tree%$'\r'}
   if [[ -n "$work_tree" ]]; then
     main=$(cd "$common" && cd "$work_tree" && pwd -P) || return 2
     return 0
   fi
-  if [[ "$(git --git-dir="$common" rev-parse --is-bare-repository 2>/dev/null)" == true* ]]; then
+  if [[ "$(run_git --git-dir="$common" rev-parse --is-bare-repository 2>/dev/null)" == true* ]]; then
     echo "mash-settings: bare repository: give the escapes path" >&2
     return 5
   fi
+  # The common git dir is named .git: its folder is the main worktree, from every worktree. This is also git's own
+  # answer (the first line of git worktree list). A --separate-git-dir repository whose git folder is named .git (say
+  # /store/proj/.git for the work folder /work/proj) gets /store/proj as git gives it: from a linked worktree nothing
+  # records the work folder, so every worktree gives that same answer, and the settings never split in two.
   if [[ "$(basename "$common")" == .git ]]; then
     main=$(dirname "$common")
     return 0
   fi
-  # --separate-git-dir: the git dir is elsewhere and git does not record the work folder. Only the work folder itself
-  # (where the git dir and the common dir are the same) can name it.
-  out=$(git -C "$dir" rev-parse --git-dir 2>/dev/null) || return 2
-  git_dir=$(cd "$dir" && cd "${out%$'\r'}" && pwd -P) || return 2
-  if [[ "$git_dir" == "$common" ]] && out=$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null) && [[ -n "$out" ]]; then
-    main=$(cd "${out%$'\r'}" && pwd -P) || return 2
+  # Any other --separate-git-dir repository: only the work folder itself (the git dir and the common dir are the
+  # same) can name its main worktree.
+  if [[ "$git_dir" == "$common" ]]; then
+    main=$dir
     return 0
   fi
   main_unknown=1
@@ -197,17 +286,30 @@ under() {
 # while Git Bash reads it as a path.
 refuse_backslash() {
   case "$1" in *\\*) fail 6 "refused: the path holds a backslash: write it with / (C:/Users/me/escapes): $1" ;; esac
+  # A control character (an escape sequence, say) would reach the terminal and the session in every message.
+  if [[ "$1" == *[[:cntrl:]]* ]]; then fail 6 "refused: the path holds a control character"; fi
 }
+# clean: standard input without control characters (C0 but tab and line feed, DEL, and the C1 range as UTF-8): text
+# that a commit can hold must not reach the terminal or the session as an escape sequence.
+clean() { LC_ALL=C tr -d '\000-\010\013-\037\177' | LC_ALL=C awk '{ gsub(/\302[\200-\237]/, ""); print }'; }
 need_home() {
   local home_folder="$main/.claude/mash-workbench"
+  local nested
   if [[ -L "$home_folder" ]]; then
-    fail 6 "refused: $home_folder is a symbolic link: the home folder must be a real folder in the main worktree"
+    fail 6 "refused: $home_folder is a symbolic link: the home folder must be a real folder in the main worktree. Replace the link with a real folder (move its files into .claude/mash-workbench)."
   fi
   # The resolved place must be exactly <main>/.claude/mash-workbench: a .claude link that stays inside the repository
-  # would put a committed folder there.
+  # would put a committed folder there, and the exclude line would not cover the private file.
   if [[ -L "$main/.claude" || "$(normalize "$home_folder")" != "$(normalize "$main")/.claude/mash-workbench" ]]; then
-    fail 6 "refused: $main/.claude is a symbolic link: the home folder must be the real folder .claude/mash-workbench in the main worktree"
+    fail 6 "refused: $main/.claude is a symbolic link: the home folder must be the real folder .claude/mash-workbench in the main worktree. Replace the link with a real .claude folder (move the files it points to into it)."
   fi
+  # A submodule or a nested repository: its files belong to another repository, and this repository's index does not
+  # show them.
+  for nested in "$main/.claude/.git" "$home_folder/.git"; do
+    if [[ -e "$nested" || -L "$nested" ]]; then
+      fail 6 "refused: $nested exists: .claude or .claude/mash-workbench is a submodule or a nested repository, so its files are not this clone's own. Keep the home folder as a plain folder of this repository."
+    fi
+  done
 }
 
 # refuse_linked_file <settings file>: exit 6 when it is a symbolic link. The file is never read or written through a
@@ -215,26 +317,24 @@ need_home() {
 refuse_linked_file() {
   if [[ -L "$1" ]]; then fail 6 "refused: $1 is a symbolic link: a settings file must be a regular file"; fi
 }
-# home_git <git arguments>: git in the home folder, without the pathspec and index variables of the environment (they
-# would change what "tracked" means).
-home_git() {
-  env -u GIT_LITERAL_PATHSPECS -u GIT_GLOB_PATHSPECS -u GIT_NOGLOB_PATHSPECS -u GIT_ICASE_PATHSPECS -u GIT_INDEX_FILE \
-    git --no-literal-pathspecs -C "$main/.claude/mash-workbench" "$@"
-}
-# local_is_tracked: settings.local is not surely the user's own file. It returns 1 (private) only on a positive
-# answer: the home folder does not exist yet, or it belongs to this repository and git says that it tracks no
-# settings.local there. A submodule or a nested repository as the home folder, a tracked file and a git error all
-# return 0.
-local_is_tracked() {
-  local top status=0
+# local_state [name]: is the home folder's file <name> (default settings.local) the user's own? The question goes to
+# the main repository's own index, with the git dir and the work folder named (no repository discovery in a folder
+# that a commit controls). Returns 1 when git answers that the index tracks no such file (private, also when the home
+# folder does not exist yet), 0 when it is tracked, and 2 when git gives no answer (git_error holds git's first line).
+# Only 1 makes the file private.
+git_error=""
+local_state() {
+  local status=0 output name=${1:-settings.local}
   [[ -d "$main/.claude/mash-workbench" ]] || return 1
-  top=$(home_git rev-parse --show-toplevel 2>/dev/null) || return 0
-  top=$(cd "${top%$'\r'}" 2>/dev/null && pwd -P) || return 0
-  [[ "$top" == "$(normalize "$main")" ]] || return 0
-  # :(icase): on a file system that ignores case, a tracked SETTINGS.LOCAL is the file that gets opened.
-  home_git ls-files --error-unmatch -- ':(icase)settings.local' >/dev/null 2>&1 || status=$?
-  # 1 is git's "no such tracked file"; 0 is tracked; any other code is an error, which is not a "no".
-  ((status != 1))
+  # :(icase): on a file system that ignores case, a tracked .Claude/Mash-Workbench/SETTINGS.LOCAL is the file that
+  # gets opened.
+  output=$(run_git --no-literal-pathspecs --git-dir="$common" --work-tree="$main" -C "$main" \
+    ls-files --error-unmatch -- ":(icase).claude/mash-workbench/$name" 2>&1 >/dev/null) || status=$?
+  case "$status" in
+    0) return 0 ;;
+    1) return 1 ;;
+    *) git_error=${output%%$'\n'*}; return 2 ;;
+  esac
 }
 
 # leaves_repository <absolute path>: the path is written inside the main worktree, and a symbolic link on it leads out.
@@ -249,7 +349,7 @@ leaves_repository() {
 
 repo_key() {
   local dir=$1 url host_part rest host after name
-  url=$(git -C "$dir" remote get-url origin 2>/dev/null || true)
+  url=$(run_git -C "$dir" remote get-url origin 2>/dev/null || true)
   url=${url%$'\r'}
   # A remote that is a path on this machine is no name for the repository, and the key goes into committed files.
   case "$url" in /* | .* | "~"* | file://* | [A-Za-z]:[/\\]*) url="" ;; esac
@@ -297,7 +397,17 @@ lookup() {
       if ((status == 0)) && [[ -n "${value//[[:space:]]/}" ]]; then
         found_value=$value
         # settings.local is the user's own file only when git does not track it: a repository can commit one.
-        if [[ "$file" == settings ]] || local_is_tracked; then found_source="team"; else found_source="local"; fi
+        found_source="team"
+        if [[ "$file" == settings.local ]]; then
+          status=0
+          local_state || status=$?
+          # Untracked is not enough: a patch applied with git apply can create the file. The exclude line that
+          # set --local writes marks the user's own: it is in the repository's own folder, which no commit, patch
+          # or copied repository can write.
+          if ((status == 1)) && has_line "$common/info/exclude" ".claude/mash-workbench/settings.local"; then
+            found_source="local"
+          fi
+        fi
         return 0
       fi
     fi
@@ -318,7 +428,7 @@ command_path() {
   path=$found_value
   refuse_backslash "$path"
   if [[ "$found_source" == env ]]; then find_main "$dir" 2>/dev/null || status=$?; fi
-  if ((status == 2)); then need_main "$dir"; fi
+  if ((status == 2 || status == 6)); then need_main "$dir"; fi
   if ! is_absolute "$path"; then
     [[ -n "$main" ]] || fail 5 "the $key setting is relative, but no main worktree was found: set it to an absolute path"
     path="$main/$path"
@@ -342,7 +452,7 @@ command_path() {
 
 # command_set <dir> <key> <value> <scope> [unset]: replace or append the key's line; with "unset", remove its lines.
 command_set() {
-  local dir=$1 key=$2 value=$3 scope=$4 mode=${5:-set} home file temporary exclude lock tries
+  local dir=$1 key=$2 value=$3 scope=$4 mode=${5:-set} home file temporary exclude lock tries state
   local line=".claude/mash-workbench/settings.local"
   [[ -n "$key" && "$key" != *=* && "$key" != \#* && "$key" != *$'\n'* && "$key" != *$'\r'* ]] \
     || fail 2 "a key is not empty, holds no = and no line break, and does not start with #: $key"
@@ -359,8 +469,13 @@ command_set() {
   file="$home/$file"
   refuse_linked_file "$home/settings"
   refuse_linked_file "$home/settings.local"
-  if [[ "$scope" == --local ]] && local_is_tracked; then
-    fail 6 "refused: $file is not a private file: git tracks it, or its folder belongs to another repository (a submodule). Remove it from the index first (git rm --cached), then run this again"
+  if [[ "$scope" == --local ]]; then
+    state=0
+    local_state || state=$?
+    case "$state" in
+      0) fail 6 "refused: git tracks $file, so it is a committed file, not a private one. Remove it from the index first (git rm --cached .claude/mash-workbench/settings.local), then run this again" ;;
+      2) fail 6 "refused: git could not tell whether $file is tracked ($git_error): nothing written" ;;
+    esac
   fi
   if [[ "$mode" == unset && ! -f "$file" ]]; then printf '%s was not set in %s\n' "$key" "$file"; return 0; fi
   mkdir -p "$home"
@@ -415,6 +530,7 @@ command_check() {
   local dir=$1 path=$2 kind=$3 noun="escapes folder" status=0 target worktree first=1 home relative owner key temporary_root owner_file
   if [[ "$kind" == backlog ]]; then noun="backlog file"; fi
   case "$path" in *\\*) echo "refused: the path holds a backslash: write it with /"; exit 6 ;; esac
+  if [[ "$path" == *[[:cntrl:]]* ]]; then echo "refused: the path holds a control character"; exit 6; fi
   find_main "$dir" 2>/dev/null || status=$?
   case "$status" in
     0) ;;
@@ -437,7 +553,7 @@ command_check() {
     if ((first)); then first=0; continue; fi
     worktree=$(normalize "${worktree#worktree }")
     if under "$target" "$worktree"; then echo "refused: a linked worktree is deleted with its branch"; exit 6; fi
-  done < <(git -C "$dir" worktree list --porcelain 2>/dev/null || true)
+  done < <(run_git -C "$anchor_top" worktree list --porcelain 2>/dev/null || true)
   # The git directory: nothing in it is committed or shared.
   if under "$target" "$common"; then echo "refused: inside the git directory: cannot be committed or shared"; exit 6; fi
   # 2. Temporary folders: /tmp, /private/tmp, $TMPDIR, and the Claude Code scratchpad (/claude-<digits>/) under them.
@@ -460,9 +576,9 @@ command_check() {
     relative=${target#"$main"}
     relative=${relative#/}
     relative=${relative:-.}
-    if [[ -n "$(git --literal-pathspecs -C "$main" ls-files -- "$relative" 2>/dev/null | head -1)" ]]; then
+    if [[ -n "$(run_git --literal-pathspecs -C "$main" ls-files -- "$relative" 2>/dev/null | head -1)" ]]; then
       echo "inside the repo: commit it to share with the team"
-    elif git -C "$main" check-ignore -q -- "$relative" 2>/dev/null || git -C "$main" check-ignore -q -- "$relative/" 2>/dev/null; then
+    elif run_git -C "$main" check-ignore -q -- "$relative" 2>/dev/null || run_git -C "$main" check-ignore -q -- "$relative/" 2>/dev/null; then
       echo "inside the repo, ignored: private to this clone"
     else
       echo "inside the repo: commit it to share with the team"
@@ -474,7 +590,7 @@ command_check() {
   if [[ "$kind" == backlog ]]; then owner_file=$target; fi
   if [[ -f "$owner_file" ]]; then
     owner=$(awk '{ sub(/\r$/, "") } /^repo:/ { sub(/^repo:[ \t]*/, ""); sub(/[ \t]+$/, ""); print; exit }' "$owner_file")
-    key=$(repo_key "$dir")
+    key=$(repo_key "$anchor_top")
     if [[ -n "$owner" && "$(lower "$owner")" != "$key" ]]; then echo "refused: owned by $owner"; exit 6; fi
   fi
   # A linked worktree of a --separate-git-dir repository: the main work folder exists but git does not name it.
@@ -512,7 +628,7 @@ case "$command" in
   get)
     [[ $# -eq 2 ]] || usage
     lookup "$1" "$2"
-    printf '%s\n' "$found_value"
+    printf '%s\n' "$found_value" | clean
     ;;
   source)
     [[ $# -eq 2 ]] || usage
@@ -539,12 +655,51 @@ case "$command" in
     [[ $# -eq 2 ]] || usage
     command_check "$1" "$2" backlog
     ;;
+  same-repository)
+    # A write that an allow rule approves goes only to the session's own repository: <dir> must share its git dir with
+    # the current folder (pwd -P: no variable can change it).
+    [[ $# -eq 1 ]] || usage
+    status=0
+    find_main "$1" || status=$?
+    if ((status != 0 && status != 5)); then exit "$status"; fi
+    wanted=$common
+    here_folder=$(pwd -P)
+    status=0
+    find_main "$here_folder" 2>/dev/null || status=$?
+    if ((status != 0 && status != 5)) || [[ "$common" != "$wanted" ]]; then
+      fail 6 "refused: the current folder ($here_folder) is not in the repository of $1: a write goes only to the repository the session works in. Run the command from inside that repository."
+    fi
+    ;;
+  private)
+    # private <dir> <name>: exit 0 when the home folder's file <name> is not tracked and its exclude line is in the
+    # repository's info/exclude; 1 when it is not tracked but not excluded yet; 6 when it is tracked, or git gives no
+    # answer.
+    [[ $# -eq 2 ]] || usage
+    [[ "$2" =~ ^[A-Za-z0-9._-]+$ && "$2" != . && "$2" != .. ]] || fail 2 "a file name in the home folder: $2"
+    need_main "$1"
+    need_home
+    state=0
+    local_state "$2" || state=$?
+    case "$state" in
+      0) fail 6 "refused: git tracks .claude/mash-workbench/$2, so it is a committed file, not private to this copy. Remove it from the index (git rm --cached .claude/mash-workbench/$2)." ;;
+      2) fail 6 "refused: git could not tell whether .claude/mash-workbench/$2 is tracked ($git_error)" ;;
+    esac
+    has_line "$common/info/exclude" ".claude/mash-workbench/$2" || exit 1
+    ;;
+  toplevel)
+    [[ $# -eq 1 ]] || usage
+    status=0
+    find_main "$1" || status=$?
+    if ((status != 0 && status != 5)); then exit "$status"; fi
+    printf '%s\n' "$anchor_top"
+    ;;
   repo-key)
     [[ $# -eq 1 ]] || usage
     status=0
     find_main "$1" 2>/dev/null || status=$?
     if ((status == 2)); then exit 2; fi
-    repo_key "$1"
+    if ((status == 6)); then need_main "$1"; fi  # prints why, and exits
+    repo_key "$anchor_top"
     ;;
   *) usage ;;
 esac

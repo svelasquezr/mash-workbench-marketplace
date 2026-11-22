@@ -13,8 +13,8 @@
 # that is installed for one project only, a "projectPath". When this file is in a folder of that shape, and that
 # registry is next to the cache folder, an entry must name this copy: its installPath ends with
 # cache/<marketplace>/<plugin>/<version>, and it has no projectPath (installed for the user), or its projectPath is
-# the current folder, the top folder of its git checkout when the current folder is really inside it, or the main
-# worktree of that checkout's repository. An entry of another
+# the current folder, the top folder of its git checkout, or the main worktree of that checkout's repository (both
+# from mash-settings.sh, which starts no git in a folder shaped like a git directory). An entry of another
 # project does not count: a registry can list old versions for many old projects. Paths are compared without regard
 # to case, with "\" as "/" and a drive letter "C:/" as "/c/", so a Windows spelling matches the Git Bash one.
 # Otherwise this copy is an old one: exit 6.
@@ -23,7 +23,7 @@
 # with an "installPath" (another format, an empty file, a file cut in the middle of a write). In the last two cases
 # the copy is in a cache-shaped folder, so the script prints one line on stderr: this check is a second guard, and a
 # reader must see when it did not work. The same file ships in each MASH plugin (tests/test_plugin_current.sh compares the copies).
-# Reads only that registry file, and asks git for the main worktree of the current folder. Writes nothing. No network.
+# Reads only that registry file, and asks mash-settings.sh for the top folder and the main worktree of the current folder. Writes nothing. No network.
 # Exit codes: 0 this copy may run; 6 this copy is in the plugin cache and is not installed for this folder.
 set -euo pipefail
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
@@ -62,19 +62,16 @@ entries=$({ tr -d '\r' < "$registry" | grep -oE '"([^"\\]|\\.)*"|[][{}:]|null|tr
 # The folders that count as "this project": the current folder (as written and resolved), the top folder of its git
 # checkout, and the main worktree of its repository. Not every folder above: an old entry for the home folder would
 # then count for every project under it.
-# git answers from its config, and a folder can be shaped like a git directory whose core.worktree names another
-# project. So git's top folder counts only when the current folder is really inside it, and the main worktree only then.
+# A folder can be shaped like a git directory whose committed config names another project (core.worktree) or a
+# program to run. So the top folder and the main worktree come from mash-settings.sh, which starts git only in a
+# repository that a real .git entry names (the top folder is then always the current folder or a folder above it).
 here_folders=$(
   real_here=$(pwd -P)
   printf '%s\n%s\n' "$PWD" "$real_here"
-  top=$(git rev-parse --show-toplevel 2>/dev/null || true)
-  top=${top%$'\r'}
-  if [[ -n "$top" ]]; then top=$(cd "$top" 2>/dev/null && pwd -P) || top=""; fi
-  if [[ -n "$top" && ( "$real_here" == "$top" || "$real_here" == "${top%/}"/* ) ]]; then
+  top=$(bash "$here/mash-settings.sh" toplevel "$real_here" 2>/dev/null || true)
+  if [[ -n "$top" ]]; then
     printf '%s\n' "$top"
-    common=$(git rev-parse --git-common-dir 2>/dev/null || true)
-    common=${common%$'\r'}
-    if [[ -n "$common" && "$(basename "$common")" == .git ]]; then (cd "$(dirname "$common")" 2>/dev/null && pwd -P) || true; fi
+    bash "$here/mash-settings.sh" main-worktree "$real_here" 2>/dev/null || true
   fi
 )
 here_folders=$(printf '%s\n' "$here_folders" | clean)

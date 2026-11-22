@@ -154,6 +154,15 @@ run_in "$fake_git" "$old/scripts/plugin-current.sh"
 assert_eq "$captured_exit_code" "6"
 run_in "$project" "$old/scripts/plugin-current.sh"
 assert_eq "$captured_exit_code" "0"
+# The same folder with core.worktree ../.. (a folder above project B, inside it as git sees it): an entry for the
+# folder above still does not count. No git runs in a folder shaped like a git directory.
+project_registry "$old" "$fixture"
+git --git-dir="$fake_git" config core.worktree ../..
+run_in "$fake_git" "$old/scripts/plugin-current.sh"
+assert_eq "$captured_exit_code" "6"
+mkdir -p "$fake_git/sub"
+run_in "$fake_git/sub" "$old/scripts/plugin-current.sh"
+assert_eq "$captured_exit_code" "6"
 
 # 6. The scripts that get allow rules stop in an old copy, before they read an argument or write a file.
 registry "$config" "$new"
@@ -175,10 +184,10 @@ for command in "$old/skills/add-reviewer/escape-add.sh $repo src/a wrong-result 
 done
 assert_eq "$(find "$repo" -path "$repo/.git" -prune -o -print | sort)" "$before"
 # The installed copies run.
-run_capturing env REVIEW_ROUTING_ESCAPES=.claude/mash-workbench/escapes bash "$new/skills/add-reviewer/escape-add.sh" "$repo" src/a wrong-result slug --body "When X, Y."
+run_capturing env REVIEW_ROUTING_ESCAPES=.claude/mash-workbench/escapes bash "$in_root_script" "$new/skills/add-reviewer/escape-add.sh" "$repo" src/a wrong-result slug --body "When X, Y."
 assert_eq "$captured_exit_code" "0"
-run_capturing bash "$new/skills/review-changes/review-log.sh" add "$repo" HEAD~1 HEAD
+run_capturing bash "$in_root_script" "$new/skills/review-changes/review-log.sh" add "$repo" HEAD~1 HEAD
 assert_eq "$captured_exit_code" "0"
-run_capturing env MASH_WORKBENCH_BACKLOG=docs/backlog.md bash "$mash_new/skills/scout/backlog-add.sh" "$repo" script title why
+run_capturing env MASH_WORKBENCH_BACKLOG=docs/backlog.md bash "$in_root_script" "$mash_new/skills/scout/backlog-add.sh" "$repo" script title why
 assert_eq "$captured_exit_code" "0"
 echo "plugin current: ok"

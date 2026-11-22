@@ -63,7 +63,7 @@ run_capturing bash "$script" /no/such/root
 # No Python is needed any more: with python3 as the Windows Store stub and no other Python, the entries are listed.
 stub_bin=$(mktemp -d)
 printf '#!/bin/sh\necho "Python was not found" >&2\nexit 9009\n' > "$stub_bin/python3"; chmod +x "$stub_bin/python3"
-for tool in bash dirname basename cat date sort git tr; do ln -s "$(command -v "$tool")" "$stub_bin/$tool"; done
+for tool in bash dirname basename cat date sort git tr awk; do ln -s "$(command -v "$tool")" "$stub_bin/$tool"; done
 run_capturing env -i PATH="$stub_bin" MASH_WORKBENCH_BACKLOG=docs/tooling-backlog.md BACKLOG_TODAY=2026-10-21 "$(command -v bash)" "$script" "$temporary_directory" 10
 rm -rf "$stub_bin"
 assert_eq "$captured_exit_code" "0"

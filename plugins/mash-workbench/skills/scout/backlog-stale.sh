@@ -52,6 +52,8 @@ while IFS= read -r line || [[ -n "$line" ]]; do
     undated+="undated · $entry"$'\n'
   fi
 done < "$backlog_file"
+# clean: no control characters in what is printed from files (a committed file can hold an escape sequence).
+clean() { LC_ALL=C tr -d '\000-\010\013-\037\177' | LC_ALL=C awk '{ gsub(/\302[\200-\237]/, ""); print }'; }
 # Oldest first; entries of one date keep the order of the file. The date is the first 10 characters of each line.
-if [[ -n "$dated" ]]; then printf '%s' "$dated" | LC_ALL=C sort -s -k1,1; fi
-printf '%s' "$undated"
+if [[ -n "$dated" ]]; then printf '%s' "$dated" | LC_ALL=C sort -s -k1,1 | clean; fi
+if [[ -n "$undated" ]]; then printf '%s' "$undated" | clean; fi

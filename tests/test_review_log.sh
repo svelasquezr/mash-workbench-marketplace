@@ -29,7 +29,7 @@ commit_file() {
   git -C "$1" add "$2"
   git -C "$1" commit --quiet -m "$4"
 }
-reviewed() { bash "$log_script" reviewed "$@"; }
+reviewed() { bash "$in_root_script" "$log_script" reviewed "$@"; }
 
 # 1. reviewed: inside the range yes; the base, an earlier commit, a later commit and another branch no.
 repo=$(new_repo range)
@@ -39,7 +39,7 @@ commit_file "$repo" a a1 "feat: a"
 first=$(git -C "$repo" rev-parse HEAD)
 commit_file "$repo" b b1 "feat: b"
 head=$(git -C "$repo" rev-parse HEAD)
-run_capturing bash "$log_script" add "$repo" "$base" "$head"
+run_capturing bash "$in_root_script" "$log_script" add "$repo" "$base" "$head"
 assert_eq "$captured_exit_code" "0"
 log="$repo/.claude/mash-workbench/reviews.log"
 assert_file "$log"
@@ -61,14 +61,14 @@ git -C "$repo" switch --quiet -c other
 commit_file "$repo" o o1 "feat: other"
 run_capturing reviewed "$repo" HEAD; assert_eq "$captured_exit_code" "1"
 # A second add of the same range writes no second line.
-bash "$log_script" add "$repo" "$base" "$head" >/dev/null
+bash "$in_root_script" "$log_script" add "$repo" "$base" "$head" >/dev/null
 assert_eq "$(wc -l < "$log" | tr -d ' ')" "1"
 # Usage errors.
-run_capturing bash "$log_script" add "$repo" "$base"; assert_eq "$captured_exit_code" "2"
-run_capturing bash "$log_script" add "$repo" "$base" "$base"; assert_eq "$captured_exit_code" "2"
-run_capturing bash "$log_script" add "$repo" "$base" not-a-commit; assert_eq "$captured_exit_code" "2"
-run_capturing bash "$log_script" reviewed "$repo" not-a-commit; assert_eq "$captured_exit_code" "2"
-run_capturing bash "$log_script" nonsense "$repo"; assert_eq "$captured_exit_code" "2"
+run_capturing bash "$in_root_script" "$log_script" add "$repo" "$base"; assert_eq "$captured_exit_code" "2"
+run_capturing bash "$in_root_script" "$log_script" add "$repo" "$base" "$base"; assert_eq "$captured_exit_code" "2"
+run_capturing bash "$in_root_script" "$log_script" add "$repo" "$base" not-a-commit; assert_eq "$captured_exit_code" "2"
+run_capturing bash "$in_root_script" "$log_script" reviewed "$repo" not-a-commit; assert_eq "$captured_exit_code" "2"
+run_capturing bash "$in_root_script" "$log_script" nonsense "$repo"; assert_eq "$captured_exit_code" "2"
 # A repository with no log answers "not reviewed".
 empty=$(new_repo nolog)
 run_capturing reviewed "$empty" HEAD; assert_eq "$captured_exit_code" "1"
@@ -82,7 +82,7 @@ git -C "$repo" switch --quiet -c feat
 commit_file "$repo" a a1 "feat: a"
 commit_file "$repo" b b1 "feat: b"
 head=$(git -C "$repo" rev-parse HEAD)
-bash "$log_script" add "$repo" "$base" "$head" >/dev/null
+bash "$in_root_script" "$log_script" add "$repo" "$base" "$head" >/dev/null
 git -C "$repo" switch --quiet main
 commit_file "$repo" unrelated u1 "chore: unrelated work on main"
 git -C "$repo" merge --squash feat >/dev/null 2>&1
@@ -104,7 +104,7 @@ commit_file "$repo" a a1 "feat: a"
 first=$(git -C "$repo" rev-parse HEAD)
 commit_file "$repo" b b1 "feat: b"
 head=$(git -C "$repo" rev-parse HEAD)
-bash "$log_script" add "$repo" "$base" "$head" >/dev/null
+bash "$in_root_script" "$log_script" add "$repo" "$base" "$head" >/dev/null
 git -C "$repo" switch --quiet main
 commit_file "$repo" unrelated u1 "chore: unrelated work on main"
 git -C "$repo" cherry-pick "$first" >/dev/null
@@ -121,7 +121,7 @@ git -C "$repo" worktree add --quiet .claude/worktrees/w -b w
 linked="$repo/.claude/worktrees/w"
 base=$(git -C "$linked" rev-parse HEAD)
 commit_file "$linked" a a1 "feat: a"
-run_capturing bash "$log_script" add "$linked" "$base" HEAD
+run_capturing bash "$in_root_script" "$log_script" add "$linked" "$base" HEAD
 assert_eq "$captured_exit_code" "0"
 assert_file "$repo/.claude/mash-workbench/reviews.log"
 [[ ! -e "$linked/.claude/mash-workbench" ]] || { echo "  wrote into the linked worktree"; exit 1; }
@@ -130,7 +130,7 @@ assert_eq "$(git -C "$repo" status --porcelain)" ""
 assert_contains "$(cat "$repo/.git/info/exclude")" ".claude/mash-workbench/reviews.log"
 # The exclude line is written once, however often add runs.
 commit_file "$linked" b b1 "feat: b"
-bash "$log_script" add "$linked" "$base" HEAD >/dev/null
+bash "$in_root_script" "$log_script" add "$linked" "$base" HEAD >/dev/null
 assert_eq "$(grep -c -x '.claude/mash-workbench/reviews.log' "$repo/.git/info/exclude")" "1"
 run_capturing reviewed "$linked" HEAD; assert_eq "$captured_exit_code" "0"
 run_capturing reviewed "$repo" "$(git -C "$linked" rev-parse HEAD)"; assert_eq "$captured_exit_code" "0"
@@ -143,13 +143,15 @@ printf '2026-01-01 %s %s %s %s,%s\r\n' "$zero" "11111111111111111111111111111111
   "2222222222222222222222222222222222222222" "3333333333333333333333333333333333333333" \
   "4444444444444444444444444444444444444444" > "$repo/.claude/mash-workbench/reviews.log"
 printf 'garbage line\n\n' >> "$repo/.claude/mash-workbench/reviews.log"
+# The exclude line that add writes: without it the log is not read (tests/test_consumer_safety.sh, case 2).
+grep -qx '.claude/mash-workbench/reviews.log' "$repo/.git/info/exclude" 2>/dev/null || printf '.claude/mash-workbench/reviews.log\n' >> "$repo/.git/info/exclude"
 run_capturing reviewed "$repo" HEAD
 assert_eq "$captured_exit_code" "1"
 assert_eq "$captured_output" ""
 
 # Not in a repository: a usage error, nothing written.
 plain=$(mktemp -d "$fixture/plain.XXXXXX")
-run_capturing bash "$log_script" reviewed "$plain" HEAD
+run_capturing bash "$in_root_script" "$log_script" reviewed "$plain" HEAD
 assert_eq "$captured_exit_code" "2"
 
 # 6. The ids do not depend on the user's git config: color.ui=always, an external diff and diff.noprefix are set, and a
@@ -165,7 +167,7 @@ git -C "$repo" switch --quiet -c feat
 commit_file "$repo" a a1 "feat: a"
 commit_file "$repo" b b1 "feat: b"
 head=$(git -C "$repo" rev-parse HEAD)
-run_capturing bash "$log_script" add "$repo" "$base" "$head"
+run_capturing bash "$in_root_script" "$log_script" add "$repo" "$base" "$head"
 assert_eq "$captured_exit_code" "0"
 read -r _ _ _ range_id commit_ids < "$repo/.claude/mash-workbench/reviews.log"
 [[ "$range_id" =~ ^[0-9a-f]{40}$ ]] || { echo "  bad range patch-id under user config: $range_id"; exit 1; }
@@ -193,11 +195,11 @@ commit_file "$repo" a a1 "feat: a"
 head=$(git -C "$repo" rev-parse HEAD)
 git -C "$repo" switch --quiet main
 commit_file "$repo" m m1 "chore: on main"
-run_capturing bash "$log_script" add "$repo" main "$head"; assert_eq "$captured_exit_code" "2"
+run_capturing bash "$in_root_script" "$log_script" add "$repo" main "$head"; assert_eq "$captured_exit_code" "2"
 assert_contains "$captured_output" "ancestor"
 git -C "$repo" switch --quiet feat
 git -C "$repo" revert --no-edit HEAD >/dev/null
-run_capturing bash "$log_script" add "$repo" "$base" HEAD; assert_eq "$captured_exit_code" "2"
+run_capturing bash "$in_root_script" "$log_script" add "$repo" "$base" HEAD; assert_eq "$captured_exit_code" "2"
 assert_contains "$captured_output" "nothing to log: the range has no changes"
 [[ ! -e "$repo/.claude/mash-workbench/reviews.log" ]] || { echo "  a refused add wrote the log"; exit 1; }
 
@@ -212,7 +214,7 @@ side=$(git -C "$repo" rev-parse HEAD)
 git -C "$repo" switch --quiet feat
 git -C "$repo" merge --quiet --no-ff side -m "merge side" >/dev/null 2>&1
 head=$(git -C "$repo" rev-parse HEAD)
-run_capturing bash "$log_script" add "$repo" "$base" "$head"; assert_eq "$captured_exit_code" "0"
+run_capturing bash "$in_root_script" "$log_script" add "$repo" "$base" "$head"; assert_eq "$captured_exit_code" "0"
 run_capturing reviewed "$repo" "$head"; assert_eq "$captured_exit_code" "0"
 run_capturing reviewed "$repo" "$side"; assert_eq "$captured_exit_code" "0"
 run_capturing reviewed "$repo" "$base"; assert_eq "$captured_exit_code" "1"
@@ -222,10 +224,10 @@ work="$fixture/sep-work"
 git init --quiet --separate-git-dir="$fixture/sep-gitdir" "$work"
 git -C "$work" commit --quiet --allow-empty -m "chore: base"
 git -C "$work" worktree add --quiet .claude/worktrees/w -b w
-run_capturing bash "$log_script" add "$work/.claude/worktrees/w" HEAD HEAD
+run_capturing bash "$in_root_script" "$log_script" add "$work/.claude/worktrees/w" HEAD HEAD
 assert_eq "$captured_exit_code" "5"
 assert_contains "$captured_output" "main worktree not found"
-run_capturing bash "$log_script" reviewed "$work/.claude/worktrees/w" HEAD
+run_capturing bash "$in_root_script" "$log_script" reviewed "$work/.claude/worktrees/w" HEAD
 assert_eq "$captured_exit_code" "5"
 
 # 10. Submodule: the exclude line goes to the submodule's own info/exclude under the superproject's .git/modules.
@@ -235,7 +237,7 @@ git -C "$super" -c protocol.file.allow=always submodule add --quiet "$inner" sub
 sub="$super/sub"
 base=$(git -C "$sub" rev-parse HEAD)
 commit_file "$sub" a a1 "feat: a"
-run_capturing bash "$log_script" add "$sub" "$base" HEAD
+run_capturing bash "$in_root_script" "$log_script" add "$sub" "$base" HEAD
 assert_eq "$captured_exit_code" "0"
 assert_file "$sub/.claude/mash-workbench/reviews.log"
 assert_contains "$(cat "$super/.git/modules/sub/info/exclude")" ".claude/mash-workbench/reviews.log"
@@ -258,7 +260,7 @@ git -C "$repo/vendor" pull --quiet >/dev/null 2>&1
 git -C "$repo" add vendor
 git -C "$repo" commit --quiet -m "chore: bump the submodule"
 bump_only=$(git -C "$repo" rev-parse HEAD)
-run_capturing bash "$log_script" add "$repo" "$base" "$bump_only"
+run_capturing bash "$in_root_script" "$log_script" add "$repo" "$base" "$bump_only"
 assert_eq "$captured_exit_code" "0"
 read -r _ _ _ range_id commit_ids < "$repo/.claude/mash-workbench/reviews.log"
 [[ "$range_id" =~ ^[0-9a-f]{40}$ ]] || { echo "  bad range id for a submodule-only range: $range_id"; exit 1; }
@@ -266,7 +268,7 @@ read -r _ _ _ range_id commit_ids < "$repo/.claude/mash-workbench/reviews.log"
 assert_eq "$range_id" "$commit_ids"
 commit_file "$repo" a a1 "feat: a"
 head=$(git -C "$repo" rev-parse HEAD)
-run_capturing bash "$log_script" add "$repo" "$base" "$head"
+run_capturing bash "$in_root_script" "$log_script" add "$repo" "$base" "$head"
 assert_eq "$captured_exit_code" "0"
 git -C "$repo" switch --quiet main
 git -C "$repo" merge --squash feat >/dev/null 2>&1
@@ -285,7 +287,7 @@ git -C "$repo" switch --quiet -c feat
 commit_file "$repo" one/x x1 "feat: x"
 commit_file "$repo" two/y y1 "feat: y"
 head=$(git -C "$repo" rev-parse HEAD)
-run_capturing bash "$log_script" add "$repo/one" "$base" "$head"; assert_eq "$captured_exit_code" "0"
+run_capturing bash "$in_root_script" "$log_script" add "$repo/one" "$base" "$head"; assert_eq "$captured_exit_code" "0"
 git -C "$repo" switch --quiet main
 git -C "$repo" merge --squash feat >/dev/null 2>&1
 git -C "$repo" commit --quiet -m "feat: x and y (#4)"
@@ -303,10 +305,10 @@ repo=$(new_repo stub)
 base=$(git -C "$repo" rev-parse HEAD)
 commit_file "$repo" a a1 "feat: a"
 mkdir -p "$fixture/stubbin"
-# The stub counts the calls of git patch-id (in $STUB_COUNT): the call number STUB_FAIL_CALL fails, the call number
+# The stub counts the calls of git patch-id, also after -C <dir> (in $STUB_COUNT): the call number STUB_FAIL_CALL fails, the call number
 # STUB_GARBAGE_CALL prints a line that is no patch-id; every other call, and every other git command, is real git.
 # shellcheck disable=SC2016  # $1, $n and $@ are for the stub script, not for this one
-printf '%s\n' '#!/bin/sh' 'if [ "$1" = patch-id ]; then' \
+printf '%s\n' '#!/bin/sh' 'sub=$1; if [ "$1" = -C ]; then sub=$3; fi' 'if [ "$sub" = patch-id ]; then' \
   '  n=$(cat "$STUB_COUNT" 2>/dev/null || echo 0); n=$((n + 1)); echo "$n" > "$STUB_COUNT"' \
   '  if [ "$n" = "${STUB_FAIL_CALL:-}" ]; then cat >/dev/null; exit 1; fi' \
   '  if [ "$n" = "${STUB_GARBAGE_CALL:-}" ]; then cat >/dev/null; echo "zzzz yyyy"; exit 0; fi' \
@@ -320,26 +322,26 @@ stubbed() {
   env PATH="$fixture/stubbin:$PATH" STUB_COUNT="$fixture/stub-count" STUB_FAIL_CALL="$fail" STUB_GARBAGE_CALL="$garbage" "$@"
 }
 # The range id fails (call 1): exit 6, nothing logged.
-run_capturing stubbed 1 0 bash "$log_script" add "$repo" "$base" HEAD
+run_capturing stubbed 1 0 bash "$in_root_script" "$log_script" add "$repo" "$base" HEAD
 assert_eq "$captured_exit_code" "6"
 assert_contains "$captured_output" "could not compute the patch-id"
 [[ ! -e "$repo/.claude/mash-workbench/reviews.log" ]] || { echo "  a failed add wrote the log"; exit 1; }
 # A per-commit id fails (call 2, after the range id worked): the log gains exactly one line of five fields.
 commit_file "$repo" b b1 "feat: b"
-run_capturing stubbed 2 0 bash "$log_script" add "$repo" "$base" HEAD
+run_capturing stubbed 2 0 bash "$in_root_script" "$log_script" add "$repo" "$base" HEAD
 assert_eq "$captured_exit_code" "0"
 assert_eq "$(wc -l < "$repo/.claude/mash-workbench/reviews.log" | tr -d ' ')" "1"
 assert_eq "$(awk '{ print NF }' "$repo/.claude/mash-workbench/reviews.log")" "5"
 assert_not_contains "$(cat "$repo/.claude/mash-workbench/reviews.log")" "zzzz"
 rm "$repo/.claude/mash-workbench/reviews.log"
 # A per-commit id that is no patch-id (call 2 prints garbage): the guard refuses the record and writes nothing.
-run_capturing stubbed 0 2 bash "$log_script" add "$repo" "$base" HEAD
+run_capturing stubbed 0 2 bash "$in_root_script" "$log_script" add "$repo" "$base" HEAD
 assert_eq "$captured_exit_code" "6"
 assert_contains "$captured_output" "not one line of five fields"
 [[ ! -e "$repo/.claude/mash-workbench/reviews.log" ]] || { echo "  the guard let a broken record through"; exit 1; }
 # reviewed with a failing patch-id prints nothing and still answers by the range (rule a).
-bash "$log_script" add "$repo" "$base" HEAD >/dev/null
-run_capturing stubbed 1 0 bash "$log_script" reviewed "$repo" HEAD
+bash "$in_root_script" "$log_script" add "$repo" "$base" HEAD >/dev/null
+run_capturing stubbed 1 0 bash "$in_root_script" "$log_script" reviewed "$repo" HEAD
 assert_eq "$captured_exit_code" "0"
 assert_eq "$captured_output" ""
 
@@ -353,13 +355,13 @@ mkdir -p "$repo/.claude/mash-workbench"
 ln -s "$fixture/outside-target" "$repo/.claude/mash-workbench/reviews.log"
 for arguments in "add $repo $base HEAD" "reviewed $repo HEAD"; do
   # shellcheck disable=SC2086  # the words are split on purpose
-  run_capturing bash "$log_script" $arguments
+  run_capturing bash "$in_root_script" "$log_script" $arguments
   assert_eq "$captured_exit_code" "6"
   assert_contains "$captured_output" "symbolic link"
 done
 rm -r "$repo/.claude/mash-workbench"; mkdir -p "$fixture/outside-home"
 ln -s "$fixture/outside-home" "$repo/.claude/mash-workbench"
-run_capturing bash "$log_script" add "$repo" "$base" HEAD
+run_capturing bash "$in_root_script" "$log_script" add "$repo" "$base" HEAD
 assert_eq "$captured_exit_code" "6"
 assert_contains "$captured_output" "symbolic link"
 assert_eq "$(cat "$fixture/outside-target")" "keep"
@@ -367,9 +369,9 @@ assert_eq "$(find "$fixture/outside-home" -type f | wc -l | tr -d ' ')" "0"
 # A revision that starts with "-" is not read as a git option.
 rm "$repo/.claude/mash-workbench"
 for option in --all -q --git-dir=/x; do
-  run_capturing bash "$log_script" add "$repo" "$option" HEAD
+  run_capturing bash "$in_root_script" "$log_script" add "$repo" "$option" HEAD
   assert_eq "$captured_exit_code" "2"
   assert_contains "$captured_output" "not a commit"
-  run_capturing bash "$log_script" reviewed "$repo" "$option"
+  run_capturing bash "$in_root_script" "$log_script" reviewed "$repo" "$option"
   assert_eq "$captured_exit_code" "2"
 done

@@ -40,13 +40,23 @@
 # Reads: the two settings.local.json files named above, only the "Bash(...)" strings of their arrays, with the name of
 # each array (allow, deny, ask). A rule in a deny or ask list is never printed as "present" or "remove"; a current
 # rule that is also in one gets a note, because a deny or ask rule wins. Writes nothing. No network.
-# Exit codes: 0 success; 2 usage error, or <repo-root> is not in a git repository; 5 bare repository, or the main
+# Exit codes: 0 success; 2 usage error, or <repo-root> is not in a git repository; 5 a linked worktree of a bare repository, or the main
 # worktree cannot be found; 6 no rules offered: the plugin folder, or a symbolic link on the path to it, is inside a
 # worktree of the repository (a session that edits files there could change the scripts, or point the link at other
 # scripts, and then run them with no prompt), or the path holds a character that a rule cannot spell safely (anything
 # but letters, digits, space and _ . / : @ % + = , ~ -).
 # Plain bash 3.2 (macOS) and Git Bash: no associative arrays, no ${var,,}, no mapfile.
 set -euo pipefail
+# Exit 6 also when <repo-root> is in a folder shaped like a git directory (mash-settings.sh refuses it before git runs).
+# Git runs without the variables that choose another repository, index or config, and with no fsmonitor program
+# (GIT_CONFIG_COUNT needs version 2.31 or later; an older version ignores it).
+# In a partial clone it downloads no missing object (GIT_NO_LAZY_FETCH, version 2.44 and later; an older version can
+# download one, which is a network call).
+# Each git call runs in a folder that mash-settings.sh checked: the main worktree, or the top folder of <repo-root>
+# (mash-settings.sh toplevel), with -C.
+unset GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR GIT_INDEX_FILE GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES \
+  GIT_NAMESPACE GIT_LITERAL_PATHSPECS GIT_GLOB_PATHSPECS GIT_NOGLOB_PATHSPECS GIT_ICASE_PATHSPECS GIT_CONFIG_PARAMETERS
+export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.fsmonitor GIT_CONFIG_VALUE_0='' GIT_NO_LAZY_FETCH=1
 
 usage="usage: permission-rules.sh <repo-root>"
 [[ $# -eq 1 && -d "$1" ]] || { echo "$usage" >&2; exit 2; }
@@ -89,6 +99,7 @@ safe_path='^[A-Za-z0-9 _./:@%+=,~-]+$'
 
 root=$(cd "$1" && pwd -P)
 main=$(bash "$here/../../scripts/mash-settings.sh" main-worktree "$root") || exit $?
+root=$(bash "$here/../../scripts/mash-settings.sh" toplevel "$root") || exit $?
 main=$(cd "$main" && pwd -P)
 # The folders a session of this repository edits: the main worktree, <repo-root> and every linked worktree. A listed
 # worktree whose folder is gone (deleted by hand, not pruned yet) counts as git names it.
@@ -191,11 +202,19 @@ stale=$(stale_rules "$main_file")
 own_stale=""
 if [[ "$root" != "$main" ]]; then own_stale=$(stale_rules "$own_file"); fi
 
+# Windows (Git Bash, MSYS, Cygwin): the path and link checks of these scripts are not tested there, so no rule is
+# offered and a current rule is listed for removal: each run then asks the user.
+untested=""
+case "$(uname -s 2>/dev/null)" in MINGW* | MSYS* | CYGWIN*) untested=1 ;; esac
+
 echo "file: $main_file"
 missing=0
 has_present=0
 while IFS= read -r rule; do
-  if grep -Fx -- "$rule" <<< "$in_main" > /dev/null; then
+  if [[ -n "$untested" ]]; then
+    if grep -Fx -- "$rule" <<< "$in_main" > /dev/null; then echo "remove: $rule"; fi
+    missing=3
+  elif grep -Fx -- "$rule" <<< "$in_main" > /dev/null; then
     echo "present: $rule"
     has_present=1
   elif [[ -z "$stale$own_stale" ]]; then
@@ -209,6 +228,7 @@ while IFS= read -r rule; do
   fi
 done <<< "$current"
 [[ -z "$stale" ]] || printf '%s\n' "$stale" | sed 's/^/remove: /'
+[[ -z "$untested" ]] || echo "note: no allow rule is offered on Windows: the scripts' path and link checks are not tested there, so each run must ask the user. Remove any \"remove\" rule above."
 if [[ -n "$own_stale" ]]; then
   echo "file: $own_file"
   printf '%s\n' "$own_stale" | sed 's/^/remove: /'

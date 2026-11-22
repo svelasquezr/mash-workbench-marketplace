@@ -53,6 +53,13 @@ def agent_file(reviewer: str, repository_root: Path) -> Path | None:
         usable = plugin == PLUGIN_NAME and candidate.is_file() and not candidate.is_symlink()
         return candidate if usable else None
     agents_directory = repository_root / ".claude" / "agents"
+    # A committed link at .claude or .claude/agents could name a folder outside the repository: nothing there is read.
+    try:
+        inside = agents_directory.resolve().is_relative_to(repository_root.resolve())
+    except OSError:
+        inside = False
+    if not inside:
+        return None
     candidate = agents_directory / f"{reviewer}.md"
     if is_file_name(reviewer) and candidate.is_file() and not candidate.is_symlink():
         return candidate

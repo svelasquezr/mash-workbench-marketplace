@@ -109,3 +109,20 @@ mkdir -p "$scratch/project"; printf 'not a program\n' > "$scratch/project/py -3"
 run_capturing env -i HOME="$HOME" PATH="$bin" "$bash_path" -c 'cd "$1" && "$2" "$3" "$4" 0' _ "$scratch/project" "$bash_path" "$finder_path" "$scratch/echo.py" < /dev/null
 assert_eq "$captured_exit_code" "0"
 assert_contains "$captured_output" "ran ['0']"
+# The same with MASH_PYTHON="py -3" (the README's Windows form): the variable is a command, not the project's file, so
+# the launcher runs. MASH_PYTHON is one path only when it holds a / or a \.
+# shellcheck disable=SC2016  # the inner bash expands its arguments
+run_capturing env -i HOME="$HOME" PATH="$bin" MASH_PYTHON="py -3" "$bash_path" -c 'cd "$1" && "$2" "$3" "$4" 0' _ "$scratch/project" "$bash_path" "$finder_path" "$scratch/echo.py" < /dev/null
+assert_eq "$captured_exit_code" "0"
+assert_contains "$captured_output" "ran ['0']"
+# MASH_PYTHON="py -3.12" with a project file of that name: the variable is still the command that runs (the built-in
+# "py -3" is refused by this launcher, so only the variable can succeed).
+bin=$(new_bin)
+make_fake "$bin" py "#!/bin/sh
+[ \"\$1\" = -3.12 ] || exit 9
+shift; exec \"$real_python\" \"\$@\""
+printf 'not a program\n' > "$scratch/project/py -3.12"
+# shellcheck disable=SC2016  # the inner bash expands its arguments
+run_capturing env -i HOME="$HOME" PATH="$bin" MASH_PYTHON="py -3.12" "$bash_path" -c 'cd "$1" && "$2" "$3" "$4" 0' _ "$scratch/project" "$bash_path" "$finder_path" "$scratch/echo.py" < /dev/null
+assert_eq "$captured_exit_code" "0"
+assert_contains "$captured_output" "ran ['0']"
