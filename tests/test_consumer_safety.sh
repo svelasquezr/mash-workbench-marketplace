@@ -222,4 +222,31 @@ assert_contains "$captured_output" "remove: "
 no_escape_byte "$captured_output" "permission-rules remove line"
 [[ "$captured_output" != *"$c1"* ]] || { echo "  a C1 control reached the output (permission-rules)"; exit 1; }
 rm "$a/.claude/settings.local.json"
+# 16. A repository whose own folder name holds an escape sequence (a submodule path can hold one): every writing script
+#     and permission-rules.sh refuse it before they print a path, and no escape byte reaches the output.
+oddrepo="$area/vendor/x${esc}]0;PWNED${c1}y"; mkdir -p "$(dirname "$oddrepo")"; new_repository "$oddrepo"
+for command in "$rr/skills/add-reviewer/escape-add.sh $oddrepo src/x wrong-result odd --body text" \
+  "$mw/skills/scout/backlog-add.sh $oddrepo script T why" "$rr/skills/review-changes/permission-rules.sh $oddrepo" \
+  "$rr/skills/review-changes/review-log.sh reviewed $oddrepo HEAD"; do
+  # shellcheck disable=SC2086  # the words are split on purpose (no word holds a space)
+  from "$oddrepo" bash $command
+  assert_eq "$captured_exit_code" "6"
+  no_escape_byte "$captured_output" "repository path: $command"
+  [[ "$captured_output" != *"$c1"* ]] || { echo "  a C1 control reached the output (repository path)"; exit 1; }
+done
+# A linked worktree of a bare repository (no main worktree) in such a folder is refused too.
+git -C "$area/bare.git" worktree add --quiet "$area/wt${esc}[2Kx" -b oddwt
+from "$area/wt${esc}[2Kx" env REVIEW_ROUTING_ESCAPES="$area/bare-escapes" bash "$rr/skills/add-reviewer/escape-add.sh" "$area/wt${esc}[2Kx" src/x wrong-result oddwt --body "text"
+assert_eq "$captured_exit_code" "6"
+no_escape_byte "$captured_output" "bare worktree path"
+# Outside git, a <repo-root> whose own name holds one is refused before a message can name it.
+plain_odd="$area/plain${esc}[2Kodd"; mkdir -p "$plain_odd"
+from "$plain_odd" env MASH_WORKBENCH_BACKLOG=notes.md bash "$mw/skills/scout/backlog-add.sh" "$plain_odd" script "A title" "why"
+assert_eq "$captured_exit_code" "6"
+no_escape_byte "$captured_output" "non-git root name"
+# The current folder (inside a clean repository) holds one, and <repo-root> is outside git: the refusal is clean.
+mkdir -p "$top/r/src/q${esc}[2Kz"
+from "$top/r/src/q${esc}[2Kz" env MASH_WORKBENCH_BACKLOG=notes/backlog.md bash "$mw/skills/scout/backlog-add.sh" "$top" script "A title" "why"
+assert_eq "$captured_exit_code" "6"
+no_escape_byte "$captured_output" "backlog-add current folder"
 echo "consumer safety: ok"

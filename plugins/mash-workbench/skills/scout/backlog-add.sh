@@ -68,6 +68,13 @@ valid_date "$entry_date" || { echo "BACKLOG_DATE must be a date, YYYY-MM-DD: $en
 [[ "$title" =~ [^[:space:]] ]] || { echo "the title is empty" >&2; echo "$usage" >&2; exit 2; }
 [[ "$title" != *" — "* ]] || { echo "the title must not contain ' — ': it separates the title from the reason" >&2; exit 2; }
 
+# clean: no control characters in what is printed from files or folder names (a commit can hold either).
+clean() { LC_ALL=C tr -d '\000-\010\013-\037\177' | LC_ALL=C awk '{ gsub(/\302[\200-\237]/, ""); print }'; }
+# A <repo-root> whose name holds a control character is refused before any message names it.
+if [[ "$root" == *$'\t'* || "$(printf '%s' "$root" | clean)" != "$root" ]]; then
+  echo "backlog-add: refused: the folder name of <repo-root> holds a control character" >&2
+  exit 6
+fi
 # in_git: the path checks, the settings files and the owner line need a git repository.
 in_git=1
 main_status=0
@@ -86,12 +93,12 @@ else
   here_status=0
   bash "$settings" main-worktree "$(pwd -P)" >/dev/null 2>&1 || here_status=$?
   if ((here_status != 2)); then
-    echo "backlog-add: refused: $root is not in a git repository, but the current folder ($(pwd -P)) is in or under one (or in a folder git would take as one): a line goes only to the repository the session works in." >&2
+    echo "backlog-add: refused: $root is not in a git repository, but the current folder ($(pwd -P)) is in or under one (or in a folder git would take as one): a line goes only to the repository the session works in." | clean >&2
     exit 6
   fi
   case "$(pwd -P)/" in
     "$root"/*) ;;
-    *) echo "backlog-add: refused: the current folder ($(pwd -P)) is not inside $root: a line goes only to the project the session works in. Run the command from inside it." >&2; exit 6 ;;
+    *) echo "backlog-add: refused: the current folder ($(pwd -P)) is not inside $root: a line goes only to the project the session works in. Run the command from inside it." | clean >&2; exit 6 ;;
   esac
 fi
 status=0
@@ -182,8 +189,6 @@ elif [[ -n "$key" ]] && ! grep -q '^repo:' "$backlog_file" && [[ "$(head -n 1 "$
   mv "$temporary" "$backlog_file"
 fi
 if grep -qiF -- "· $title —" "$backlog_file"; then echo "already in backlog: $title"; exit 0; fi
-# clean: no control characters in what is printed from files (a committed file can hold an escape sequence).
-clean() { LC_ALL=C tr -d '\000-\010\013-\037\177' | LC_ALL=C awk '{ gsub(/\302[\200-\237]/, ""); print }'; }
 TITLE="$title" awk '
   function words(text, set,   parts, count, i, n) {
     n = split(tolower(text), parts, /[^a-z0-9]+/); count = 0

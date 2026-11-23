@@ -170,6 +170,12 @@ find_main() {
   main_unknown=""
   [[ -d "$dir" ]] || { warn "no such folder: $dir"; return 2; }
   anchor "$dir" || return $?
+  # The scripts print the repository's paths in their messages: a folder name with a control character (a submodule
+  # path can hold one) is refused, so no escape sequence of it reaches the terminal.
+  if has_control "$anchor_top" || has_control "$anchor_git_dir"; then
+    warn "refused: the path of the repository holds a control character: $anchor_top"
+    return 6
+  fi
   # Git runs only from the folder that holds the .git entry, and its answer must name that entry: then no committed
   # config chose the repository.
   dir=$anchor_top
@@ -188,6 +194,7 @@ find_main() {
   work_tree=${work_tree%$'\r'}
   if [[ -n "$work_tree" ]]; then
     main=$(cd "$common" && cd "$work_tree" && pwd -P) || return 2
+    if has_control "$main" || has_control "$common"; then warn "refused: the path of the repository holds a control character: $main"; return 6; fi
     return 0
   fi
   if [[ "$(run_git --git-dir="$common" rev-parse --is-bare-repository 2>/dev/null)" == true* ]]; then
@@ -200,6 +207,7 @@ find_main() {
   # records the work folder, so every worktree gives that same answer, and the settings never split in two.
   if [[ "$(basename "$common")" == .git ]]; then
     main=$(dirname "$common")
+    if has_control "$main"; then warn "refused: the path of the repository holds a control character: $main"; return 6; fi
     return 0
   fi
   # Any other --separate-git-dir repository: only the work folder itself (the git dir and the common dir are the
