@@ -1,15 +1,10 @@
 # shellcheck shell=bash
 set -euo pipefail
 source tests/lib.sh
-finder=plugins/review-routing/scripts/python.sh
+finder=plugins/mash-workbench/scripts/python.sh
 real_python=$(command -v python3)
 bash_path=$(command -v bash)
 scratch=$(mktemp -d); trap 'rm -rf "$scratch"' EXIT
-
-# Both plugins ship the same finder.
-assert_eq "$(cmp plugins/review-routing/scripts/python.sh plugins/mash-workbench/scripts/python.sh && echo same)" "same"
-# ... and the same settings lookup.
-assert_eq "$(cmp plugins/review-routing/scripts/mash-settings.sh plugins/mash-workbench/scripts/mash-settings.sh && echo same)" "same"
 
 # fake_bin <name>: a bin directory that holds only fakes, so the system python3 is out of sight.
 # The stub also reads stdin, so a probe that does not shield stdin would lose the hook's input.

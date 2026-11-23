@@ -1,6 +1,7 @@
 # shellcheck shell=bash
-# Convention: every script path a skill writes as "<this skill's base directory>/<path>.sh" or ".py", in any SKILL.md or
-# reference.md, names a file that exists (relative to that skill's folder, so "../add-reviewer/x.sh" counts).
+# Convention: every script path a skill of a plugin that ships scripts writes as "<this skill's base directory>/<path>.sh" or ".py", in any SKILL.md or
+# reference.md, names a file that exists (relative to that skill's folder, so "../scout/x.sh" counts). A plugin with no .sh or .py files (mash-review) is skipped; the
+# sanity scan below runs on mash-workbench, the plugin that has scripts.
 # tests/test_skill_references.sh checks only quoted section names, not script paths.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -25,12 +26,16 @@ printf 'run `bash <this skill'"'"'s base directory>/../two/real.sh <repo>` and `
 assert_eq "$(missing_scripts "$scratch/one/SKILL.md")" "$scratch/one/SKILL.md: no such script: gone.sh"
 
 # The scan finds paths at all (a pattern that matches nothing would pass every file).
-found=$(grep -o "<this skill's base directory>/[^][:space:]\`'\"<>()]*\.\(sh\|py\)" plugins/review-routing/skills/review-changes/SKILL.md | wc -l | tr -d ' ')
-[[ "$found" -ge 2 ]] || { echo "  the scan found no script paths in review-changes/SKILL.md"; exit 1; }
+found=$(grep -o "<this skill's base directory>/[^][:space:]\`'\"<>()]*\.\(sh\|py\)" plugins/mash-workbench/skills/scout/SKILL.md | wc -l | tr -d ' ')
+[[ "$found" -ge 1 ]] || { echo "  the scan found no script paths in scout/SKILL.md"; exit 1; }
 
 problems=""
 for file in plugins/*/skills/*/SKILL.md plugins/*/skills/*/reference.md; do
   [[ -f "$file" ]] || continue
+  # Only a plugin that ships scripts (mash-workbench) is checked: a plugin with none, like mash-review, is
+  # instructions only, and the paths it writes are not script paths.
+  plugin_directory=${file#plugins/}; plugin_directory=plugins/${plugin_directory%%/*}
+  [[ -d "$plugin_directory/scripts" || -n "$(find "$plugin_directory" -name '*.sh' -o -name '*.py' | head -n 1)" ]] || continue
   problems+=$(missing_scripts "$file")
 done
 assert_eq "$problems" ""

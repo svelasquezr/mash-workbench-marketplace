@@ -1,6 +1,10 @@
 # Changelog
 
-Newest first. "Changed scripts" lists the scripts and hooks whose behavior changed, so you know what to re-read before you update.
+Newest first.
+
+## 1.0.0 - 2026-11-23
+
+The plugin `review-routing` is now `mash-review`, made of instructions only: no Python, no hook, no scripts. The design is in `docs/specs/mash-review.md` in the marketplace repository; migration steps follow in this entry.
 
 ## 0.6.0 - 2026-11-22
 

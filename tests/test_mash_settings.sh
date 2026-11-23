@@ -1,10 +1,9 @@
 # shellcheck shell=bash
-# mash-settings.sh: one settings lookup and one escapes-path check for every worktree of a repository.
+# mash-settings.sh: one settings lookup for every worktree of a repository.
 set -euo pipefail
 source tests/lib.sh
 source tests/git_fixtures.sh
-settings_script="$PWD/plugins/review-routing/scripts/mash-settings.sh"
-path_script="$PWD/plugins/review-routing/skills/add-reviewer/escapes-path.sh"
+settings_script="$PWD/plugins/mash-workbench/scripts/mash-settings.sh"
 # The path checks refuse /tmp, so the whole fixture lives under $HOME (never under /tmp).
 area=$(mktemp -d "$HOME/.mash-settings-test.XXXXXX"); trap 'rm -rf "$area"' EXIT
 case "$(cd "$area" && pwd -P)" in /tmp/* | /var/tmp/*) echo "  HOME is under /tmp: the fixture cannot hold a non-temporary repository"; exit 1 ;; esac
@@ -211,13 +210,6 @@ assert_eq "$captured_exit_code" "6"
 assert_contains "$captured_output" "shaped like a git directory"
 assert_eq "$(settings toplevel "$area/bare-linked")" "$(normalized "$area/bare-linked")"
 assert_eq "$(REVIEW_ROUTING_ESCAPES=/abs/escapes settings get "$area/bare-linked" escapes)" "/abs/escapes"
-# Finding 3: escapes-path.sh there needs an absolute path.
-run_capturing env REVIEW_ROUTING_ESCAPES=notes/escapes bash "$path_script" "$area/bare-linked"
-assert_eq "$captured_exit_code" "5"
-assert_contains "$captured_output" "absolute path"
-assert_eq "$(REVIEW_ROUTING_ESCAPES="$area/bare-escapes" bash "$path_script" "$area/bare-linked")" "$area/bare-escapes"
-run_capturing bash "$path_script" "$area/bare-linked"
-assert_eq "$captured_exit_code" "5"
 
 # 8. Repo key: every clone spelling gives one key; no origin gives local/<main worktree folder name>.
 keyed="$area/Keyed"; new_repository "$keyed"
@@ -311,56 +303,6 @@ check "$area/bare-linked" "$area/bare-escapes"
 assert_eq "$captured_exit_code" "0"
 check "$area/bare-linked" "$area/bare-linked/escapes"
 assert_eq "$captured_exit_code" "6"
-
-# 10. escapes-path.sh from a linked worktree, with the setting in the main worktree's settings.local.
-paths="$area/paths"; new_repository "$paths"
-git -C "$paths" worktree add --quiet "$paths/.claude/worktrees/w" -b w
-linked="$paths/.claude/worktrees/w"; paths_main=$(normalized "$paths")
-run_capturing bash "$path_script" "$linked"
-assert_eq "$captured_exit_code" "3"
-assert_eq "$captured_output" ""
-settings set "$paths" escapes off --local >/dev/null
-run_capturing bash "$path_script" "$linked"
-assert_eq "$captured_exit_code" "4"
-assert_eq "$captured_output" ""
-settings set "$paths" escapes .claude/mash-workbench/escapes --local >/dev/null
-assert_eq "$(bash "$path_script" "$linked")" "$paths_main/.claude/mash-workbench/escapes"
-settings set "$paths" escapes "$area/elsewhere" --local >/dev/null
-assert_eq "$(bash "$path_script" "$linked")" "$area/elsewhere"
-assert_eq "$(REVIEW_ROUTING_ESCAPES=notes/e.md bash "$path_script" "$linked")" "$paths_main/notes/e.md"
-rm "$paths/.claude/mash-workbench/settings.local"
-for old in docs/review-escapes.md docs/mash/review-escapes.md; do
-  mkdir -p "$paths/$(dirname "$old")"; printf '# Review escapes\n' > "$paths/$old"
-  assert_eq "$(bash "$path_script" "$linked" 2>/dev/null)" "$paths_main/$old"
-  # shellcheck disable=SC2016  # the single quotes are meant: $1 and $2 expand in the inner bash
-  run_capturing bash -c 'bash "$1" "$2" 2>&1 >/dev/null' _ "$path_script" "$linked"
-  assert_contains "$captured_output" "old ledger format in use: $old; run escape-migrate.sh"
-done
-
-# Finding 2: escape-add.sh from a linked worktree writes into the main worktree's escapes folder, where a plain record
-# and the report find it again.
-add_script="$PWD/plugins/review-routing/skills/add-reviewer/escape-add.sh"
-report_script="$PWD/plugins/review-routing/skills/add-reviewer/escapes-report.sh"
-printf 'When X, Y happens.\n' > "$area/body.md"
-led="$area/led"; new_repository "$led"
-git -C "$led" worktree add --quiet "$led/.claude/worktrees/w" -b w
-led_linked="$led/.claude/worktrees/w"
-settings set "$led" escapes .claude/mash-workbench/escapes --local >/dev/null
-bash "$in_root_script" "$add_script" "$led_linked" src/a wrong-result one --body "$(cat "$area/body.md")" >/dev/null
-run_capturing bash "$in_root_script" "$add_script" "$led_linked" src/a missing-test two --body "$(cat "$area/body.md")"
-assert_eq "$captured_exit_code" "0"
-assert_contains "$captured_output" "recorded: .claude/mash-workbench/escapes/"
-assert_eq "$(find "$led/.claude/mash-workbench/escapes" -name '*.md' ! -name README.md | wc -l | tr -d ' ')" "2"
-[[ ! -e "$led_linked/.claude/mash-workbench" ]] || { echo "  recorded into the linked worktree"; exit 1; }
-assert_contains "$(bash "$report_script" "$led_linked" 2>/dev/null)" "src/a: 2 escapes"
-
-# Finding 11: escapes=off in a settings file stops recording.
-offrepo="$area/offrepo"; new_repository "$offrepo"
-settings set "$offrepo" escapes off --local >/dev/null
-run_capturing bash "$in_root_script" "$add_script" "$offrepo" src/a wrong-result off --body "$(cat "$area/body.md")"
-assert_eq "$captured_exit_code" "0"
-assert_contains "$captured_output" "off"
-[[ ! -e "$offrepo/.claude/mash-workbench/escapes" ]] || { echo "  recorded while off"; exit 1; }
 
 # An empty value counts as not set, for every key: get skips it (the next source answers), set refuses it.
 empty_repo="$area/empty"; new_repository "$empty_repo"; mkdir -p "$empty_repo/.claude/mash-workbench"

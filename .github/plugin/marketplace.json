@@ -1,6 +1,6 @@
 {
   "name": "mash-workbench-marketplace",
-  "description": "MASH (Memories, Agents, Skills, Hooks): plugins that turn repeated work into tooling and route code review to the right reviewer",
+  "description": "MASH (Memories, Agents, Skills, Hooks): plugins that turn repeated work into tooling and review changes against project standards",
   "owner": {
     "name": "Sergio Velasquez"
   },
@@ -12,10 +12,13 @@
       "category": "development"
     },
     {
-      "name": "review-routing",
-      "description": "Specialist reviewer agents per project: route each change to its reviewers from .claude/reviewers.toml, review your changes before opening a PR, add a reviewer, record review escapes, ready an existing project (inspect)",
-      "source": "./plugins/review-routing",
+      "name": "mash-review",
+      "description": "Review changes against your project's review standards (skills), record the bugs a review passed, and turn them into new standards. Instructions only: no Python, no hooks, no scripts. Say \"mash review\" to pick it.",
+      "source": "./plugins/mash-review",
       "category": "development"
     }
-  ]
+  ],
+  "renames": {
+    "review-routing": "mash-review"
+  }
 }

@@ -16,10 +16,9 @@ Plugin marketplace (brand MASH: Memories, Agents, Skills, Hooks) of general-purp
 
 - The tests' in-place edits use GNU sed (on macOS: `brew install gnu-sed`); the shipped scripts don't need it.
 - Run `pre-commit install` once: it installs the commit-message hook (Conventional Commits) that CI also checks.
-- `tests/test_reviewer_guard.sh` builds its fixture repositories under `$HOME` (the hook treats `/tmp` as throwaway), removes them on exit, and refuses to run when `$HOME` is under `/tmp`.
 - `pre-commit` can run as `uvx pre-commit run --all-files`.
-- Scripts and hooks need Python 3.11 or newer, and call it only through the plugin's `scripts/python.sh`: on Windows, `python3` is often the Microsoft Store alias, which fails every call. The file is the same in every plugin (`tests/test_find_python.sh`).
-- Three more files are identical copies in both plugins, because an installed plugin cannot read another plugin's files: `scripts/mash-settings.sh` (`tests/test_find_python.sh`), `scripts/plugin-current.sh` (`tests/test_plugin_current.sh`) and `permission-rules.sh` (`tests/test_permission_rules.sh`). Change one, copy it to the other.
+- `tests/test_plugin_current.sh`, `test_consumer_safety.sh`, `test_git_dir_shape.sh`, `test_mash_settings.sh` and `test_permission_rules.sh` build their fixture repositories under `$HOME` (the scripts treat `/tmp` as throwaway), remove them on exit, and refuse to run when `$HOME` is under `/tmp`.
+- Only `past-friction.py` in mash-workbench is Python (3.11 or newer); it runs through the plugin's `scripts/python.sh`: on Windows, `python3` is often the Microsoft Store alias, which fails every call (`tests/test_find_python.sh`).
 - `tests/test_no_network.sh` keeps its accepted lines in `tests/no_network_allowed.txt`, by file and line number: after you edit a file that has entries, run `NO_NETWORK_LIST=1 bash tests/test_no_network.sh` and update them.
 
 ## Skill and agent conventions

@@ -24,7 +24,22 @@ for plugin in json.load(open(sys.argv[1]))["plugins"]:
     print(plugin["name"])
 PY
 )
-assert_eq "$listed" "$(printf 'mash-workbench\nreview-routing')"
+assert_eq "$listed" "$(printf 'mash-workbench\nmash-review')"
+
+# Both catalogs record that review-routing is now mash-review, and every rename target is a listed plugin.
+for catalog in "$claude_catalog" "$copilot_catalog"; do
+  assert_eq "$(python3 - "$catalog" <<'PY'
+import json, sys
+catalog = json.load(open(sys.argv[1]))
+renames = catalog.get("renames")
+assert renames == {"review-routing": "mash-review"}, renames
+listed = {plugin["name"] for plugin in catalog["plugins"]}
+for old, new in renames.items():
+    assert new in listed, f"renames: {old} -> {new}, which is not a listed plugin"
+print("ok")
+PY
+)" "ok"
+done
 
 # Every plugin folder is listed.
 assert_eq "$(find plugins -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')" "$(grep -c . <<< "$listed")"
