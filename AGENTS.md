@@ -10,6 +10,7 @@ Plugin marketplace (brand MASH: Memories, Agents, Skills, Hooks) of general-purp
 - `plugins/<name>/` — `.claude-plugin/plugin.json`, `skills/<skill>/SKILL.md` (+ the skill's scripts next to it), `agents/*.md`, `hooks/hooks.json` (+ the hook's script next to it)
 - `tests/test_*.sh` — bash tests for every script; `bash tests/run.sh`
 - `docs/decisions/` — architecture decisions
+- `docs/specs/<plugin>.md` — a plugin's design: its model, decisions, contracts and diagrams
 
 ## Working on this repo
 
@@ -33,7 +34,8 @@ Plugin marketplace (brand MASH: Memories, Agents, Skills, Hooks) of general-purp
 
 ## Rules
 
-- Deterministic first: hook > script > skill > agent > MCP. Skills hold judgment and call scripts for mechanics.
+- Instructions first: a plugin prefers skills and agents; a project adds hooks or scripts when it needs a guarantee (`docs/decisions/0007-instructions-first.md`). mash-workbench still has scripts until its own change; the script rules in this file apply to them.
+- A change to a plugin's behavior updates the diagrams in its spec, `docs/specs/<plugin>.md`, in the same PR.
 - Every script gets a bash test written first. Before committing run `bash scripts/check.sh` (the tests, then `claude plugin validate --strict`) and `pre-commit run --all-files`; CI runs the same two.
 - Bump the plugin's `version` in `plugin.json` on every change that consumers should receive.
 - Test a plugin locally without publishing: `claude --plugin-dir plugins/<name>` from a consumer repo.

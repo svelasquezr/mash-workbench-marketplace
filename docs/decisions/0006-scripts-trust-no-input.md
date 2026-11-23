@@ -1,5 +1,7 @@
 # 0006: the scripts do not trust a committed file, an argument or an old copy
 
+Status: accepted for mash-workbench. For review-routing, superseded by [0007](0007-instructions-first.md): mash-review has no scripts.
+
 ## Context
 
 An audit of the plugins found eight ways in which data from a repository, from a session or from an old plugin version changed what a script did. Each one is a security bug. The conditions, the incorrect result and the expected result follow.
