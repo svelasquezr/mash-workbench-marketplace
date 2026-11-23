@@ -33,12 +33,15 @@ usage() { echo "usage: escape-migrate.sh <repo-root>" >&2; exit 2; }
 [[ $# -eq 1 && -d "$1" ]] || usage
 # clean: no control characters in what is printed from files or folder names (a commit can hold either).
 clean() { LC_ALL=C tr -d '\000-\010\013-\037\177' | LC_ALL=C awk '{ gsub(/\302[\200-\237]/, ""); print }'; }
+# say_line <text>: the text on one line of stderr, without control characters (a tab or a line feed in a folder name
+# becomes a space, so a name cannot add a line of its own).
+say_line() { printf '%s\n' "$(printf '%s' "$1" | tr '\t\n' '  ' | clean)" >&2; }
 root=$(cd "$1" && pwd -P)
 status=0
 main=$(bash "$settings" main-worktree "$root" 2>/dev/null) || status=$?
 case "$status" in
   0) ;;
-  2) echo "escape-migrate: not in a git repository: $root" | clean >&2; exit 2 ;;
+  2) say_line "escape-migrate: not in a git repository: $root"; exit 2 ;;
   6) bash "$settings" main-worktree "$root" >/dev/null || true; exit 6 ;;  # once more, for its message on stderr
   *) echo "escape-migrate: no main worktree (bare repository): migrate from a clone with a work folder" >&2; exit "$status" ;;
 esac

@@ -269,5 +269,24 @@ for script in "$rr/skills/add-reviewer/escape-add.sh" "$rr/skills/add-reviewer/e
   no_escape_byte "$captured_output" "git refused: $script"
   [[ "$captured_output" != *"$c1"* ]] || { echo "  a C1 control reached the output (git refused)"; exit 1; }
 done
-git config --file "$k/.git/config" core.repositoryformatversion 0
+# (No restore: the EXIT trap deletes $area.)
+
+# 19. A line feed in a folder name never adds a line of its own to a message: the repository's own path, a <repo-root>
+#     outside git for escape-add.sh and escape-migrate.sh, and a current folder inside a clean repository.
+fake_line() { if printf '%s\n' "$1" | grep -q '^FAKE'; then echo "  a folder name added a line ($2)"; exit 1; fi; }
+lfrepo="$area/lfr"$'\n'"FAKE repo"; new_repository "$lfrepo"
+from "$area" bash "$settings_script" main-worktree "$lfrepo"
+assert_eq "$captured_exit_code" "6"
+fake_line "$captured_output" "mash-settings refusal"
+lfplain="$area/lfp"$'\n'"FAKE plain"; mkdir -p "$lfplain"
+from "$area" bash "$rr/skills/add-reviewer/escape-add.sh" "$lfplain" src/x wrong-result lf --body "text"
+fake_line "$captured_output" "escape-add not in git"
+from "$area" bash "$rr/skills/add-reviewer/escape-migrate.sh" "$lfplain"
+fake_line "$captured_output" "escape-migrate not in git"
+lfsub="$top/r/src/lf"$'\n'"FAKE sub"; mkdir -p "$lfsub"
+from "$lfsub" env MASH_WORKBENCH_BACKLOG=notes/backlog.md bash "$mw/skills/scout/backlog-add.sh" "$top" script "A title" "why"
+assert_eq "$captured_exit_code" "6"
+fake_line "$captured_output" "backlog-add current folder"
+from "$lfsub" bash "$rr/skills/add-reviewer/escape-add.sh" "$a" src/x wrong-result lf2 --body "text"
+fake_line "$captured_output" "same-repository message"
 echo "consumer safety: ok"

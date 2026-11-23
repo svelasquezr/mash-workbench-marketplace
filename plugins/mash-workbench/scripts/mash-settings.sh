@@ -91,7 +91,8 @@ usage() {
 }
 # warn <text>: one message on stderr, without control characters. A message can name a value, a path or a folder that a
 # commit chose, and no escape sequence of it may reach the terminal or the session.
-warn() { printf 'mash-settings: %s\n' "$*" | clean >&2; }
+# One line: a tab or a line feed in a folder name becomes a space, so a name cannot add a line of its own.
+warn() { printf 'mash-settings: %s\n' "$(printf '%s' "$*" | tr '\t\n' '  ' | clean)" >&2; }
 fail() {
   local code=$1
   shift

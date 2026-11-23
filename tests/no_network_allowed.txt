@@ -1,5 +1,5 @@
 # Lines that tests/test_no_network.sh accepts: <file>:<line>:<word><TAB><reason>. See the header of that test.
-plugins/mash-workbench/scripts/mash-settings.sh:389:ssh	comment that names the URL forms of an origin remote that the string handling next to it treats as equal; nothing runs ssh
+plugins/mash-workbench/scripts/mash-settings.sh:390:ssh	comment that names the URL forms of an origin remote that the string handling next to it treats as equal; nothing runs ssh
 plugins/mash-workbench/scripts/past-friction.py:18:git fetch	docstring example of how a recorded command is shortened to program and subcommand; the script runs no command
 plugins/mash-workbench/scripts/past-friction.py:59:gh	list of program names the script recognizes in transcripts; it runs none of them
 plugins/mash-workbench/scripts/past-friction.py:59:npx	list of program names the script recognizes in transcripts; it runs none of them
@@ -23,7 +23,7 @@ plugins/review-routing/hooks/reviewer-guard.py:793:"gh"	text, comment or table o
 plugins/review-routing/hooks/reviewer-guard.py:809:"gh"	text, comment or table of the hook that reads a reviewer's command string and refuses some commands; it runs no gh command and no git command that talks to a remote
 plugins/review-routing/hooks/reviewer-guard.py:95:"ls-remote"	text, comment or table of the hook that reads a reviewer's command string and refuses some commands; it runs no gh command and no git command that talks to a remote
 plugins/review-routing/hooks/reviewer-guard.py:97:"clone"	text, comment or table of the hook that reads a reviewer's command string and refuses some commands; it runs no gh command and no git command that talks to a remote
-plugins/review-routing/scripts/mash-settings.sh:389:ssh	comment that names the URL forms of an origin remote that the string handling next to it treats as equal; nothing runs ssh
+plugins/review-routing/scripts/mash-settings.sh:390:ssh	comment that names the URL forms of an origin remote that the string handling next to it treats as equal; nothing runs ssh
 plugins/review-routing/skills/add-reviewer/escape-add.sh:134:ssh	regular expression that reads an origin URL held in a string, to find owner and repo; it contacts nothing
 plugins/review-routing/skills/add-reviewer/reference.md:43:gh	prose that says which commands a reviewer may run; nothing runs them
 plugins/review-routing/skills/inspect/reference.md:21:gh	prose that says which commands a reviewer may not run; nothing runs them
