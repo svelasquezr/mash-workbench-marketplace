@@ -249,4 +249,25 @@ mkdir -p "$top/r/src/q${esc}[2Kz"
 from "$top/r/src/q${esc}[2Kz" env MASH_WORKBENCH_BACKLOG=notes/backlog.md bash "$mw/skills/scout/backlog-add.sh" "$top" script "A title" "why"
 assert_eq "$captured_exit_code" "6"
 no_escape_byte "$captured_output" "backlog-add current folder"
+# 17. Outside git, a <repo-root> with a line feed in its name is refused (a name must not add a line to the output).
+lf_root="$area/lf"$'\n'"backlog-add: fake line"; mkdir -p "$lf_root"
+from "$area" env MASH_WORKBENCH_BACKLOG=notes.md bash "$mw/skills/scout/backlog-add.sh" "$lf_root" script "A title" "why"
+assert_eq "$captured_exit_code" "6"
+assert_not_contains "$captured_output" "fake line"
+
+# 18. git refuses the repository (here: an unknown repository format) and <repo-root> is a subfolder with an escape
+#     sequence in its name: escape-add.sh and escape-migrate.sh name it without control characters.
+k="$area/k"; new_repository "$k"; mkdir -p "$k/src/x${esc}]0;PWNED${c1}y"
+git config --file "$k/.git/config" core.repositoryformatversion 99
+for script in "$rr/skills/add-reviewer/escape-add.sh" "$rr/skills/add-reviewer/escape-migrate.sh"; do
+  if [[ "$script" == *escape-add.sh ]]; then
+    from "$k" bash "$script" "$k/src/x${esc}]0;PWNED${c1}y" src/x wrong-result k --body "text"
+  else
+    from "$k" bash "$script" "$k/src/x${esc}]0;PWNED${c1}y"
+  fi
+  [[ "$captured_exit_code" != 0 ]] || { echo "  $script accepted a repository git refuses"; exit 1; }
+  no_escape_byte "$captured_output" "git refused: $script"
+  [[ "$captured_output" != *"$c1"* ]] || { echo "  a C1 control reached the output (git refused)"; exit 1; }
+done
+git config --file "$k/.git/config" core.repositoryformatversion 0
 echo "consumer safety: ok"

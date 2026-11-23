@@ -28,6 +28,7 @@
 # Plain bash 3.2 (macOS) and Git Bash, no python3: on Windows python3 is often the Microsoft Store stub.
 set -euo pipefail
 # Exit 6 also when <repo-root> is in a folder shaped like a git directory (mash-settings.sh refuses it before git runs).
+# Exit 6 also when the name of <repo-root> holds a control character, a tab or a line feed.
 # Exit 6 also when <repo-root> is not in the repository of the current folder (outside git: when the current folder
 # is not inside <repo-root>): an allow rule approves any arguments, so a line goes only to the session's project.
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
@@ -71,7 +72,7 @@ valid_date "$entry_date" || { echo "BACKLOG_DATE must be a date, YYYY-MM-DD: $en
 # clean: no control characters in what is printed from files or folder names (a commit can hold either).
 clean() { LC_ALL=C tr -d '\000-\010\013-\037\177' | LC_ALL=C awk '{ gsub(/\302[\200-\237]/, ""); print }'; }
 # A <repo-root> whose name holds a control character is refused before any message names it.
-if [[ "$root" == *$'\t'* || "$(printf '%s' "$root" | clean)" != "$root" ]]; then
+if [[ "$root" == *$'\t'* || "$root" == *$'\n'* || "$(printf '%s' "$root" | clean)" != "$root" ]]; then
   echo "backlog-add: refused: the folder name of <repo-root> holds a control character" >&2
   exit 6
 fi

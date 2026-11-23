@@ -164,7 +164,7 @@ set_root() {
     0) ;;
     5) main="" ;;
     6) bash "$settings" main-worktree "$root" >/dev/null || true; exit 6 ;;  # once more, for its message on stderr
-    *) echo "escape-add: not in a git repository: $root (escapes belong to a git repository)" >&2; exit 2 ;;
+    *) echo "escape-add: not in a git repository: $root (escapes belong to a git repository)" | clean >&2; exit 2 ;;
   esac
   root=$(bash "$settings" toplevel "$root") || exit $?
 }
