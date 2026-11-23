@@ -139,7 +139,8 @@ from "$e" bash "$rr/skills/add-reviewer/escape-migrate.sh" "$e"
 no_escape_byte "$captured_output" "escape-migrate"
 [[ "$captured_output" != *$'\302\233'* ]] || { echo "  a C1 control reached the output (escape-migrate)"; exit 1; }
 mkdir -p "$e/.github/workflows"
-printf 'jobs:\n  t:\n    steps:\n      - run: npm test\n' > "$e/.github/workflows/x${esc}]0;T${esc}\\$'\302\233'.yml"
+c1=$'\302\233'
+printf 'jobs:\n  t:\n    steps:\n      - run: npm test\n' > "$e/.github/workflows/x${esc}]0;T${esc}\\${c1}.yml"
 from "$e" bash "$rr/skills/review-changes/find-checks.sh" "$e"
 no_escape_byte "$captured_output" "find-checks"
 [[ "$captured_output" != *$'\302\233'* ]] || { echo "  a C1 control reached the output (find-checks)"; exit 1; }
@@ -190,4 +191,35 @@ own_dir="$area/owned"; mkdir -p "$own_dir"; printf '# Review escapes\nrepo: gith
 from "$a" bash "$settings_script" check-escapes-path "$a" "$own_dir"
 assert_eq "$captured_exit_code" "6"
 no_escape_byte "$captured_output" "owner line"
+# 13. A committed settings value with a backslash and an escape sequence: the refusal names no control character, in
+#     the read commands too, also under LC_ALL=C with a C1 control. A line feed or a tab in a path is refused.
+h="$area/h"; new_repository "$h"; mkdir -p "$h/.claude/mash-workbench"
+printf 'escapes=docs/%s]0;owned\a%s[2K\\x\nbacklog=docs/%s[31mRED\\b.md\n' "$esc" "$esc" "$esc" > "$h/.claude/mash-workbench/settings"
+for command in "$rr/skills/add-reviewer/escapes-report.sh $h" "$rr/skills/add-reviewer/escape-add.sh --list $h src/x" \
+  "$rr/skills/add-reviewer/escape-add.sh $h src/x wrong-result bs --body text" "$mw/skills/scout/backlog-add.sh $h script T why"; do
+  # shellcheck disable=SC2086  # the words are split on purpose
+  from "$h" bash $command
+  no_escape_byte "$captured_output" "backslash refusal: $command"
+done
+printf 'escapes=docs/e\302\233x\\y\n' > "$h/.claude/mash-workbench/settings"
+from "$h" env LC_ALL=C bash "$rr/skills/add-reviewer/escapes-report.sh" "$h"
+[[ "$captured_output" != *$'\302\233'* ]] || { echo "  a C1 control reached the output (backslash refusal)"; exit 1; }
+from "$h" env REVIEW_ROUTING_ESCAPES=$'docs/a\nb' bash "$settings_script" path "$h" escapes
+assert_eq "$captured_exit_code" "6"
+from "$h" bash "$settings_script" check-escapes-path "$h" $'docs/a\tb'
+assert_eq "$captured_exit_code" "6"
+
+# 14. A committed folder whose name holds an escape sequence, shaped like a git directory: the refusal names it cleanly.
+odd="$h/tools/x${esc}[2Ky"; mkdir -p "$odd/objects" "$odd/refs"; printf 'ref: refs/heads/main\n' > "$odd/HEAD"
+from "$odd" bash "$rr/skills/add-reviewer/escape-add.sh" "$odd" src/x wrong-result odd --body "text"
+assert_eq "$captured_exit_code" "6"
+no_escape_byte "$captured_output" "anchor message"
+# 15. A stale allow rule that holds an escape sequence is listed for removal without it.
+mkdir -p "$a/.claude"
+printf '{"permissions": {"allow": ["Bash(bash /old/review-routing/0.0.1/skills/add-reviewer/escape-add.sh%s[2K%s *)"]}}\n' "$esc" "$c1" > "$a/.claude/settings.local.json"
+from "$a" bash "$rr/skills/review-changes/permission-rules.sh" "$a"
+assert_contains "$captured_output" "remove: "
+no_escape_byte "$captured_output" "permission-rules remove line"
+[[ "$captured_output" != *"$c1"* ]] || { echo "  a C1 control reached the output (permission-rules)"; exit 1; }
+rm "$a/.claude/settings.local.json"
 echo "consumer safety: ok"

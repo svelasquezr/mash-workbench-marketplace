@@ -89,10 +89,13 @@ usage() {
   } >&2
   exit 2
 }
+# warn <text>: one message on stderr, without control characters. A message can name a value, a path or a folder that a
+# commit chose, and no escape sequence of it may reach the terminal or the session.
+warn() { printf 'mash-settings: %s\n' "$*" | clean >&2; }
 fail() {
   local code=$1
   shift
-  echo "mash-settings: $*" >&2
+  warn "$*"
   exit "$code"
 }
 lower() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
@@ -137,7 +140,7 @@ anchor() {
       # A .git entry that git cannot use (an empty folder, a folder without HEAD, objects and refs, a file with no
       # gitdir: line, a dangling link): git would go on to the folders above, which this walk has not checked.
       if [[ -z "$anchor_git_dir" ]]; then
-        echo "mash-settings: refused: $folder/.git is a .git entry that git cannot use, so git would look for a repository in the folders above. Nothing ran." >&2
+        warn "refused: $folder/.git is a .git entry that git cannot use, so git would look for a repository in the folders above. Nothing ran."
         return 6
       fi
       return 0
@@ -145,11 +148,11 @@ anchor() {
     # -L too: git accepts a HEAD that is a symbolic link to refs/..., also a dangling one, which -e does not see.
     if [[ ( -e "$folder/HEAD" || -L "$folder/HEAD" ) && ( -e "$folder/objects" || -L "$folder/objects" || -e "$folder/refs" \
       || -L "$folder/refs" || -e "$folder/commondir" || -L "$folder/commondir" ) ]]; then
-      echo "mash-settings: refused: $folder is shaped like a git directory and has no .git entry: a bare repository, or a folder that a commit can hold. Nothing ran. Run it from a work folder of the repository, or from a linked worktree." >&2
+      warn "refused: $folder is shaped like a git directory and has no .git entry: a bare repository, or a folder that a commit can hold. Nothing ran. Run it from a work folder of the repository, or from a linked worktree."
       return 6
     fi
     if [[ "$folder" == / || "$folder" == "$(dirname "$folder")" ]]; then
-      echo "mash-settings: not in a git repository: $1" >&2
+      warn "not in a git repository: $1"
       return 2
     fi
     folder=$(dirname "$folder")
@@ -165,20 +168,20 @@ find_main() {
   local dir=$1 out work_tree git_dir
   main=""
   main_unknown=""
-  [[ -d "$dir" ]] || { echo "mash-settings: no such folder: $dir" >&2; return 2; }
+  [[ -d "$dir" ]] || { warn "no such folder: $dir"; return 2; }
   anchor "$dir" || return $?
   # Git runs only from the folder that holds the .git entry, and its answer must name that entry: then no committed
   # config chose the repository.
   dir=$anchor_top
-  out=$(run_git -C "$dir" rev-parse --git-dir 2>/dev/null) || { echo "mash-settings: not in a git repository: $1" >&2; return 2; }
+  out=$(run_git -C "$dir" rev-parse --git-dir 2>/dev/null) || { warn "not in a git repository: $1"; return 2; }
   git_dir=$(cd "$dir" && cd "${out%$'\r'}" && pwd -P) || return 2
   if [[ "$git_dir" != "$anchor_git_dir" ]]; then
-    echo "mash-settings: refused: git took the repository $git_dir, not the one that $dir/.git names. Nothing ran." >&2
+    warn "refused: git took the repository $git_dir, not the one that $dir/.git names. Nothing ran."
     return 6
   fi
   # Ask from the top level: git 2.7 to 2.12 print --git-common-dir relative to it, later versions relative to the
   # current folder, so both agree there.
-  out=$(run_git -C "$dir" rev-parse --git-common-dir 2>/dev/null) || { echo "mash-settings: not in a git repository: $1" >&2; return 2; }
+  out=$(run_git -C "$dir" rev-parse --git-common-dir 2>/dev/null) || { warn "not in a git repository: $1"; return 2; }
   common=$(cd "$dir" && cd "${out%$'\r'}" && pwd -P) || return 2
   # Submodules keep their work folder in core.worktree, relative to the git dir.
   work_tree=$(run_git --git-dir="$common" config core.worktree 2>/dev/null || true)
@@ -188,7 +191,7 @@ find_main() {
     return 0
   fi
   if [[ "$(run_git --git-dir="$common" rev-parse --is-bare-repository 2>/dev/null)" == true* ]]; then
-    echo "mash-settings: bare repository: give the escapes path" >&2
+    warn "bare repository: give the escapes path"
     return 5
   fi
   # The common git dir is named .git: its folder is the main worktree, from every worktree. This is also git's own
@@ -206,7 +209,7 @@ find_main() {
     return 0
   fi
   main_unknown=1
-  echo "mash-settings: main worktree not found: set the escapes path with an absolute path" >&2
+  warn "main worktree not found: set the escapes path with an absolute path"
   return 5
 }
 
@@ -285,17 +288,18 @@ under() {
 # refuse_backslash <path>: the path code splits on "/" only, so a name with "\" would pass as one name in a folder
 # while Git Bash reads it as a path.
 refuse_backslash() {
-  case "$1" in *\\*) fail 6 "refused: the path holds a backslash: write it with / (C:/Users/me/escapes): $1" ;; esac
-  # A control character (an escape sequence, say) would reach the terminal and the session in every message.
+  # A control character first: it would reach the terminal and the session in every message, also this one.
   has_control "$1" && fail 6 "refused: the path holds a control character"
+  case "$1" in *\\*) fail 6 "refused: the path holds a backslash: write it with / (C:/Users/me/escapes): $1" ;; esac
   return 0
 }
 # clean: standard input without control characters (C0 but tab and line feed, DEL, and the C1 range as UTF-8): text
 # that a commit can hold must not reach the terminal or the session as an escape sequence.
 clean() { LC_ALL=C tr -d '\000-\010\013-\037\177' | LC_ALL=C awk '{ gsub(/\302[\200-\237]/, ""); print }'; }
-# has_control <text>: the text holds a character that clean removes (tab and line feed aside). By bytes, so the answer
+# has_control <text>: the text holds a character that clean removes, or a tab or a line feed. By bytes, so the answer
 # is the same in every locale ([[:cntrl:]] misses C1 in the C locale).
-has_control() { [[ "$(printf '%s' "$1" | clean)" != "$1" ]]; }
+# A tab or a line feed counts too: a path is one line of text.
+has_control() { [[ "$1" == *$'\t'* || "$1" == *$'\n'* || "$(printf '%s' "$1" | clean)" != "$1" ]]; }
 need_home() {
   local home_folder="$main/.claude/mash-workbench"
   local nested
