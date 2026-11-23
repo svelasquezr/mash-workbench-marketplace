@@ -103,9 +103,12 @@ stub_bin=$(mktemp -d "$temporary_directory/stub.XXXXXX")
 printf '#!/bin/sh\necho "Python was not found; run without arguments to install from the Microsoft Store" >&2\nexit 9009\n' > "$stub_bin/python3"
 chmod +x "$stub_bin/python3"
 root=$(fresh_backlog)
+day_before=$(date -u +%F)  # a run across midnight UTC may write either day
 run_capturing env -u BACKLOG_DATE PATH="$stub_bin:$PATH" bash "$in_root_script" "$script" "$root" script "A title" "why"
 assert_eq "$captured_exit_code" "0"
-assert_contains "$(cat "$root/docs/tooling-backlog.md")" "- [ ] $(date -u +%F) · script · A title — why"
+backlog_text=$(cat "$root/docs/tooling-backlog.md")
+[[ "$backlog_text" == *"- [ ] $day_before · script · A title — why"* ]] \
+  || assert_contains "$backlog_text" "- [ ] $(date -u +%F) · script · A title — why"
 
 # --- which file: nothing is created before the user chose; the choice is a setting, never an argument --------------
 source tests/git_fixtures.sh

@@ -41,10 +41,15 @@ assert_eq "$captured_output" "recorded: $escapes_folder/2026-11-21-discount-tax.
 assert_eq "$(cat "$repo/$escapes_folder/2026-11-21-discount-tax.md")" "$(cat "$template")"
 assert_eq "$(cat "$repo/$escapes_folder/README.md")" "$(printf '%s\n' '# Review escapes' 'repo: github.com/acme/shop' '' 'One file per bug that a review passed. The add-reviewer skill reads them through escapes-report.sh.')"
 # source is optional; the date defaults to today in UTC.
+# The day is read before and after the record: a run across midnight UTC may write either one.
+day_before=$(date -u +%F)
 run_capturing record "$repo" src/billing missing-test no-source
+day_after=$(date -u +%F)
 assert_eq "$captured_exit_code" "0"
-assert_file "$repo/$escapes_folder/$(date -u +%F)-no-source.md"
-assert_not_contains "$(cat "$repo/$escapes_folder/$(date -u +%F)-no-source.md")" "source:"
+no_source="$repo/$escapes_folder/$day_after-no-source.md"
+[[ -f "$no_source" ]] || no_source="$repo/$escapes_folder/$day_before-no-source.md"
+assert_file "$no_source"
+assert_not_contains "$(cat "$no_source")" "source:"
 
 # 2. A folder outside the repo whose README.md names another repository is refused, and nothing is written there.
 shared="$fixture/shared-escapes"; mkdir -p "$shared"
@@ -399,9 +404,10 @@ stub_bin="$fixture/stub-bin"; mkdir -p "$stub_bin"
 printf '#!/bin/sh\necho "Python was not found; run without arguments to install from the Microsoft Store" >&2\nexit 9009\n' > "$stub_bin/python3"
 chmod +x "$stub_bin/python3"
 repo=$(new_repo no-python)
+day_before=$(date -u +%F)  # a run across midnight UTC may write either day
 run_capturing env PATH="$stub_bin:$PATH" bash "$in_root_script" "$add" "$repo" src/a wrong-result stub --body "$(cat "$body")"
 assert_eq "$captured_exit_code" "0"
-assert_file "$repo/$escapes_folder/$(date -u +%F)-stub.md"
+[[ -f "$repo/$escapes_folder/$day_before-stub.md" ]] || assert_file "$repo/$escapes_folder/$(date -u +%F)-stub.md"
 assert_eq "$(env PATH="$stub_bin:$PATH" bash "$report" "$repo")" "src/a: 1 escape (wrong-result 1)"
 
 # The definition and the escape: field are written everywhere they matter; the prose names the threshold, not 2.
