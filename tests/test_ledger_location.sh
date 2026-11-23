@@ -1,108 +1,309 @@
 # shellcheck shell=bash
+# Choosing and finding the escapes folder: escape-add.sh asks before anything exists, honours "off", writes into the
+# main worktree from a linked one, and refuses to write beside an old one-file ledger.
 set -euo pipefail
 source tests/lib.sh
-add=plugins/review-routing/skills/add-reviewer/escape-add.sh
-report=plugins/review-routing/skills/add-reviewer/escapes-report.sh
-path_script=plugins/review-routing/skills/add-reviewer/escapes-path.sh
-temporary_directory=$(mktemp -d); trap 'rm -rf "$temporary_directory"' EXIT
+source tests/git_fixtures.sh
+add="$PWD/plugins/review-routing/skills/add-reviewer/escape-add.sh"
+report="$PWD/plugins/review-routing/skills/add-reviewer/escapes-report.sh"
+path_script="$PWD/plugins/review-routing/skills/add-reviewer/escapes-path.sh"
+settings_script="$PWD/plugins/review-routing/scripts/mash-settings.sh"
+# The path checks refuse /tmp, so the fixture lives under $HOME (never under /tmp).
+fixture=$(mktemp -d "$HOME/.ledger-location-test.XXXXXX"); trap 'rm -rf "$fixture"' EXIT
+case "$(cd "$fixture" && pwd -P)" in /tmp/* | /var/tmp/*) echo "  HOME is under /tmp: the fixture cannot hold a non-temporary repository"; exit 1 ;; esac
+temporary_directory="$fixture"
+isolate_git_config
 unset REVIEW_ROUTING_ESCAPES
-fresh() { mktemp -d "$temporary_directory/$1.XXXXXX"; }
+fresh() {
+  local folder
+  folder=$(mktemp -d "$fixture/$1.XXXXXX")
+  git init --quiet "$folder"
+  git -C "$folder" commit --quiet --allow-empty -m "chore: base"
+  (cd "$folder" && pwd -P)
+}
+body="$fixture/body.md"; printf 'When X, Y happens.\nZ must happen.\n' > "$body"
+record() { local repo=$1; shift; bash "$in_root_script" "$add" "$repo" src/a wrong-result "$1" --body "$(cat "$body")" "${@:2}"; }
 
-# Nothing chosen and no ledger: the path script exits 3, nothing is created, and the message says how to choose.
+# 13. Nothing chosen: escape-add.sh exits 3 with the setup text and creates nothing; the report and --list say "none".
 root=$(fresh none)
 run_capturing bash "$path_script" "$root"
 assert_eq "$captured_exit_code" "3"
-run_capturing bash "$add" "$root" src/payments wrong-result "https://example.test/issues/1"
+run_capturing record "$root" first
 assert_eq "$captured_exit_code" "3"
-assert_contains "$captured_output" "--create"
-assert_contains "$captured_output" "--file"
-assert_contains "$captured_output" "REVIEW_ROUTING_ESCAPES"
-assert_contains "$captured_output" "docs/mash/review-escapes.md"
-assert_contains "$captured_output" ".gitignore"
-[[ ! -e "$root/docs" ]] || { echo "  created docs/ before the user chose"; exit 1; }
-# The report has nothing to count and says so.
+assert_contains "$captured_output" "no escapes folder chosen yet: ask the user where to keep it"
+assert_contains "$captured_output" "mash-settings.sh set $root escapes <path, or off> --team   (committed escapes)"
+assert_contains "$captured_output" "mash-settings.sh set $root escapes <path, or off> --local  (excluded, or outside the repo)"
+assert_contains "$captured_output" "The default is .claude/mash-workbench/escapes"
+assert_contains "$captured_output" "mash-settings.sh check-escapes-path $root <path>"
+assert_contains "$captured_output" "Setting up escapes"
+[[ ! -e "$root/.claude" ]] || { echo "  created .claude/ before the user chose"; exit 1; }
 run_capturing bash "$report" "$root"
 assert_eq "$captured_exit_code" "0"
 assert_contains "$captured_output" "no escapes recorded"
+run_capturing bash "$in_root_script" "$add" --list "$root" src/a
+assert_eq "$captured_exit_code" "0"
+assert_eq "$captured_output" "no escapes in src/a"
+printf -- '---\narea: src/a\nclass: c\nslug: s\n---\nx\n' > "$fixture/batch.txt"
+run_capturing bash "$in_root_script" "$add" --batch - "$root" < "$fixture/batch.txt"
+assert_eq "$captured_exit_code" "3"
+[[ ! -e "$root/.claude" ]] || { echo "  --batch created .claude/ before the user chose"; exit 1; }
+# The commands the text prints work as printed: choosing the default records into it.
+settings_command=$(printf '%s\n' "$captured_output" | awk '/--local  \(excluded/ { sub(/^ +bash /, ""); sub(/ set .*/, ""); print }')
+bash "$settings_command" set "$root" escapes .claude/mash-workbench/escapes --local >/dev/null
+run_capturing record "$root" first
+assert_eq "$captured_exit_code" "0"
+assert_contains "$captured_output" "recorded: .claude/mash-workbench/escapes/"
 
-# --create starts the grouped default; afterwards it is used without asking.
-bash "$add" --create "$root" src/payments wrong-result "https://example.test/issues/1" >/dev/null
-assert_contains "$(cat "$root/docs/mash/review-escapes.md")" "· src/payments · wrong-result ·"
-bash "$add" "$root" src/payments missing-test "https://example.test/issues/2" >/dev/null
-assert_eq "$(grep -c '^- ' "$root/docs/mash/review-escapes.md")" "2"
-assert_eq "$(bash "$path_script" "$root")" "$(cd "$root" && pwd -P)/docs/mash/review-escapes.md"
-run_capturing bash "$report" "$root"
-assert_contains "$captured_output" "src/payments: 2 escapes"
+# Paths in the printed commands are quoted, so a repository path with a space still works when pasted as printed.
+root=$(fresh "with space")
+run_capturing record "$root" first
+assert_eq "$captured_exit_code" "3"
+assert_contains "$captured_output" "set $(printf '%q' "$root") escapes"
+local_line=$(printf '%s\n' "$captured_output" | awk '/--local  \(excluded/ { sub(/^ +/, ""); sub(/  \(excluded.*/, ""); print }')
+eval "${local_line/<path, or off>/.claude/mash-workbench/escapes}" >/dev/null
+run_capturing record "$root" first
+assert_eq "$captured_exit_code" "0"
+assert_contains "$captured_output" "recorded: .claude/mash-workbench/escapes/"
 
-# --file keeps the ledger elsewhere.
-root=$(fresh file)
-bash "$add" --file notes/escapes.md "$root" src/a wrong-result "https://example.test/issues/3" >/dev/null
-assert_contains "$(cat "$root/notes/escapes.md")" "· src/a · wrong-result ·"
-[[ ! -e "$root/docs" ]] || { echo "  created docs/ next to --file"; exit 1; }
+# A setting that names a missing .md file is an old ledger path, not a folder to create.
+root=$(fresh md-setting)
+run_capturing env REVIEW_ROUTING_ESCAPES=quality/escapes.md bash "$in_root_script" "$add" "$root" src/a wrong-result md --body "$(cat "$body")"
+assert_eq "$captured_exit_code" "2"
+assert_contains "$captured_output" "this looks like an old ledger file: $root/quality/escapes.md; point the setting at a folder"
+[[ ! -e "$root/quality" ]] || { echo "  created a folder named like a ledger file"; exit 1; }
 
-# The setting moves the ledger (relative to the repository root) and "off" records nothing.
-root=$(fresh setting)
-REVIEW_ROUTING_ESCAPES=quality/escapes.md bash "$add" "$root" src/a wrong-result "https://example.test/issues/4" >/dev/null
-assert_contains "$(cat "$root/quality/escapes.md")" "src/a"
-REVIEW_ROUTING_ESCAPES=quality/escapes.md run_capturing bash "$report" "$root"
-assert_contains "$captured_output" "src/a: 1 escape"
+# "off", from the settings files or the environment, records nothing and exits 0.
 root=$(fresh off)
-REVIEW_ROUTING_ESCAPES=off run_capturing bash "$path_script" "$root"
-assert_eq "$captured_exit_code" "4"
-REVIEW_ROUTING_ESCAPES=off run_capturing bash "$add" "$root" src/a wrong-result "https://example.test/issues/5"
-assert_eq "$captured_exit_code" "0"
-assert_contains "$captured_output" "off"
-[[ ! -e "$root/docs" ]] || { echo "  created docs/ while off"; exit 1; }
-REVIEW_ROUTING_ESCAPES=off run_capturing bash "$report" "$root"
-assert_eq "$captured_exit_code" "0"
+bash "$settings_script" set "$root" escapes off --team >/dev/null
+for command in record batch; do
+  if [[ "$command" == record ]]; then run_capturing record "$root" off; else
+    run_capturing env REVIEW_ROUTING_ESCAPES=off bash "$in_root_script" "$add" --batch - "$root" < "$fixture/batch.txt"
+  fi
+  assert_eq "$captured_exit_code" "0"
+  assert_contains "$captured_output" "the escapes ledger is off for this project: nothing recorded"
+done
+[[ ! -e "$root/.claude/mash-workbench/escapes" ]] || { echo "  recorded while off"; exit 1; }
+run_capturing bash "$report" "$root"
 assert_contains "$captured_output" "no escapes recorded"
 
-# A project that already has docs/review-escapes.md keeps it; the grouped file wins when both exist.
-root=$(fresh legacy)
-mkdir -p "$root/docs"; printf '# Review escapes\n\n' > "$root/docs/review-escapes.md"
-assert_eq "$(bash "$path_script" "$root")" "$(cd "$root" && pwd -P)/docs/review-escapes.md"
-bash "$add" "$root" src/a wrong-result "https://example.test/issues/6" >/dev/null
-assert_contains "$(cat "$root/docs/review-escapes.md")" "src/a"
-[[ ! -e "$root/docs/mash" ]] || { echo "  created docs/mash next to a legacy ledger"; exit 1; }
-mkdir -p "$root/docs/mash"; printf '# Review escapes\n\n' > "$root/docs/mash/review-escapes.md"
-assert_eq "$(bash "$path_script" "$root")" "$(cd "$root" && pwd -P)/docs/mash/review-escapes.md"
+# A linked worktree records into the main worktree's folder, and its own status stays clean.
+root=$(fresh linked)
+printf '.claude/worktrees/\n' >> "$root/.git/info/exclude"
+git -C "$root" worktree add --quiet .claude/worktrees/w -b w
+linked="$root/.claude/worktrees/w"
+bash "$settings_script" set "$root" escapes .claude/mash-workbench/escapes --local >/dev/null
+run_capturing record "$linked" from-linked
+assert_eq "$captured_exit_code" "0"
+assert_eq "$(find "$root/.claude/mash-workbench/escapes" -name '*-from-linked.md' | wc -l | tr -d ' ')" "1"
+[[ ! -e "$linked/.claude/mash-workbench" ]] || { echo "  wrote into the linked worktree"; exit 1; }
+assert_eq "$(git -C "$linked" status --porcelain)" ""
+assert_contains "$(bash "$report" "$linked")" "src/a: 1 escape"
+assert_contains "$(bash "$in_root_script" "$add" --list "$linked" src/a)" "-from-linked.md  When X, Y happens."
+# A folder inside a linked worktree is refused: it is deleted with its branch.
+run_capturing env REVIEW_ROUTING_ESCAPES="$linked/escapes" bash "$in_root_script" "$add" "$root" src/a wrong-result in-linked --body "$(cat "$body")"
+assert_eq "$captured_exit_code" "6"
+assert_contains "$captured_output" "linked worktree"
+[[ ! -e "$linked/escapes" ]] || { echo "  created a folder in a linked worktree"; exit 1; }
+# A temporary folder is refused before anything is created.
+run_capturing env REVIEW_ROUTING_ESCAPES="/tmp/ledger-location-$$/escapes" bash "$in_root_script" "$add" "$root" src/a wrong-result in-tmp --body "$(cat "$body")"
+assert_eq "$captured_exit_code" "6"
+[[ ! -e "/tmp/ledger-location-$$" ]] || { echo "  created a folder under /tmp"; exit 1; }
+# An absolute folder outside the repo under $HOME works, and gets this repository's README.md.
+run_capturing env REVIEW_ROUTING_ESCAPES="$fixture/outside/escapes" bash "$in_root_script" "$add" "$root" src/a wrong-result outside --body "$(cat "$body")"
+assert_eq "$captured_exit_code" "0"
+assert_contains "$(cat "$fixture/outside/escapes/README.md")" "repo: local/linked."
 
-# --file with a second entry in the same area still prints the "add a reviewer" line from that file.
-root=$(fresh filereport)
-bash "$add" --file notes/escapes.md "$root" src/a wrong-result "https://example.test/issues/7" >/dev/null
-run_capturing bash "$add" --file notes/escapes.md "$root" src/a missing-test "https://example.test/issues/8"
-assert_contains "$captured_output" "add a reviewer for src/a"
+# 12. An old one-file ledger in place: escape-add.sh exits 3 with the migration message and writes nothing.
+for old in docs/mash/review-escapes.md docs/review-escapes.md; do
+  root=$(fresh old)
+  mkdir -p "$root/$(dirname "$old")"
+  printf '# Review escapes\n\n- 2026-01-01 · src/a · wrong-result · https://example.test/issues/1\n' > "$root/$old"
+  before=$(cat "$root/$old")
+  run_capturing record "$root" beside-old
+  assert_eq "$captured_exit_code" "3"
+  assert_contains "$captured_output" "old ledger format at $root/$old: ask the user, then run escape-migrate.sh"
+  assert_eq "$(cat "$root/$old")" "$before"
+  [[ ! -e "$root/.claude" ]] || { echo "  wrote beside an old ledger"; exit 1; }
+  run_capturing bash "$in_root_script" "$add" --list "$root" src/a
+  assert_eq "$captured_exit_code" "3"
+  # The path script names the old file and points at the migration.
+  # shellcheck disable=SC2016  # the single quotes are meant: $1 and $2 expand in the inner bash
+  run_capturing bash -c 'bash "$1" "$2" 2>&1 >/dev/null' _ "$path_script" "$root"
+  assert_contains "$captured_output" "old ledger format in use: $old"
+  assert_contains "$captured_output" "escape-migrate.sh"
+done
+# The same when REVIEW_ROUTING_ESCAPES names a file.
+root=$(fresh env-file)
+printf '# Review escapes\n' > "$root/escapes.md"
+run_capturing env REVIEW_ROUTING_ESCAPES=escapes.md bash "$in_root_script" "$add" "$root" src/a wrong-result env-file --body "$(cat "$body")"
+assert_eq "$captured_exit_code" "3"
+assert_contains "$captured_output" "escape-migrate.sh"
+assert_eq "$(cat "$root/escapes.md")" "# Review escapes"
+# A folder setting beside an old ledger records into the folder, and the path script warns about the old file.
+root=$(fresh beside)
+mkdir -p "$root/docs"; printf '# Review escapes\n' > "$root/docs/review-escapes.md"
+bash "$settings_script" set "$root" escapes .claude/mash-workbench/escapes --local >/dev/null
+run_capturing record "$root" beside
+assert_eq "$captured_exit_code" "0"
+assert_contains "$captured_output" "docs/review-escapes.md holds escapes in the old format"
+assert_contains "$captured_output" "escape-migrate.sh"
 
-# --create or --file beside a ledger the project already uses is refused: two ledgers would split the evidence.
-root=$(fresh split)
-mkdir -p "$root/docs"; printf '# Review escapes\n\n- 2026-01-01 · src/a · wrong-result · https://example.test/issues/1\n' > "$root/docs/review-escapes.md"
-run_capturing bash "$add" --create "$root" src/a missing-test "https://example.test/issues/2"
-assert_eq "$captured_exit_code" "2"
-assert_contains "$captured_output" "docs/review-escapes.md"
-[[ ! -e "$root/docs/mash" ]] || { echo "  --create started a second ledger"; exit 1; }
-run_capturing bash "$add" --file other.md "$root" src/a missing-test "https://example.test/issues/2"
-assert_eq "$captured_exit_code" "2"
-# Naming the ledger already in use is fine, spelled any way (./ prefix included).
-bash "$add" --file ./docs/review-escapes.md "$root" src/a missing-test "https://example.test/issues/11" >/dev/null
-# The refusal is a plain message, not a usage error.
-assert_not_contains "$captured_output" "usage:"
-# With a named setting that does not exist yet beside a default ledger, the path script warns.
-# shellcheck disable=SC2016
-run_capturing env REVIEW_ROUTING_ESCAPES=elsewhere.md bash -c 'bash "$1" "$2" 2>&1 >/dev/null' _ "$path_script" "$root"
-assert_contains "$captured_output" "docs/review-escapes.md"
-bash "$add" --file docs/review-escapes.md "$root" src/a missing-test "https://example.test/issues/2" >/dev/null
-assert_eq "$(grep -c '^- ' "$root/docs/review-escapes.md")" "3"
-# When both default files exist, the path script warns on stderr (stdout stays the path).
-mkdir -p "$root/docs/mash"; printf '# Review escapes\n\n' > "$root/docs/mash/review-escapes.md"
+# The report still counts an old ledger until it is migrated, and says so on stderr.
+root=$(fresh old-report)
+mkdir -p "$root/docs"
+printf -- '# Review escapes\r\n- a note in prose, not an entry\r\n- 2026-10-11 · ./src/a/ · wrong-result · https://example.test/issues/1\r\n- 2026-10-12 · src/a · wrong-result · https://example.test/issues/1\r\n- 2026-10-12 · src/a · data-loss · https://example.test/issues/2\r\n- 2026-10-13 · src/a · data-loss · https://example.test/issues/3' > "$root/docs/review-escapes.md"
+assert_eq "$(bash "$report" "$root" 2>/dev/null)" "src/a: 3 escapes (wrong-result 1, data-loss 2) -> add a reviewer for src/a (add-reviewer skill)"
 # shellcheck disable=SC2016  # the single quotes are meant: $1 and $2 expand in the inner bash
-run_capturing bash -c 'bash "$1" "$2" 2>&1 >/dev/null' _ "$path_script" "$root"
-assert_contains "$captured_output" "both"
+run_capturing bash -c 'bash "$1" "$2" 2>&1 >/dev/null' _ "$report" "$root"
+assert_contains "$captured_output" "old ledger format: run escape-migrate.sh"
+printf '# Review escapes\n\n' > "$root/docs/review-escapes.md"
+assert_eq "$(bash "$report" "$root" 2>/dev/null)" "no escapes recorded"
 
-# Usage errors and absolute paths.
-run_capturing bash "$path_script" "$temporary_directory/missing"
+# --create and --file are gone, and say what replaced them; outside a git repository nothing is recorded.
+root=$(fresh gone)
+for option in --create --file; do
+  run_capturing bash "$in_root_script" "$add" "$option" "$root" src/a wrong-result s --body "$(cat "$body")"
+  assert_eq "$captured_exit_code" "2"
+  assert_contains "$captured_output" "mash-settings.sh"
+done
+not_repo=$(mktemp -d "$fixture/not-repo.XXXXXX")
+run_capturing env REVIEW_ROUTING_ESCAPES="$fixture/not-repo-escapes" bash "$in_root_script" "$add" "$not_repo" src/a wrong-result s --body "$(cat "$body")"
 assert_eq "$captured_exit_code" "2"
-run_capturing bash "$add" "$root" src/a wrong-result "https://example.test/issues/9" --file
+assert_contains "$captured_output" "not in a git repository"
+[[ ! -e "$fixture/not-repo-escapes" ]] || { echo "  recorded outside a git repository"; exit 1; }
+run_capturing bash "$path_script" "$fixture/missing"
 assert_eq "$captured_exit_code" "2"
-root=$(fresh absolute)
-bash "$add" --file "$root/elsewhere/e.md" "$root" src/a wrong-result "https://example.test/issues/10" >/dev/null
-assert_contains "$(cat "$root/elsewhere/e.md")" "src/a"
+run_capturing bash "$in_root_script" "$add" "$fixture/missing" src/a wrong-result s --body "$(cat "$body")"
+assert_eq "$captured_exit_code" "2"
+
+# An empty escapes setting counts as not set; a value that is the repository root is refused. Nothing is written.
+set_local() { mkdir -p "$1/.claude/mash-workbench"; printf '%s\n' "$2" > "$1/.claude/mash-workbench/settings.local"; }
+for empty_line in "escapes=" $'escapes=\r'; do
+  root=$(fresh empty)
+  set_local "$root" "$empty_line"
+  run_capturing bash "$path_script" "$root"
+  assert_eq "$captured_exit_code" "3"
+  run_capturing record "$root" first
+  assert_eq "$captured_exit_code" "3"
+  assert_contains "$captured_output" "no escapes folder chosen yet: ask the user where to keep it"
+  [[ ! -e "$root/README.md" ]] || { echo "  wrote README.md into the repository root"; exit 1; }
+  [[ -z "$(find "$root" -mindepth 1 -maxdepth 1 ! -name .git ! -name .claude | head -1)" ]] || { echo "  wrote into the repository root"; exit 1; }
+done
+# An empty setting with an old ledger present: the old-ledger handling, as with no setting.
+root=$(fresh empty-old)
+mkdir -p "$root/docs/mash"; printf 'old\n' > "$root/docs/mash/review-escapes.md"
+set_local "$root" "escapes="
+run_capturing bash "$path_script" "$root"
+assert_eq "$captured_exit_code" "0"
+assert_contains "$captured_output" "$root/docs/mash/review-escapes.md"
+assert_contains "$captured_output" "old ledger format in use"
+# An empty environment variable is the same as an unset one.
+root=$(fresh empty-env)
+run_capturing env REVIEW_ROUTING_ESCAPES= bash "$path_script" "$root"
+assert_eq "$captured_exit_code" "3"
+# A value that resolves to the repository root is refused with exit 6.
+for root_value in . ./ "@ROOT@" "@ROOT@/"; do
+  root=$(fresh rootvalue)
+  set_local "$root" "escapes=${root_value//@ROOT@/$root}"
+  run_capturing bash "$path_script" "$root"
+  assert_eq "$captured_exit_code" "6"
+  assert_contains "$captured_output" "the escapes folder must not be the repository root"
+  run_capturing record "$root" first
+  assert_eq "$captured_exit_code" "6"
+  [[ -z "$(find "$root" -mindepth 1 -maxdepth 1 ! -name .git ! -name .claude | head -1)" ]] || { echo "  wrote into the repository root"; exit 1; }
+done
+# A repository with no setting at all still gets exit 3.
+root=$(fresh nosetting)
+run_capturing bash "$path_script" "$root"
+assert_eq "$captured_exit_code" "3"
+
+# A whitespace-only setting counts as not set too; nothing is created in the root.
+for blank_line in "escapes= " $'escapes=\t' $'escapes= \t '; do
+  root=$(fresh blank)
+  set_local "$root" "$blank_line"
+  run_capturing bash "$path_script" "$root"
+  assert_eq "$captured_exit_code" "3"
+  run_capturing record "$root" first
+  assert_eq "$captured_exit_code" "3"
+  [[ -z "$(find "$root" -mindepth 1 -maxdepth 1 ! -name .git ! -name .claude | head -1)" ]] || { echo "  wrote into the repository root"; exit 1; }
+done
+# Other spellings of the root: src/.. and a symlink to it are refused with exit 6.
+root=$(fresh rootspell)
+ln -s "$root" "$fixture/link-to-root-$$"
+for root_value in src/.. "$fixture/link-to-root-$$"; do
+  set_local "$root" "escapes=$root_value"
+  run_capturing bash "$path_script" "$root"
+  assert_eq "$captured_exit_code" "6"
+  assert_contains "$captured_output" "the escapes folder must not be the repository root"
+done
+# A near miss still resolves.
+set_local "$root" "escapes=docs/escapes"
+run_capturing bash "$path_script" "$root"
+assert_eq "$captured_exit_code" "0"
+assert_eq "$captured_output" "$root/docs/escapes"
+
+# An old ledger that is a symbolic link is not read: the report and the migration would read the file it names.
+root=$(fresh linked-ledger)
+mkdir -p "$root/docs/mash"; printf -- '- 2026-10-11 · src/a · wrong-result · https://example.test/SECRET\n' > "$fixture/outside-ledger.md"
+ln -s "$fixture/outside-ledger.md" "$root/docs/mash/review-escapes.md"
+for script in "$path_script" "$report" "$PWD/plugins/review-routing/skills/add-reviewer/escape-migrate.sh"; do
+  run_capturing bash "$script" "$root"
+  assert_eq "$captured_exit_code" "6"
+  assert_not_contains "$captured_output" "SECRET"
+done
+[[ ! -e "$root/.claude" ]] || { echo "  migrated a linked ledger"; exit 1; }
+
+# The old-ledger reads follow no committed link either: docs as a link to a folder outside the repository, and a
+# setting that names a ledger file which is a link. Nothing of the outside file is counted, copied or named.
+migrate_script="$PWD/plugins/review-routing/skills/add-reviewer/escape-migrate.sh"
+mkdir -p "$fixture/outside-docs/mash"
+printf -- '- 2026-10-11 · src/a · wrong-result · https://example.test/OUTSIDE-1\n- 2026-10-12 · src/a · wrong-result · https://example.test/OUTSIDE-2\n' > "$fixture/outside-docs/mash/review-escapes.md"
+root=$(fresh linked-docs)
+ln -s "$fixture/outside-docs" "$root/docs"
+for script in "$path_script" "$report" "$migrate_script"; do
+  run_capturing bash "$script" "$root"
+  assert_eq "$captured_exit_code" "6"
+  assert_not_contains "$captured_output" "OUTSIDE"
+  assert_not_contains "$captured_output" "rm "
+done
+[[ ! -e "$root/.claude" ]] || { echo "  migrated a ledger behind a linked docs folder"; exit 1; }
+# The second candidate is checked too when the first is a real file.
+root=$(fresh linked-second)
+mkdir -p "$root/docs/mash"; printf -- '- 2026-10-11 · src/a · wrong-result · https://example.test/REAL\n' > "$root/docs/mash/review-escapes.md"
+ln -s "$fixture/outside-docs/mash/review-escapes.md" "$root/docs/review-escapes.md"
+run_capturing bash "$in_root_script" "$migrate_script" "$root"
+assert_eq "$captured_exit_code" "6"
+assert_not_contains "$captured_output" "OUTSIDE"
+[[ ! -e "$root/.claude" ]] || { echo "  migrated beside a linked second ledger"; exit 1; }
+# A committed setting that names a ledger file which is a link.
+root=$(fresh linked-setting)
+mkdir -p "$root/docs" "$root/.claude/mash-workbench"
+ln -s "$fixture/outside-docs/mash/review-escapes.md" "$root/docs/ledger.md"
+printf 'escapes=docs/ledger.md\n' > "$root/.claude/mash-workbench/settings"
+for script in "$path_script" "$report" "$migrate_script"; do
+  run_capturing bash "$script" "$root"
+  assert_eq "$captured_exit_code" "6"
+  assert_contains "$captured_output" "symbolic link"
+  assert_not_contains "$captured_output" "OUTSIDE"
+done
+# The setting names a folder and docs is a link out: escapes-path.sh answers with the folder and never looks at the old
+# ledgers, so escape-migrate.sh must check each old candidate itself.
+root=$(fresh setting-and-linked-docs)
+mkdir -p "$root/.claude/mash-workbench"
+printf 'escapes=.claude/mash-workbench/escapes\n' > "$root/.claude/mash-workbench/settings"
+ln -s "$fixture/outside-docs" "$root/docs"
+run_capturing bash "$in_root_script" "$migrate_script" "$root"
+assert_eq "$captured_exit_code" "6"
+assert_not_contains "$captured_output" "OUTSIDE"
+assert_not_contains "$captured_output" "rm "
+[[ ! -e "$root/.claude/mash-workbench/escapes" ]] || { echo "  migrated a ledger behind a linked docs folder"; exit 1; }
+# The same with the old ledger itself a link to a file inside the repository: still refused (a link is never read).
+root=$(fresh setting-and-linked-ledger)
+mkdir -p "$root/.claude/mash-workbench" "$root/docs/mash" "$root/notes"
+printf 'escapes=.claude/mash-workbench/escapes\n' > "$root/.claude/mash-workbench/settings"
+printf -- '- 2026-10-11 · src/a · wrong-result · https://example.test/INSIDE\n' > "$root/notes/ledger.md"
+ln -s ../../notes/ledger.md "$root/docs/mash/review-escapes.md"
+run_capturing bash "$in_root_script" "$migrate_script" "$root"
+assert_eq "$captured_exit_code" "6"
+assert_contains "$captured_output" "symbolic link"
+[[ ! -e "$root/.claude/mash-workbench/escapes" ]] || { echo "  migrated a linked ledger"; exit 1; }

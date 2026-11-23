@@ -182,3 +182,12 @@ assert_eq "$captured_exit_code" "0"
 assert_not_contains "$captured_output" "Python was not found"
 assert_not_contains "$captured_output" "npm test"
 assert_contains "$captured_output" "make test"
+
+# Text copied from a repository file is printed without control characters (here an escape sequence in a CI line).
+control_root=$(mktemp -d)
+mkdir -p "$control_root/.github/workflows"
+printf 'jobs:\n  t:\n    steps:\n      - run: pytest \033[2K\033[1Ghidden\n' > "$control_root/.github/workflows/ci.yml"
+control_output=$(bash plugins/review-routing/skills/review-changes/find-checks.sh "$control_root")
+rm -rf "$control_root"
+assert_contains "$control_output" "pytest"
+if printf '%s' "$control_output" | LC_ALL=C grep -q "$(printf '\033')"; then echo "  a control character was printed"; exit 1; fi

@@ -352,19 +352,45 @@ git init --quiet -b main "$other_temporary_repository"
 allowed "git -C $other_temporary_repository checkout -b y"
 allowed "cd $other_temporary_repository && git commit --allow-empty -m x"
 
-# Registered for Bash next to the Haiku guard, and the description names both.
+# Registered for Bash only, and the description names the hook.
 python3 - "$hooks_json" <<'PY'
 import json, sys
 data = json.load(open(sys.argv[1]))
 entries = {entry["matcher"]: entry for entry in data["hooks"]["PreToolUse"]}
-assert set(entries) == {"Agent|Task", "Bash"}, entries.keys()
+assert set(entries) == {"Bash"}, entries.keys()
 bash_hooks = entries["Bash"]["hooks"]
 assert len(bash_hooks) == 1 and bash_hooks[0]["type"] == "command"
 assert bash_hooks[0]["command"] == 'command -v bash >/dev/null 2>&1 || exit 0; exec bash "${CLAUDE_PLUGIN_ROOT}/scripts/python.sh" --missing-ok "${CLAUDE_PLUGIN_ROOT}/hooks/reviewer-guard.py"', bash_hooks[0]["command"]
 assert bash_hooks[0]["timeout"] == 10
-assert "haiku-reviewer-guard" in data["description"] and "reviewer-guard" in data["description"].replace("haiku-reviewer-guard", "")
-assert "haiku-reviewer-guard.py" in entries["Agent|Task"]["hooks"][0]["command"]
+assert "reviewer-guard" in data["description"]
 PY
+
+# The registered hook command does nothing, quietly, with no bash or no Python 3.11 on the PATH (the Windows Store
+# python3 alias does not count).
+command_line=$(python3 - "$hooks_json" <<'PY'
+import json, sys
+for group in json.load(open(sys.argv[1]))["hooks"]["PreToolUse"]:
+    for entry in group["hooks"]:
+        if "reviewer-guard.py" in entry["command"]:
+            print(entry["command"])
+PY
+)
+[[ -n "$command_line" ]] || { echo "  no hook command for reviewer-guard.py"; exit 1; }
+# The payload is one the guard blocks when it runs: a reviewer commits in a real repository.
+blocked_payload=$(payload "$agent" "$repository" "git commit -m x")
+# Positive control: with a normal PATH and real Python the same command blocks, so the silent runs below mean "no bash or no Python".
+run_capturing env TMPDIR="$scratch" CLAUDE_PLUGIN_ROOT="$PWD/plugins/review-routing" /bin/sh -c "$command_line" <<< "$blocked_payload"
+assert_eq "$captured_exit_code" "2"
+assert_contains "$captured_output" "reviewer-guard"
+run_capturing env -i PATH=/nonexistent TMPDIR="$scratch" CLAUDE_PLUGIN_ROOT="$PWD/plugins/review-routing" /bin/sh -c "$command_line" <<< "$blocked_payload"
+assert_eq "$captured_exit_code" "0"
+assert_eq "$captured_output" ""
+stub_bin=$(mktemp -d "$area/stub.XXXXXX")
+printf '#!/bin/sh\necho "Python was not found" >&2\nexit 9009\n' > "$stub_bin/python3"; chmod +x "$stub_bin/python3"
+ln -s "$(command -v bash)" "$stub_bin/bash"
+run_capturing env -i PATH="$stub_bin" TMPDIR="$scratch" CLAUDE_PLUGIN_ROOT="$PWD/plugins/review-routing" /bin/sh -c "$command_line" <<< "$blocked_payload"
+assert_eq "$captured_exit_code" "0"
+assert_eq "$captured_output" ""
 
 # The reviewer prompts tell reviewers the read-only way, and say it is enforced by the hook.
 # shellcheck disable=SC2016  # the single quotes are on purpose: the prompts contain a literal $(mktemp -d)

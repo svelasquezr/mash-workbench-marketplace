@@ -13,8 +13,7 @@ agent (or a bare name that is one of this plugin's agent files), or an agent the
 the repository root) and that the project or the user defines in `.claude/agents/`, or that a plugin ships (a
 `plugin:name`). Claude Code's built-in agents are never guarded, even when the config names one, because the same
 type also builds in that session. Any other agent is left alone, whatever its name or its file says.
-haiku-reviewer-guard.py's `is_reviewer` differs on purpose: that hook sees the dispatch prompt, this one sees only
-`agent_type`.
+This hook sees only `agent_type`, never the dispatch prompt.
 
 Blocks (exit 2, reason on stderr, which Claude Code shows to Claude):
   - git, when it runs in a real repository, unless the subcommand is a read: show diff log blame status grep
@@ -39,7 +38,8 @@ Blocks (exit 2, reason on stderr, which Claude Code shows to Claude):
 Known gaps (this catches honest mistakes; it is not a security boundary): scripts run from disk, eval, `xargs git`,
 paths held in variables or computed by $(...) (an unresolvable target is allowed, which is also what keeps
 `cd "$tmp" && git commit` working), GraphQL mutations, gh aliases (`gh alias set` is refused, but an alias set earlier runs),
-file writes by `sed -i`, redirects or `tee`, `--output=` options of read subcommands, and review-changes's
+file writes by `sed -i`, redirects or `tee`, options of read subcommands that write a file or run a program (`--output=`,
+`archive -o`, `-c <key>=<value>`, `--ext-diff`), and review-changes's
 `general-purpose` fallback reviewer (a built-in agent), any reviewer the routing config does not name, gh write
 actions not listed above, and `git submodule foreach` / `git difftool`, which are refused though they can be reads.
 Pros: the commands that already hurt are refused with the read-only way shown. Cons: a creative reviewer gets past.
