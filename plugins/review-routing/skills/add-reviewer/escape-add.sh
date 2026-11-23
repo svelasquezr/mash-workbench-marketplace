@@ -175,7 +175,7 @@ same_repository() { bash "$settings" same-repository "$root" || exit $?; }
 clean() { LC_ALL=C tr -d '\000-\010\013-\037\177' | LC_ALL=C awk '{ gsub(/\302[\200-\237]/, ""); print }'; }
 # say_line <text>: the text on one line of stderr, without control characters (a tab or a line feed in a folder name
 # becomes a space, so a name cannot add a line of its own).
-say_line() { printf '%s\n' "$(printf '%s' "$1" | tr '\t\n' '  ' | clean)" >&2; }
+say_line() { printf '%s\n' "$(printf '%s' "$1" | LC_ALL=C tr '\t\n' '  ' | clean)" >&2; }
 # display <path>: relative to the main worktree when inside it.
 display() { if [[ -n "$main" && "$1" == "$main"/* ]]; then printf '%s' "${1#"$main"/}"; else printf '%s' "$1"; fi; }
 
