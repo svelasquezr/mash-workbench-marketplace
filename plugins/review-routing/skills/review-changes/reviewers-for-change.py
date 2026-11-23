@@ -138,6 +138,14 @@ def main() -> None:
         parser.error(
             f"{options.commit_range!r} is not a range; use <base>...<head> or <old>..<new>"
         )
+    # The range goes to git as one argument: one that starts with "-" would be read as an option
+    # (--output=<file> writes a file), and a range holds no whitespace.
+    if options.commit_range is not None and (
+        options.commit_range.startswith("-") or any(c.isspace() for c in options.commit_range)
+    ):
+        parser.error(
+            f"{options.commit_range!r} is not a range: it starts with '-' or holds whitespace"
+        )
     if options.explain and options.check:
         parser.error("--explain shows the routing of a change; it does not combine with --check")
     if options.format is not None and not options.explain:

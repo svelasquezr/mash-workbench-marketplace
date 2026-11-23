@@ -16,3 +16,10 @@ gnu_sed() {
   else echo "this test needs GNU sed: on macOS, brew install gnu-sed" >&2; return 1
   fi
 }
+
+# in_root_script: run as `bash "$in_root_script" <script> <arguments...>` to run the script from inside its <repo-root>
+# (the first argument that is an absolute path to a folder), as a session in that repository does. The writing scripts
+# refuse a <repo-root> of another repository than the current folder's. A script, not a function: it also works after
+# an `env NAME=value` prefix.
+# shellcheck disable=SC2034  # used by the test files that source this one
+in_root_script="$PWD/tests/in_root.sh"

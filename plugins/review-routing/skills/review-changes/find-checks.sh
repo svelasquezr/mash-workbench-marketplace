@@ -11,7 +11,11 @@ usage="usage: find-checks.sh <repo-root>"
 [[ $# -eq 1 && -d "$1" ]] || { echo "$usage" >&2; exit 2; }
 root="$(cd "$1" && pwd -P)"
 names='test|lint|format|typecheck|check'
-emit() { printf '%s\t%s\n' "$1" "$2"; }
+# emit <command> <file>: the text comes from files of the repository, so control characters (an escape sequence that
+# would rewrite the terminal line, for example) are dropped before it is printed.
+# Both fields: a file name can hold one too. C1 controls (as UTF-8) go as well.
+clean() { LC_ALL=C tr -d '\000-\010\013-\037\177' | LC_ALL=C awk '{ gsub(/\302[\200-\237]/, ""); printf "%s", $0 }'; }
+emit() { printf '%s\t%s\n' "$(printf '%s' "$1" | clean)" "$(printf '%s' "$2" | clean)"; }
 
 if [[ -f "$root/package.json" ]]; then
   bash "$(dirname "${BASH_SOURCE[0]}")/../../scripts/python.sh" --missing-ok -I - "$root/package.json" <<'PY' || true

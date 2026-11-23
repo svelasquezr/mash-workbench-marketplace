@@ -36,19 +36,36 @@ def frontmatter_model(agent_file: Path) -> str | None:
     return frontmatter(agent_file).get("model")
 
 
+def is_file_name(name: str) -> bool:
+    """A reviewer name from the config is used as a file name in an agents folder: one with a path
+    separator, or one that starts with a dot (.. too), would read a file outside that folder."""
+    return bool(name) and "/" not in name and "\\" not in name and not name.startswith(".")
+
+
 def agent_file(reviewer: str, repository_root: Path) -> Path | None:
     """The file that defines a reviewer: this plugin's agents for `review-routing:<name>`, the
     project's .claude/agents/ otherwise (by file name or `name:`); None for other plugins."""
     if ":" in reviewer:
         plugin, _, name = reviewer.partition(":")
+        if not is_file_name(name):
+            return None
         candidate = PLUGIN_AGENTS_DIRECTORY / f"{name}.md"
-        return candidate if plugin == PLUGIN_NAME and candidate.is_file() else None
+        usable = plugin == PLUGIN_NAME and candidate.is_file() and not candidate.is_symlink()
+        return candidate if usable else None
     agents_directory = repository_root / ".claude" / "agents"
+    # A committed link at .claude or .claude/agents could name a folder outside the repository: nothing there is read.
+    try:
+        inside = agents_directory.resolve().is_relative_to(repository_root.resolve())
+    except OSError:
+        inside = False
+    if not inside:
+        return None
     candidate = agents_directory / f"{reviewer}.md"
-    if candidate.is_file():
+    if is_file_name(reviewer) and candidate.is_file() and not candidate.is_symlink():
         return candidate
     for other in sorted(agents_directory.glob("*.md")):
-        if frontmatter(other).get("name") == reviewer:
+        # A committed symbolic link could name a file outside the folder: it is not read.
+        if not other.is_symlink() and frontmatter(other).get("name") == reviewer:
             return other
     return None
 

@@ -60,11 +60,18 @@ rm -rf "$chosen"
 run_capturing bash "$script" /no/such/root
 [[ "$captured_exit_code" != 0 ]] || { echo "  a missing root exited 0"; exit 1; }
 
-# With python3 as the Windows Store stub and no other Python: exit 3 with the finder's message, never a silent "no stale entries".
+# No Python is needed any more: with python3 as the Windows Store stub and no other Python, the entries are listed.
 stub_bin=$(mktemp -d)
 printf '#!/bin/sh\necho "Python was not found" >&2\nexit 9009\n' > "$stub_bin/python3"; chmod +x "$stub_bin/python3"
-for tool in bash dirname cat; do ln -s "$(command -v "$tool")" "$stub_bin/$tool"; done
-run_capturing env -i PATH="$stub_bin" MASH_WORKBENCH_BACKLOG="${MASH_WORKBENCH_BACKLOG:-docs/tooling-backlog.md}" BACKLOG_TODAY=2026-10-21 "$(command -v bash)" "$script" "$temporary_directory"
+for tool in bash dirname basename cat date sort git tr awk; do ln -s "$(command -v "$tool")" "$stub_bin/$tool"; done
+run_capturing env -i PATH="$stub_bin" MASH_WORKBENCH_BACKLOG=docs/tooling-backlog.md BACKLOG_TODAY=2026-10-21 "$(command -v bash)" "$script" "$temporary_directory" 10
 rm -rf "$stub_bin"
-assert_eq "$captured_exit_code" "3"
-assert_contains "$captured_output" "no Python 3.11 or newer found"
+assert_eq "$captured_exit_code" "0"
+assert_eq "$captured_output" "$(printf '2025-12-31 (294 days) · hook · Last year\nundated · 2026-02-30 · script · Bad date\nundated · Hand-written entry')"
+if grep -q "python" "$script"; then echo "  backlog-stale.sh still mentions python"; exit 1; fi
+
+# Date math by hand: leap years, a year boundary, a century that is not a leap year, entries of one date in file order,
+# a CRLF file, and a last line with no line break.
+printf -- '- [ ] 2024-02-28 · script · Before leap day — x\r\n- [ ] 2024-03-01 · script · After leap day — x\r\n- [ ] 1900-02-28 · hook · B — x\r\n- [ ] 1900-02-28 · hook · A — x\r\n- [ ] 2100-03-01 · hook · Future — x' > "$temporary_directory/docs/tooling-backlog.md"
+output=$(BACKLOG_TODAY=2024-03-02 bash "$script" "$temporary_directory" 0)
+assert_eq "$output" "$(printf '1900-02-28 (45293 days) · hook · B\n1900-02-28 (45293 days) · hook · A\n2024-02-28 (3 days) · script · Before leap day\n2024-03-01 (1 days) · script · After leap day')"

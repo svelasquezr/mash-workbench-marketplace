@@ -14,18 +14,35 @@ set -euo pipefail
 # The script never deletes the old file and never changes a setting: it prints the commands for the user (git rm or rm,
 # and mash-settings.sh set when the setting must name the new folder).
 # Exit codes: 0 migrated, or no old ledger found; 2 usage error, not in a git repository, or an entry that fails
-# escape-add.sh's checks (nothing written); 4 the escapes ledger is off; 5 no main worktree (bare repository); 6 the
-# target folder is refused by mash-settings.sh check-escapes-path.
+# escape-add.sh's checks (nothing written); 4 the escapes ledger is off; 5 no main worktree (a linked worktree of a bare repository); 6 the
+# target folder is refused by mash-settings.sh check-escapes-path, or an old ledger file (or a folder on its path) is a
+# symbolic link.
+# Exit 6 also when <repo-root> is in a folder shaped like a git directory (mash-settings.sh refuses it before git runs).
+# Git runs without the variables that choose another repository, index or config, and with no fsmonitor program
+# (GIT_CONFIG_COUNT needs version 2.31 or later; an older version ignores it).
+# In a partial clone it downloads no missing object (GIT_NO_LAZY_FETCH, version 2.44 and later; an older version can
+# download one, which is a network call).
+# Each git call runs in a folder that mash-settings.sh checked: the main worktree, or the top folder of <repo-root>
+# (mash-settings.sh toplevel), with -C.
+unset GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR GIT_INDEX_FILE GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES \
+  GIT_NAMESPACE GIT_LITERAL_PATHSPECS GIT_GLOB_PATHSPECS GIT_NOGLOB_PATHSPECS GIT_ICASE_PATHSPECS GIT_CONFIG_PARAMETERS
+export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.fsmonitor GIT_CONFIG_VALUE_0='' GIT_NO_LAZY_FETCH=1
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
 settings=$(cd "$here/../../scripts" && pwd -P)/mash-settings.sh
 usage() { echo "usage: escape-migrate.sh <repo-root>" >&2; exit 2; }
 [[ $# -eq 1 && -d "$1" ]] || usage
+# clean: no control characters in what is printed from files or folder names (a commit can hold either).
+clean() { LC_ALL=C tr -d '\000-\010\013-\037\177' | LC_ALL=C awk '{ gsub(/\302[\200-\237]/, ""); print }'; }
+# say_line <text>: the text on one line of stderr, without control characters (a tab or a line feed in a folder name
+# becomes a space, so a name cannot add a line of its own).
+say_line() { printf '%s\n' "$(printf '%s' "$1" | LC_ALL=C tr '\t\n' '  ' | clean)" >&2; }
 root=$(cd "$1" && pwd -P)
 status=0
 main=$(bash "$settings" main-worktree "$root" 2>/dev/null) || status=$?
 case "$status" in
   0) ;;
-  2) echo "escape-migrate: not in a git repository: $root" >&2; exit 2 ;;
+  2) say_line "escape-migrate: not in a git repository: $root"; exit 2 ;;
+  6) bash "$settings" main-worktree "$root" >/dev/null || true; exit 6 ;;  # once more, for its message on stderr
   *) echo "escape-migrate: no main worktree (bare repository): migrate from a clone with a work folder" >&2; exit "$status" ;;
 esac
 quote() { printf '%q' "$1"; }  # a path in a printed command, safe to paste
@@ -36,7 +53,8 @@ current=$(bash "$here/escapes-path.sh" "$root" 2>/dev/null) || status=$?
 case "$status" in
   0 | 3) ;;
   4) echo "the escapes ledger is off for this project: nothing migrated"; exit 4 ;;
-  *) exit "$status" ;;
+  *) bash "$here/escapes-path.sh" "$root" >/dev/null || true  # once more, for its message on stderr
+    exit "$status" ;;
 esac
 old_files=()
 target=""
@@ -44,6 +62,11 @@ if ((status == 0)); then
   if [[ -f "$current" ]]; then old_files+=("$current"); else target=$current; fi
 fi
 for candidate in docs/mash/review-escapes.md docs/review-escapes.md; do
+  # escapes-path.sh checked only the file it named. Each old file is read, so each one must pass check-escapes-path:
+  # a real file inside the main worktree, with no symbolic link on its path (a repository can commit a link).
+  if [[ -f "$main/$candidate" ]]; then
+    message=$(bash "$settings" check-escapes-path "$root" "$main/$candidate" 2>&1) || { echo "escape-migrate: $candidate: $message" >&2; exit 6; }
+  fi
   if [[ -f "$main/$candidate" ]] && { ((${#old_files[@]} == 0)) || ! [[ "${old_files[0]}" -ef "$main/$candidate" ]]; }; then
     old_files+=("$main/$candidate")
   fi
@@ -66,12 +89,12 @@ for old in "${old_files[@]}"; do
       print ENVIRON["DISPLAY_NAME"] ":" FNR >> ENVIRON["LINES_FILE"]
     }' "$old" >> "$work/batch" 2>> "$work/skipped"
 done
-if [[ -s "$work/skipped" ]]; then cat "$work/skipped"; fi
+if [[ -s "$work/skipped" ]]; then clean < "$work/skipped"; fi
 if [[ -s "$work/batch" ]]; then
   status=0
   # The variable points escape-add.sh at the target folder for this run only. Its escapes-path.sh warnings about the old
   # files are left out: the steps below say what to do with them.
-  REVIEW_ROUTING_ESCAPES="$target" bash "$here/escape-add.sh" --batch "$work/batch" "$root" 2> "$work/errors" || status=$?
+  REVIEW_ROUTING_ESCAPES="$target" bash "$here/escape-add.sh" --batch - "$root" < "$work/batch" 2> "$work/errors" || status=$?
   # escape-add.sh names a bad block by its number: name the old file and line instead.
   awk 'NR == FNR { line[FNR] = $0; next }
     /^escapes-path: / { next }
@@ -79,13 +102,13 @@ if [[ -s "$work/batch" ]]; then
       number = $3; sub(/:$/, "", number); text = $0; sub(/^escape-add: block [0-9]+: /, "", text)
       print "escape-migrate: " line[number] ": " text; next
     }
-    { print }' "$work/lines" "$work/errors" >&2 || true
+    { print }' "$work/lines" "$work/errors" | clean >&2 || true
   if ((status != 0)); then exit "$status"; fi
 else
   echo "no entry lines found: nothing recorded"
 fi
 
-echo "The escapes are now in $(display "$target"). The old file stays until you remove it; ask the user, then run:"
+echo "The escapes are now in $(display "$target"). The old file stays until you remove it; ask the user, then run:" | clean
 for old in "${old_files[@]}"; do
   if [[ "$old" == "$main"/* ]] && git -C "$main" ls-files --error-unmatch -- "$(display "$old")" >/dev/null 2>&1; then
     echo "  git -C $(quote "$main") rm $(quote "$(display "$old")")"

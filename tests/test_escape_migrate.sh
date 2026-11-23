@@ -32,7 +32,7 @@ old_ledger() {
 root=$(fresh committed)
 old_ledger "$root/docs/mash/review-escapes.md"
 git -C "$root" add docs; git -C "$root" commit --quiet -m "docs: old ledger"
-run_capturing bash "$migrate" "$root"
+run_capturing bash "$in_root_script" "$migrate" "$root"
 assert_eq "$captured_exit_code" "0"
 assert_contains "$captured_output" "recorded 3, already recorded 1"
 assert_contains "$captured_output" "skipped line 8 of docs/mash/review-escapes.md"
@@ -44,7 +44,7 @@ assert_contains "$(cat "$root/$escapes_folder/2026-10-12-migrated-2.md")" "area:
 assert_contains "$(cat "$root/$escapes_folder/2026-10-14-migrated-4.md")" "source: https://example.test/bugs/3"
 assert_file "$root/$escapes_folder/README.md"
 assert_file "$root/docs/mash/review-escapes.md"
-run_capturing bash "$migrate" "$root"
+run_capturing bash "$in_root_script" "$migrate" "$root"
 assert_eq "$captured_exit_code" "0"
 assert_contains "$captured_output" "recorded 0, already recorded 4"
 assert_eq "$(count_files "$root/$escapes_folder")" "3"
@@ -52,8 +52,8 @@ assert_eq "$(count_files "$root/$escapes_folder")" "3"
 git -C "$root" rm --quiet docs/mash/review-escapes.md
 bash "$settings_script" set "$root" escapes "$escapes_folder" --team >/dev/null
 assert_eq "$(bash "$report" "$root")" "$(printf '%s\n' 'src/a: 2 escapes (wrong-result 1, missing-test 1)' 'docs: 1 escape (stale-doc 1)')"
-assert_eq "$(bash "$add" --list "$root" src/a)" "$(printf '%s\n' '2026-10-12-migrated-2.md  Migrated; see source.' '2026-10-11-migrated-1.md  Migrated; see source.')"
-run_capturing bash "$migrate" "$root"
+assert_eq "$(bash "$in_root_script" "$add" --list "$root" src/a)" "$(printf '%s\n' '2026-10-12-migrated-2.md  Migrated; see source.' '2026-10-11-migrated-1.md  Migrated; see source.')"
+run_capturing bash "$in_root_script" "$migrate" "$root"
 assert_eq "$captured_exit_code" "0"
 assert_contains "$captured_output" "no old ledger found"
 
@@ -61,7 +61,7 @@ assert_contains "$captured_output" "no old ledger found"
 root=$(fresh untracked)
 old_ledger "$root/docs/review-escapes.md"
 bash "$settings_script" set "$root" escapes "$fixture/kept-escapes" --local >/dev/null
-run_capturing bash "$migrate" "$root"
+run_capturing bash "$in_root_script" "$migrate" "$root"
 assert_eq "$captured_exit_code" "0"
 assert_contains "$captured_output" "rm $root/docs/review-escapes.md"
 assert_not_contains "$captured_output" "git -C"
@@ -73,7 +73,7 @@ assert_contains "$(cat "$fixture/kept-escapes/README.md")" "repo: local/untracke
 # the variable, which would otherwise keep winning over the settings files.
 root=$(fresh env-file)
 old_ledger "$root/notes/escapes.md"
-run_capturing env REVIEW_ROUTING_ESCAPES=notes/escapes.md bash "$migrate" "$root"
+run_capturing env REVIEW_ROUTING_ESCAPES=notes/escapes.md bash "$in_root_script" "$migrate" "$root"
 assert_eq "$captured_exit_code" "0"
 assert_eq "$(count_files "$root/$escapes_folder")" "3"
 assert_contains "$captured_output" "mash-settings.sh set $root escapes .claude/mash-workbench/escapes --team"
@@ -83,7 +83,7 @@ assert_contains "$captured_output" "rm $root/notes/escapes.md"
 root=$(fresh setting-file)
 old_ledger "$root/notes/escapes.md"
 bash "$settings_script" set "$root" escapes notes/escapes.md --local >/dev/null
-run_capturing bash "$migrate" "$root"
+run_capturing bash "$in_root_script" "$migrate" "$root"
 assert_eq "$(count_files "$root/$escapes_folder")" "3"
 assert_contains "$captured_output" "mash-settings.sh set $root escapes .claude/mash-workbench/escapes"
 assert_not_contains "$captured_output" "REVIEW_ROUTING_ESCAPES"
@@ -92,7 +92,7 @@ root=$(fresh both)
 old_ledger "$root/docs/review-escapes.md"
 printf -- '- 2026-10-20 · src/b · data-loss · https://github.com/o/r/issues/9\n' > "$root/docs/review-escapes2.md"
 mkdir -p "$root/docs/mash"; mv "$root/docs/review-escapes2.md" "$root/docs/mash/review-escapes.md"
-run_capturing bash "$migrate" "$root"
+run_capturing bash "$in_root_script" "$migrate" "$root"
 assert_contains "$captured_output" "recorded 4, already recorded 1"
 assert_contains "$captured_output" "rm $root/docs/mash/review-escapes.md"
 assert_contains "$captured_output" "rm $root/docs/review-escapes.md"
@@ -102,7 +102,7 @@ root=$(fresh two-areas)
 mkdir -p "$root/docs"
 printf -- '- 2026-10-11 · src/a · wrong-result · https://github.com/o/r/issues/1\n- 2026-10-12 · src/b · wrong-result · https://github.com/o/r/issues/1\n' > "$root/docs/review-escapes.md"
 old_report=$(bash "$report" "$root" 2>/dev/null)
-run_capturing bash "$migrate" "$root"
+run_capturing bash "$in_root_script" "$migrate" "$root"
 assert_contains "$captured_output" "recorded 2, already recorded 0"
 bash "$settings_script" set "$root" escapes "$escapes_folder" --local >/dev/null
 rm "$root/docs/review-escapes.md"
@@ -114,7 +114,7 @@ assert_file "$root/$escapes_folder/2026-10-12-migrated-2.md"
 root=$(fresh bad-entry)
 mkdir -p "$root/docs"
 printf -- '# Review escapes\n- 2026-10-11 · src/a · wrong-result · https://github.com/o/r/issues/1\n- 2026-10-12 · src/a · Bad Class · https://github.com/o/r/issues/2\n' > "$root/docs/review-escapes.md"
-run_capturing bash "$migrate" "$root"
+run_capturing bash "$in_root_script" "$migrate" "$root"
 assert_eq "$captured_exit_code" "2"
 assert_contains "$captured_output" "docs/review-escapes.md:3: the class is lowercase words"
 assert_not_contains "$captured_output" "block"
@@ -123,7 +123,7 @@ assert_not_contains "$captured_output" "block"
 # Paths in the printed commands are quoted: the rm line works as printed for a path with a space.
 root=$(fresh "with space")
 old_ledger "$root/docs/review-escapes.md"
-run_capturing bash "$migrate" "$root"
+run_capturing bash "$in_root_script" "$migrate" "$root"
 assert_contains "$captured_output" "rm $(printf '%q' "$root/docs/review-escapes.md")"
 assert_contains "$captured_output" "set $(printf '%q' "$root") escapes"
 eval "$(printf '%s\n' "$captured_output" | awk '/^  rm / { sub(/^  /, ""); print }')"
@@ -133,25 +133,25 @@ eval "$(printf '%s\n' "$captured_output" | awk '/^  rm / { sub(/^  /, ""); print
 root=$(fresh off)
 old_ledger "$root/docs/review-escapes.md"
 bash "$settings_script" set "$root" escapes off --local >/dev/null
-run_capturing bash "$migrate" "$root"
+run_capturing bash "$in_root_script" "$migrate" "$root"
 assert_eq "$captured_exit_code" "4"
 [[ ! -e "$root/.claude/mash-workbench/escapes" ]] || { echo "  migrated while off"; exit 1; }
 root=$(fresh owned)
 old_ledger "$root/docs/review-escapes.md"
 mkdir -p "$fixture/owned-escapes"; printf '# Review escapes\nrepo: github.com/other/thing\n' > "$fixture/owned-escapes/README.md"
 bash "$settings_script" set "$root" escapes "$fixture/owned-escapes" --local >/dev/null
-run_capturing bash "$migrate" "$root"
+run_capturing bash "$in_root_script" "$migrate" "$root"
 assert_eq "$captured_exit_code" "6"
 assert_eq "$(count_files "$fixture/owned-escapes")" "0"
 root=$(fresh nothing)
-run_capturing bash "$migrate" "$root"
+run_capturing bash "$in_root_script" "$migrate" "$root"
 assert_eq "$captured_exit_code" "0"
 assert_contains "$captured_output" "no old ledger found"
 # Usage errors.
-run_capturing bash "$migrate"
+run_capturing bash "$in_root_script" "$migrate"
 assert_eq "$captured_exit_code" "2"
-run_capturing bash "$migrate" "$fixture/missing"
+run_capturing bash "$in_root_script" "$migrate" "$fixture/missing"
 assert_eq "$captured_exit_code" "2"
 not_repo=$(mktemp -d "$fixture/not-repo.XXXXXX")
-run_capturing bash "$migrate" "$not_repo"
+run_capturing bash "$in_root_script" "$migrate" "$not_repo"
 assert_eq "$captured_exit_code" "2"
