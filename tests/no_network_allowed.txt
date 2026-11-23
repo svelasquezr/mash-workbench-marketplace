@@ -4,3 +4,4 @@ plugins/mash-workbench/scripts/past-friction.py:18:git fetch	docstring example o
 plugins/mash-workbench/scripts/past-friction.py:59:gh	list of program names the script recognizes in transcripts; it runs none of them
 plugins/mash-workbench/scripts/past-friction.py:59:npx	list of program names the script recognizes in transcripts; it runs none of them
 plugins/mash-workbench/scripts/past-friction.py:59:uvx	list of program names the script recognizes in transcripts; it runs none of them
+plugins/mash-review/agents/reviewer.md:11:git push	prose: the list of git commands the reviewer must never run; nothing runs it

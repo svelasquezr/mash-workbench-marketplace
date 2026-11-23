@@ -1,23 +1,25 @@
 ---
-name: review-changes
-description: Use when you are about to open a pull request or share a branch, when asked to review or self-review your changes, or when deciding which reviewer agents a change needs
+name: review
+description: Use when the user asks for a mash review, a code review or a self-review of their changes, before opening a pull request or sharing a branch, or when deciding which review standards a change needs
 ---
 
-# Review your changes before opening a PR
+# Review a change against the project's standards
 
-Reviews committed work with the agents the project's routing (`.claude/reviewers.toml`) names. It needs only git; nothing goes to a PR. Below, `route` means `bash <this skill's base directory>/../../scripts/python.sh <this skill's base directory>/reviewers-for-change.py`, run from the repository (it finds a working Python 3.11+).
+This skill changes no code. It never fixes, commits, stashes, pushes, opens a pull request or comments. When the user also asked for fixes, the session makes them after the summary, with the builder skill each finding's standard names. Details for each step, and common mistakes: `reference.md` next to this file.
 
-**Reviewers judge; tools enforce.** Automate whatever a tool can decide.
+**Plan mode:** do steps 1–4 by reading only, then write the review plan (range, intent, standards and why, reviewers and models, checks to run) and stop. Run no check, start no reviewer, write no file.
+
+**User present** means a person can answer now. Auto mode, `claude -p` and background sessions have none.
 
 ## Steps
 
-0. **Does this change fix a bug that a review passed?** Record it ("Recording escapes" in `<this skill's base directory>/reference.md`, source link, when there is one; "Recording by hand" there if the script cannot run).
-1. **Range and reviewers.** Review `<default branch>...HEAD` (`origin/HEAD`, else `origin/main` or `origin/master`, else local `main` or `master`, else ask) unless the user names another base. Uncommitted changes: ask the user to commit first. `route <range> --models` prints `agent<TAB>model` lines. Exit 3 means no Python 3.11 was found: follow "No Python" in the reference. Any other non-zero exit means the range or config is wrong, never that no reviewers are needed. Dispatch every agent printed: its name as `subagent_type`, its model as `model` unless `-` (the agent's default; `general-purpose`: `sonnet`). With no `.claude/reviewers.toml` only `review-routing:change-reviewer` is printed: say add-reviewer sets up routing. When the change touches `.claude/reviewers.toml` or `.claude/agents/`, also run `route --check`.
-2. **Checks first, once, as a gate.** Use the test, lint and format commands that CLAUDE.md or AGENTS.md names. If none: `bash <this skill's base directory>/find-checks.sh <repo-root>` lists candidates (if it fails, treat the list as empty); propose them, run only what the user confirms, then offer a CLAUDE.md line naming them. If nothing exists, review anyway: tell reviewers "no automated checks ran", pair mechanical findings with the tool that would catch them, and report **Unchecked: no tests or linters configured**. Fix any failure before step 3.
-3. **Dispatch all reviewers in one message.** Each prompt holds: the range to review (`git diff <range>`), what it is for, briefly, the check results, and anything the agent's description says the caller must name. For `general-purpose`, first add "General-purpose reviewer prompt" from the reference. A reviewer that errors or gives no verdict is dispatched again, never counted as safe.
-4. **Triage every finding.**
-   - Mechanical: fix it and add (or propose) the check that now covers it. With mash-workbench, record it with `scout`.
-   - Introduced by this change: fix in a new commit (no amend), rerun the checks, then send the fix round to the reviewers ("Fix rounds" in the reference). After two rounds still `NOT SAFE`, stop and report the open findings.
-   - A finding you think is wrong: answer it with evidence in that reviewer's next prompt; its verdict decides.
-   - Pre-existing: list it for the user; file nothing. Record each `escape: yes`.
-5. **Summary, in the terminal only:** each reviewer's last verdict, Critical / Important / Minor counts and fix rounds; the checks that ran or the Unchecked line; open Minor suggestions; Pre-existing findings. When every last verdict is `SAFE TO LAND`, log the range and add the escape lines ("Review log and escape lines" in the reference), then say `ready to open your PR`; otherwise list what is open. Never push, open a PR, comment or merge.
+1. **Range.** Base: `git merge-base <default branch> HEAD` (`origin/HEAD`, else `origin/main` or `origin/master`, else local `main` or `master`, else ask), or the base the user names. Note the commit id (`git rev-parse HEAD`) and the untracked files. Changes outside `.mash-review/` and `.claude/worktrees/` that are uncommitted or untracked: ask _review everything, commit first, or only the commits?_; with no user present, use everything and say so in the report. Everything is **working-tree mode** (its section in `reference.md`).
+2. **Intent.** From the commit messages (`git log <base>..HEAD`), the PR description, or the user. One commit: put its message in the intent.
+3. **A fixed escape?** If the change fixes a bug that a review passed, run the `record-escape` skill for it.
+4. **Standards.** List the skills whose `description` covers what this diff does ("Selecting standards" in the reference). Add every standard the project's `CLAUDE.md` or `AGENTS.md` requires for this change. Group them into reviewers and give each group a model ("Grouping"). With none selected: one reviewer with the general checklist only.
+5. **Checks, once.** Run the test, lint and format commands that `CLAUDE.md` or `AGENTS.md` names. With none, propose commands from the project files and run only those the user confirms ("Check commands"). Nothing to run: tell reviewers "no automated checks ran" and mark the summary **Unchecked**. A red check: ask "stop here, or review anyway?". Stop, or no user present: report the failures and start no reviewer. Review anyway: give the red results and mark **Checks red**.
+6. **Start every reviewer in one message.** `subagent_type: mash-review:reviewer`, `model` from step 4, and the prompt in "Reviewer prompt". A reviewer that errors or gives no verdict is started again once; a second failure is **no verdict**, and the review is `NOT SAFE`. Where there are no subagents, do each review in the main conversation with the instructions of `../../agents/reviewer.md` from this skill's folder.
+7. **Escapes.** Each Pre-existing finding with `escape: yes`: run `record-escape`.
+8. **Summary, in the terminal** ("Summary" in the reference): each reviewer's verdict and standards; findings with their standard; the checks line; Pre-existing findings; escapes recorded, waiting, or to confirm; the offers; the migration hint. Then stop.
+
+A **re-review** on request goes only to the reviewers that found something ("Re-review" in the reference). There is no round limit; a caller that loops sets its own.

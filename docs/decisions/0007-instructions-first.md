@@ -17,7 +17,7 @@ review-routing 0.6.0 used a Python router with nine modules, a Python hook of 82
 
 1. **Instructions only.** The plugin `mash-review` 1.0.0 replaces review-routing. It contains skills and one agent. It contains no hook, no script, no config file and no allow rule.
 2. **Standards are skills.** A review standard is a skill whose `description` tells when it applies. It is a "Review checklist" section in a builder skill, a companion skill that cites a builder skill, or a standalone review skill. The `review` skill selects the standards from the diff and the intent. Path routes and `reviewers.toml` are removed.
-3. **One read-only reviewer.** The agent `mash-review:reviewer` has the tools `Read`, `Grep`, `Glob` and `Skill`. It has no Bash, so it cannot change a file or run git. The `review` skill writes the diff to a temporary file and gives the path to the reviewer. The reviewer asks for more history with a "Needs context" list.
+3. **One read-only reviewer.** The agent `mash-review:reviewer` has the tools `Read`, `Grep`, `Glob`, `Bash` and `Skill`. Its instructions permit only read-only git commands. It gets the diff and the history from git itself. The permission check of Claude Code refuses a write when no user is present in default mode.
 4. **The review only reviews.** The `review` skill does not fix, commit, stash or push. A user who wants fixes asks the session. Each finding names its standard, and the standard names its builder skill.
 5. **Escapes are checklist lines.** An escape becomes a line in the standard that covers it. When no standard covers it, the skill writes a file in `.mash-review/escapes/` in the main worktree. At three files on one topic, the skill offers a new standard. The skill writes only when a user is present. With no user present, the final report lists the escapes.
 6. **Determinism is the work of the project.** A project forces a standard with a rule in its `CLAUDE.md` or `AGENTS.md`. A project adds hooks, tests or CI jobs when it needs a guarantee. The repository rule "Deterministic first" changes to "Instructions first".
@@ -28,8 +28,9 @@ review-routing 0.6.0 used a Python router with nine modules, a Python hook of 82
 
 - **Keep the scripts and correct the bugs.** Pros: the routing stays deterministic. Cons: the Python version, Windows and the security checks stay problems for each new script. The users did not use the plugin.
 - **Write the router in bash.** Pros: no Python. Cons: bash is different on macOS (3.2), Linux and Git Bash. The security checks of 0006 stay necessary. The parser for TOML becomes our code.
-- **Keep only the hook, in bash.** Pros: a guard against a reviewer that changes a file. Cons: an agent with no Bash cannot change a file, so the hook gives no more protection.
-- **Paste the diff into each reviewer prompt.** Pros: the reviewer needs no file. Cons: the orchestrator writes the diff as output tokens one time for each reviewer. A shell redirect writes the file at no token cost.
+- **Keep only the hook, in bash.** Pros: a guard against a reviewer that changes a file, also in `bypassPermissions` mode. Cons: the hook is a script, with the problems of item 2 and item 3 of the context. In the other modes, the permission check of Claude Code already asks before a write.
+- **A reviewer with no Bash, and the diff in a file.** Pros: the reviewer cannot change a file. Cons: in `claude -p` with the default permission mode, Claude Code refused the redirect to the file and the `Read` of a file in `/tmp`. Thus a session with no user present cannot do a review without allow rules. We tested this on 2026-11-23 with Claude Code 2.1.330.
+- **Paste the diff into each reviewer prompt.** Pros: the reviewer needs no Bash. Cons: the orchestrator writes the diff as output tokens one time for each reviewer. When the reviewer runs `git diff`, the diff is input only.
 - **One reviewer agent for each area.** Pros: each agent has its own rules. Cons: the agents repeat the builder skills, and the two become different.
 - **Keep the name review-routing.** Pros: no rename. Cons: the plugin no longer routes. Users ask for "mash review", and "code review" matches many plugins.
 - **Escapes in `CLAUDE.md`.** Pros: no new folder. Cons: the file becomes longer with each escape, and each session loads it.
@@ -37,6 +38,7 @@ review-routing 0.6.0 used a Python router with nine modules, a Python hook of 82
 ## Pros and cons
 
 - Pros: the plugin works on each host that runs Claude Code, with no Python and no allow rules.
+- Cons: in `bypassPermissions` mode, only the instruction stops a reviewer that runs a command that writes.
 - Pros: there is no script, so there is no script attack surface and no security check to keep.
 - Pros: one file holds the rules for the work and for its review, so the review and the builder agree.
 - Pros: plan mode gives a plan, and nothing runs.

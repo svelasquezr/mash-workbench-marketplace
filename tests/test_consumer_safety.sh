@@ -81,7 +81,7 @@ assert_eq "$captured_exit_code" "6"
 # 9. A bare repository with a linked worktree (used by case 16).
 git clone --quiet --bare "$a" "$area/bare.git"; git -C "$area/bare.git" worktree add --quiet "$area/bare-linked" -b linked
 # 10. The control-character refusal for paths does not depend on the locale: a C1 control (U+009B as UTF-8) in a
-#     committed escapes path is refused under LC_ALL=C too.
+#     committed escapes or backlog path is refused under LC_ALL=C too.
 g="$area/g"; new_repository "$g"; mkdir -p "$g/.claude/mash-workbench"
 printf 'escapes=docs/e\302\23331mRED\nbacklog=docs/e\302\23331mRED.md\n' > "$g/.claude/mash-workbench/settings"
 for locale in C POSIX; do
