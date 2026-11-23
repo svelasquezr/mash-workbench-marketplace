@@ -11,6 +11,7 @@ Plugin marketplace (brand MASH: Memories, Agents, Skills, Hooks) of general-purp
 - `tests/test_*.sh` — bash tests for every script; `bash tests/run.sh`
 - `docs/decisions/` — architecture decisions
 - `docs/specs/<plugin>.md` — a plugin's design: its model, decisions, contracts and diagrams
+- `evals/<plugin>/` — `claude plugin eval` cases, kept outside the plugin so they do not ship; `bash scripts/eval-<plugin>.sh` runs them on a copy (each case is a paid Claude session, so CI does not run them)
 
 ## Working on this repo
 

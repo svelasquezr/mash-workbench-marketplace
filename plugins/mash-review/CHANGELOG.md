@@ -4,7 +4,25 @@ Newest first.
 
 ## 1.0.0 - 2026-11-23
 
-The plugin `review-routing` is now `mash-review`, made of instructions only: no Python, no hook, no scripts. The design is in `docs/specs/mash-review.md` in the marketplace repository; migration steps follow in this entry.
+The plugin `review-routing` is now `mash-review`, made of instructions only: no Python, no hook, no scripts, no config file, no allow rules. The design is in `docs/specs/mash-review.md` in the marketplace repository, and the reasons in `docs/decisions/0007-instructions-first.md`.
+
+**Do this after you update.**
+
+1. Run `/plugin install mash-review@mash-workbench-marketplace` once. The marketplace maps `review-routing` to `mash-review`, so Claude Code renames the plugin in your settings and shows a notice.
+2. In each project that used review-routing, run `/mash-review:migrate`. It proposes, and applies only what you approve: each reviewer agent and route in `.claude/reviewers.toml` becomes a review standard (a skill), each escape file becomes a checklist line or a file in `.mash-review/escapes/`, and the old settings, `reviews.log` and exclude lines go.
+3. Remove, first, every allow rule that names `review-routing`, and every rule with a `*` before `escape-add.sh`, `escape-migrate.sh`, `review-log.sh` or `mash-settings.sh`, from every settings file you added them to (`~/.claude/settings.json`, `.claude/settings*.json` in each worktree; `migrate` lists the ones in the project). They still approve the old scripts that Claude Code keeps in its plugin cache, and a rule from 0.4.0 to 0.5.0 that starts with `bash *` approves any command that mentions the script name. Keep the mash-workbench rule for `backlog-add.sh`.
+
+**Changed.**
+
+- Skills: `review-changes` is now `review`, `add-reviewer` is now `add-standard`; `migrate` is new. Agent: `change-reviewer` is now `reviewer`.
+- Reviews select **review standards** (skills whose description says when they apply) by what the change does. `.claude/reviewers.toml` and path routing are gone; to force a standard, add a rule to `CLAUDE.md` or `AGENTS.md`.
+- The review changes no code: it never fixes, commits, stashes or pushes. Ask for fixes after the summary. Uncommitted changes can be reviewed (working-tree mode). Plan mode writes the review plan only. A red check asks "stop here, or review anyway?".
+- The reviewer runs read-only git itself, and the diff is no longer pasted into prompts.
+- Escapes become checklist lines in the standard that covers them, or files in `<main worktree>/.mash-review/escapes/` with a `topic`. When a new escape file brings a topic to exactly three files (or five), `record-escape` offers a new standard. With no user present, nothing is written: the final report lists the escapes to record.
+
+**Removed.** The `reviewer-guard` hook, the Python router (`reviewers-for-change.py`, `route --check`), `escape-add.sh`, `escapes-report.sh`, `escapes-path.sh`, `escape-migrate.sh`, `review-log.sh`, `find-checks.sh`, `permission-rules.sh`, `scripts/python.sh`, `scripts/mash-settings.sh`, `scripts/plugin-current.sh`, `escape-fields.awk`, `reviewers.example.toml`, `reviewer-template.md`, the `escapes`, `escapes.threshold` and `declined.*` settings, `REVIEW_ROUTING_ESCAPES` and `MASH_PYTHON` for this plugin.
+
+**Known effect.** The `forge` skill of mash-workbench still counts review-routing escape files in `.claude/mash-workbench/escapes/`; after `migrate` it finds none there. A later mash-workbench release reads `.mash-review/escapes/`.
 
 ## 0.6.0 - 2026-11-22
 

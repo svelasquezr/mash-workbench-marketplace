@@ -1,0 +1,29 @@
+schema_version: "1.1"
+name: 02-standard-by-description
+description: "A review standard whose description matches the change is selected and given to the reviewer by name."
+tags: [mash-review]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: "mash review my branch. Nobody is available to answer questions."
+  max_turns: 40
+  timeout_seconds: 900
+  allowed_tools:
+    - "Skill"
+    - "Read"
+    - "Glob"
+    - "Grep"
+    - "Agent"
+    - "Write"
+    - "Edit"
+    - "Bash(git diff:*)"
+    - "Bash(git log:*)"
+    - "Bash(git status:*)"
+    - "Bash(git merge-base:*)"
+    - "Bash(git rev-parse:*)"
+    - "Bash(git worktree list:*)"
+    - "Bash(git blame:*)"
+    - "Bash(git show:*)"
+    - "Bash(git branch:*)"
+runs: 1
+expected_outcome: "The review selects the review-billing standard because the change edits a discount, names it in the reviewer prompt, and reports the broken check under that standard."
