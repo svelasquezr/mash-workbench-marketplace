@@ -1,8 +1,6 @@
 .claude/settings.local.json
-__pycache__/
-.ruff_cache/
 .DS_Store
 
 # superpowers specs and plans are working notes, kept local
 docs/superpowers/
-evals/mash-review/results/
+evals/*/results/

@@ -1,28 +1,46 @@
 # scout reference
 
-## Setting up the backlog
+The design, with diagrams, is `docs/specs/mash-workbench.md` in the marketplace repository.
 
-When `backlog-add.sh` exits 3 with "no tooling backlog chosen yet", nothing has been written. Ask, then set it up:
+## Main worktree
 
-1. **Where.** Ask the user, in one question, where to keep the backlog, with a recommendation: `docs/mash/tooling-backlog.md` committed (recommended: the whole team's candidates add up, and the reasons are reviewable), the same file excluded (only this clone), another file, or none (`off`). Check a path first with the `check-backlog-path` command the script printed: it says what the choice means, or refuses (exit 6) a linked worktree, a temporary folder, the git directory, a symbolic link, or a file another repository owns. For an excluded file inside the repo, add it to `<git common dir>/info/exclude` (`git rev-parse --git-common-dir` names the dir).
-2. **Save the answer.** Run the `mash-settings.sh set` command the script printed: `--team` for a committed backlog (the `settings` file in `.claude/mash-workbench/` is committed with it), `--local` for an excluded file, a file outside the repo, or `off`. Only `--local` (or the `MASH_WORKBENCH_BACKLOG` environment variable) can name a file outside the repository: the committed file cannot. Exit 1 means another writer holds the settings lock: run the same command again.
-3. **Offer write access.** With it, a session with no user (`claude -p` in a new worktree) adds to the backlog without a prompt. Run `bash <this skill's base directory>/permission-rules.sh <repo-root>`. It only prints: the `file:` to edit (`.claude/settings.local.json` in the main worktree; create it when it is missing), a `present:`, `add:` or `remove:` line for each rule, and `note:` lines. When it prints `remove:` lines, they come first and they are not optional: show them to the user, say why (they still approve an old plugin version's script, which stays on disk after an update), delete them from `permissions.allow`, and run the script again. Then show the user the `add:` rule and add it to `permissions.allow` only on a yes. Edit the file with your own edit tool, so Claude Code asks the user to approve the write too; no script edits it. Exit 6 means no rule is safe for this copy of the plugin (the message says why): add none. Exit 2 or 5: there is no git repository or no main worktree to hold the file; skip this step. In a tool other than Claude Code, skip this step. On Windows (Git Bash, MSYS, Cygwin) the script offers no rule, because the checks are not tested there: tell the user that each run asks, and that any "remove" rule it lists must go.
+The first `worktree` line of `git worktree list --porcelain`. When the line after it is `bare`, that entry is the git directory of a bare repository: use the top of the current worktree (`git rev-parse --show-toplevel`) instead. Outside git: the project folder. The location line, the backlog and the 0.x files are read and written there only, so every worktree finds the same ones. In a bare repository each worktree keeps its own backlog: say that its new lines must be committed before the worktree is removed.
 
-   The rule is `Bash(bash <plugin folder>/skills/scout/backlog-add.sh *)`: the exact installed path, and one wildcard, at the end, for the arguments. Claude Code compares a rule with the command text letter for letter, so write the command as the skill gives it (no variable, no `cd` before it, nothing joined to it). The path holds the plugin's version folder, so run this step again after every plugin update: the old rule must go, and the new one needs a yes. What the rule still allows: any arguments to that one script. No argument names the file to write. `<repo-root>` is an argument, but the script refuses one that is not in the repository of the current folder (exit 6), and Claude Code blocks a `cd` out of the session's folders.
+## First time
 
-4. Run `backlog-add.sh` again.
+There is no location line and no `.mash-workbench/tooling-backlog.md`. Ask the user once, in one question, with a recommendation:
 
-## Old backlog file
+- `.mash-workbench/tooling-backlog.md`, committed (recommended: the plugin's own folder, like `.mash-review/` of the mash-review plugin; the whole team's candidates add up, and the reasons are reviewable). It needs no line: go on with "The file".
+- Another file in the repository. Propose the line `Tooling backlog: <path>` ("Where the line goes" below, in the main worktree), and write it only on a yes.
+- None. Propose the line `Tooling backlog: off`, and write it only on a yes. Then write nothing.
 
-A backlog from before the setting existed (`docs/mash/tooling-backlog.md` or `docs/tooling-backlog.md`, with no `backlog` setting) keeps working: the entry was added there. `backlog-add.sh` says so on stderr ("has no setting yet") until the project has a setting. Why give it one: the setting is what every worktree and every teammate reads, so the file no longer depends on a fixed name, and a later choice (another file, or `off`) has one place. Ask the user once: keep the file where it is, or move it. Then run the command the script printed: `mash-settings.sh set <repo-root> backlog <path> --team` to keep it, or `git mv <old> <new path>` in the main worktree and the same `set` command with the new path. Do neither without the user's answer. The script added a `repo:` line under the file's title: it names the repository that owns the backlog.
+A no to the line: use the answer for this session only; a later session asks again.
 
-## What the script answers
+## Where the line goes
 
-- "the tooling backlog is off" (exit 0): say nothing more and continue.
-- Exit 3: follow "Setting up the backlog" above.
-- Exit 6: refused, and the message says why; show the user. A linked worktree, a temporary folder, the git directory or a file another repository owns: ask for another file. "the committed settings file puts the backlog file outside the repository": a committed file may not choose that; ask the user, and only on a yes run the `mash-settings.sh set ... --local` command the message gives. "a symbolic link": the backlog file, a folder on its path or `.claude/mash-workbench` is a link (a repository can commit one); add nothing until the user has looked at it. "not the installed version": the plugin was updated during this session; tell the user to start a new session and to remove the allow rule for the old folder (step 3 above). "shaped like a git directory", "nested repository" or "could not tell": the repository holds a folder that git would take as another repository, or git gave no answer; add nothing, show the user the message, and do not try another `<repo-root>`. "not in the repository of": the command named another repository than the one the session works in; add nothing there, and run it from inside the right repository only if the user asked for that repository.
-- Claude Code refuses the command ("requires approval") and no user is there to approve it, as in a `claude -p` session: the allow rule is missing or names another plugin version. Do not try another spelling or a wrapper such as `bash -c`. Put the candidate in your final report (form, title, why), and say that a session with a user must add it and run step 3 again.
-- Exit 6, "is not a tooling backlog" or "an empty file whose name does not end in .md": the setting names a file whose first line is not `# Tooling backlog`, or an empty file that is not a `.md` file (an empty `__init__.py`, say). The script adds nothing to such a file. "cannot read": the user must give read access or choose another file. Show the user; the setting must name another file, or the user adds the title line.
-- `--create` and `--file` are gone (exit 2): no argument names the file. Set the `backlog` setting instead.
+The line goes to `CLAUDE.md` when it exists; else to `AGENTS.md` when it exists (Claude Code reads `AGENTS.md` only where there is no `CLAUDE.md`, and a new `CLAUDE.md` would hide it); else to a new `CLAUDE.md`. Copilot CLI reads `.github/copilot-instructions.md` and `AGENTS.md`; when the project uses Copilot CLI, offer the same line there too.
 
-The entry goes to the backlog in the main worktree, also when you work in a linked worktree; with a committed backlog it waits there as an uncommitted change, and the user commits it from the main worktree.
+## The file
+
+Write to the backlog only when every answer is yes:
+
+- The path is relative, inside the main worktree, and has no `..` part.
+- The name ends in `.md`.
+- The file is new, empty, or its first line is `# Tooling backlog`. A file with other content is not a backlog, even when a location line names it (a committed `CLAUDE.md` can name `.env` or a source file).
+- Neither the file nor a folder on its path is a symbolic link. Check with `ls -la` on the file and on each folder of the path; git does not show an untracked link or a path under a linked folder.
+- It is not in the git directory.
+- It is not inside a nested repository, such as a submodule.
+
+From a linked worktree of a repository that is not bare, the file is in the main worktree, outside the current folder, so Claude Code asks for the write. Say why when it asks: the backlog is in the main worktree, so a deleted worktree loses nothing.
+
+A `repo:` line under the title, from 0.3.0, stays as it is.
+
+## 0.x files
+
+Only when there is no location line. Look in the main worktree for:
+
+- a `backlog=` line in `.claude/mash-workbench/settings` or `.claude/mash-workbench/settings.local`;
+- `MASH_WORKBENCH_BACKLOG` in the `env` block of `.claude/settings.json` or `.claude/settings.local.json`;
+- `docs/mash/tooling-backlog.md` or `docs/tooling-backlog.md` (the 0.x defaults), tracked or not.
+
+Any one means the project has not moved from mash-workbench 0.x. When the 0.x choice is `off` (the variable, else the last `backlog=` line of `settings.local`, else of `settings`), treat it as `off`: say nothing. Otherwise write nothing, so the project does not get a second backlog: list the candidate, and add the line "This project has mash-workbench 0.x files; run `/mash-workbench:migrate`". Do not run the migration yourself. Do not read a 0.x path as a location: only `migrate`, with the user, turns it into a location line.

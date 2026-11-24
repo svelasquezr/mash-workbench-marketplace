@@ -1,62 +1,51 @@
 # shellcheck shell=bash
-# Convention: every script path a skill of a plugin that ships scripts writes as "<this skill's base directory>/<path>.sh" or ".py", in any SKILL.md or
-# reference.md, names a file that exists (relative to that skill's folder, so "../scout/x.sh" counts). A plugin that ships no .sh or .py file outside its evals/ folder
-# (mash-review) is instructions only, so its skills must name no script path at all. The sanity scan below runs on
-# mash-workbench, the plugin that has scripts.
+# Convention (ADRs 0007, 0008): plugins are instructions only. No plugin ships a .sh or .py file, and no skill file names a
+# script path ("<this skill's base directory>/<path>.sh" or ".py", or a "scripts/" folder of the plugin).
 # tests/test_skill_references.sh checks only quoted section names, not script paths.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 source tests/lib.sh
 
-# missing_scripts <file>: prints one line for each script path in the file that does not resolve.
-missing_scripts() {
-  local file=$1 folder path
-  folder=$(dirname "$file")
-  { grep -o "<this skill's base directory>/[^][:space:]\`'\"<>()]*\.\(sh\|py\)" "$file" || true; } | sort -u | while IFS= read -r match; do
-    path=${match#"<this skill's base directory>/"}
-    [[ -f "$folder/$path" ]] || echo "$file: no such script: $path"
+script_path_pattern="\(<this skill's base directory>/\|scripts/\)[^][:space:]\`'\"<>()]*\.\(sh\|py\)"
+
+# script_path_problems <file>: one line for each script path the skill file names.
+script_path_problems() {
+  { grep -o "$script_path_pattern" "$1" || true; } | sort -u | while IFS= read -r match; do
+    echo "$1: names a script: $match"
   done
 }
 
-# The check catches a missing script and accepts an existing one, also through "..".
+# shipped_scripts <plugin folder>: the .sh and .py files of the plugin, outside evals/ (the setup scripts of eval cases
+# run only under `claude plugin eval --scaffold`, never in a user's session).
+shipped_scripts() {
+  find "$1" -path "$1/evals" -prune -o \( -name '*.sh' -o -name '*.py' \) -print
+}
+
+# The checks catch a script path and a shipped script, and pass a plain skill and an eval setup script.
 scratch=$(mktemp -d); trap 'rm -rf "$scratch"' EXIT
-mkdir -p "$scratch/one" "$scratch/two"
-: > "$scratch/two/real.sh"
+mkdir -p "$scratch/p/skills/a" "$scratch/p/evals/case"
+: > "$scratch/p/evals/case/setup.sh"
 # shellcheck disable=SC2016  # the backticks are text in the fixture
-printf 'run `bash <this skill'"'"'s base directory>/../two/real.sh <repo>` and `bash <this skill'"'"'s base directory>/gone.sh`.\n' > "$scratch/one/SKILL.md"
-assert_eq "$(missing_scripts "$scratch/one/SKILL.md")" "$scratch/one/SKILL.md: no such script: gone.sh"
-
-# ships_scripts <plugin folder>: true when the plugin has a scripts/ folder or a .sh or .py file outside evals/ (the
-# setup scripts of eval cases run only under `claude plugin eval --scaffold`, never in a user's session).
-ships_scripts() {
-  [[ -d "$1/scripts" || -n "$(find "$1" -path "$1/evals" -prune -o \( -name '*.sh' -o -name '*.py' \) -print | head -n 1)" ]]
-}
-# script_path_problems <file> <plugin folder>: the problems of one skill file.
-script_path_problems() {
-  if ships_scripts "$2"; then
-    missing_scripts "$1"
-  elif grep -q "<this skill's base directory>/[^][:space:]\`'\"<>()]*\.\(sh\|py\)" "$1"; then
-    echo "$1: names a script, but the plugin ships none"
-  fi
-}
-
-# A plugin with no scripts fails when a skill names one; an eval setup script does not count as shipping one.
-mkdir -p "$scratch/plain/skills/a" "$scratch/plain/evals/case"
-: > "$scratch/plain/evals/case/setup.sh"
-printf 'run `bash <this skill'"'"'s base directory>/x.sh`.\n' > "$scratch/plain/skills/a/SKILL.md"
-assert_eq "$(script_path_problems "$scratch/plain/skills/a/SKILL.md" "$scratch/plain")" "$scratch/plain/skills/a/SKILL.md: names a script, but the plugin ships none"
-printf 'no script here.\n' > "$scratch/plain/skills/a/SKILL.md"
-assert_eq "$(script_path_problems "$scratch/plain/skills/a/SKILL.md" "$scratch/plain")" ""
-
-# The scan finds paths at all (a pattern that matches nothing would pass every file).
-found=$(grep -o "<this skill's base directory>/[^][:space:]\`'\"<>()]*\.\(sh\|py\)" plugins/mash-workbench/skills/scout/SKILL.md | wc -l | tr -d ' ')
-[[ "$found" -ge 1 ]] || { echo "  the scan found no script paths in scout/SKILL.md"; exit 1; }
+printf 'run `bash <this skill'"'"'s base directory>/../b/x.sh <repo>`.\n' > "$scratch/p/skills/a/SKILL.md"
+assert_eq "$(script_path_problems "$scratch/p/skills/a/SKILL.md")" "$scratch/p/skills/a/SKILL.md: names a script: <this skill's base directory>/../b/x.sh"
+printf 'no script here.\n' > "$scratch/p/skills/a/SKILL.md"
+assert_eq "$(script_path_problems "$scratch/p/skills/a/SKILL.md")" ""
+# shellcheck disable=SC2016  # the backticks are text in the fixture
+printf 'run `bash ../../scripts/y.py`.\n' > "$scratch/p/skills/a/SKILL.md"
+assert_eq "$(script_path_problems "$scratch/p/skills/a/SKILL.md")" "$scratch/p/skills/a/SKILL.md: names a script: scripts/y.py"
+assert_eq "$(shipped_scripts "$scratch/p")" ""
+: > "$scratch/p/skills/a/run.py"
+assert_eq "$(shipped_scripts "$scratch/p")" "$scratch/p/skills/a/run.py"
 
 problems=""
-for file in plugins/*/skills/*/SKILL.md plugins/*/skills/*/reference.md; do
-  [[ -f "$file" ]] || continue
-  plugin_directory=${file#plugins/}; plugin_directory=plugins/${plugin_directory%%/*}
-  problem=$(script_path_problems "$file" "$plugin_directory")
-  [[ -z "$problem" ]] || problems+="$problem"$'\n'
+for plugin_directory in plugins/*/; do
+  plugin_directory=${plugin_directory%/}
+  shipped=$(shipped_scripts "$plugin_directory")
+  [[ -z "$shipped" ]] || problems+="$plugin_directory ships scripts: $shipped"$'\n'
+  [[ ! -d "$plugin_directory/scripts" ]] || problems+="$plugin_directory has a scripts/ folder"$'\n'
+  while IFS= read -r file; do
+    problem=$(script_path_problems "$file")
+    [[ -z "$problem" ]] || problems+="$problem"$'\n'
+  done < <(find "$plugin_directory/skills" -name '*.md')
 done
 assert_eq "$problems" ""

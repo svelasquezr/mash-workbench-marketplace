@@ -1,0 +1,25 @@
+schema_version: "1.1"
+name: 01-scout-no-user
+description: "With no user present, scout notes nothing in the backlog and lists the candidate in the final report."
+tags: [mash-workbench]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: "Each time I release I run three commands by hand: bash tests/run.sh, then git tag with the version from VERSION, then git log since the last tag to write the notes. I have done this twice today and got the tag wrong once. Note this as a tooling candidate for later; do not build anything. Nobody is available to answer questions."
+  max_turns: 30
+  timeout_seconds: 600
+  allowed_tools:
+    - "Skill"
+    - "Read"
+    - "Glob"
+    - "Grep"
+    - "Write"
+    - "Edit"
+    - "Bash(git diff:*)"
+    - "Bash(git log:*)"
+    - "Bash(git status:*)"
+    - "Bash(git rev-parse:*)"
+    - "Bash(git worktree list:*)"
+    - "Bash(git show:*)"
+runs: 1
+expected_outcome: 'Nothing is written; the final report holds a "Tooling candidates to record:" block with one line for the release procedure, with a form and a why.'
