@@ -7,7 +7,7 @@ description: Use when you notice yourself repeating a multi-step procedure, when
 
 Capture, don't build. The current task comes first. You write one line to the project's tooling backlog with your own edit tool.
 
-**Plan mode, or no user present** (a session that started from one prompt with no conversation, such as `claude -p` or a background session, or whose prompt says nobody can answer): write nothing. Put this block in the final report, one line per candidate, and continue the task:
+**Plan mode, or no user present** (a session that started from one prompt with no conversation, such as `claude -p` or a background session, or whose prompt says nobody can answer): still do steps 1 and 2, by reading only and asking nothing, so you know the form, whether the backlog is `off`, and whether the project has 0.x files. Then write nothing. Unless the backlog is `off`, put this block in the final report, one line per candidate, with the 0.x hint of step 2 when it applies, and continue the task:
 
 ```text
 Tooling candidates to record:
@@ -32,6 +32,4 @@ Tooling candidates to record:
 
 5. **Tell the user** in one line: "Noted for /forge: <title>". When an open entry describes the same candidate, add "(similar to <title>)"; `/forge` merges the two.
 
-If Claude Code refuses the write, write nothing more and list the candidate in the block above. The line waits uncommitted in the main worktree; no skill commits it.
-
-Where it goes once promoted is decided in `/forge`, not now.
+If Claude Code refuses the write, write nothing more and list the candidate in the block above. The line waits uncommitted; `/forge` decides later where the tool goes.

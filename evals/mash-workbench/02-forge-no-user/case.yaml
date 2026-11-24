@@ -1,0 +1,26 @@
+schema_version: "1.1"
+name: 02-forge-no-user
+description: "With no user present, forge gives one table from the backlog, marks the stale and undated entries, and builds nothing."
+tags: [mash-workbench]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: "Run /forge on this project. Nobody is available to answer questions."
+  max_turns: 30
+  timeout_seconds: 600
+  allowed_tools:
+    - "Skill"
+    - "Read"
+    - "Glob"
+    - "Grep"
+    - "Write"
+    - "Edit"
+    - "Bash(git diff:*)"
+    - "Bash(git log:*)"
+    - "Bash(git status:*)"
+    - "Bash(git rev-parse:*)"
+    - "Bash(git worktree list:*)"
+    - "Bash(git ls-files:*)"
+    - "Bash(git show:*)"
+runs: 1
+expected_outcome: "One table with a row for each open backlog entry (the stale and the undated one flagged build-or-drop, the two lockfile entries merged), a recommendation, and nothing built or marked."

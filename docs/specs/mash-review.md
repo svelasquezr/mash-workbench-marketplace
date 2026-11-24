@@ -204,7 +204,7 @@ Load the `acme-angular:component` skill and check the change against it.
 ## Verification
 
 - `bash scripts/check.sh` and `pre-commit run --all-files`.
-- `bash scripts/eval-mash-review.sh`: `claude plugin eval` cases in `evals/mash-review/`, all with no user present (the harness runs `claude -p` in `dontAsk` mode).
+- `bash scripts/eval.sh mash-review`: `claude plugin eval` cases in `evals/mash-review/`, all with no user present (the harness runs `claude -p` in `dontAsk` mode).
 - By hand: plan mode, questions to a present user, escape writes, `add-standard`, an applied `migrate`.
 - Tested with `claude -p` in default mode. On 2026-11-23 (2.1.330), in the main session and in a subagent: `git diff`, `log`, `blame`, `status` and `show` ran with no prompt; a redirect to a file, `git diff --output`, `git stash create`, `touch` and a subagent's read of `/tmp` were refused. On 2026-11-24 (2.1.331), in the main session only: `git diff --no-ext-diff --function-context` with the `':(top)'` pathspec, `git status --porcelain`, `git rev-parse --show-toplevel`, `git merge-base` and `git worktree list --porcelain` ran; the same diff with `--no-textconv` was refused. This is why D6 gives the reviewer Bash and why working-tree mode writes no snapshot.
 - The eval runner grants the git commands with `--allow-tools`, so the evals do not show that they run with no allow rules; the tests above do, except the pathspec diff in a subagent, which is not tested.

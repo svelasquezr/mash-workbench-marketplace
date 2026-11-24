@@ -1,0 +1,26 @@
+schema_version: "1.1"
+name: 03-forge-escape-topics
+description: "forge turns a mash-review escape topic with three files into a review-standard candidate, and ignores a topic with one file and the processed folder."
+tags: [mash-workbench]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: "Run /forge on this project. Nobody is available to answer questions."
+  max_turns: 30
+  timeout_seconds: 600
+  allowed_tools:
+    - "Skill"
+    - "Read"
+    - "Glob"
+    - "Grep"
+    - "Write"
+    - "Edit"
+    - "Bash(git diff:*)"
+    - "Bash(git log:*)"
+    - "Bash(git status:*)"
+    - "Bash(git rev-parse:*)"
+    - "Bash(git worktree list:*)"
+    - "Bash(git ls-files:*)"
+    - "Bash(git show:*)"
+runs: 1
+expected_outcome: "The table has a review standard row for the discount-tax topic (built with mash-review add-standard, or a project review skill without it), no row for angular-subscriptions, and nothing is built."

@@ -1,0 +1,26 @@
+schema_version: "1.1"
+name: 04-migrate-no-user
+description: "With no user present, migrate gives a proposal for a 0.x project and writes nothing; the old allow rule comes first and the review keys stay."
+tags: [mash-workbench]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: "Migrate this project from mash-workbench 0.x to 1.0. Nobody is available to answer questions."
+  max_turns: 30
+  timeout_seconds: 600
+  allowed_tools:
+    - "Skill"
+    - "Read"
+    - "Glob"
+    - "Grep"
+    - "Write"
+    - "Edit"
+    - "Bash(git diff:*)"
+    - "Bash(git log:*)"
+    - "Bash(git status:*)"
+    - "Bash(git rev-parse:*)"
+    - "Bash(git worktree list:*)"
+    - "Bash(git ls-files:*)"
+    - "Bash(git show:*)"
+runs: 1
+expected_outcome: "A proposal only: remove the backlog-add.sh allow rule first, turn backlog=docs/tooling/backlog.md into a Tooling backlog line in an instruction file, keep the escapes key for mash-review, and nothing written."
