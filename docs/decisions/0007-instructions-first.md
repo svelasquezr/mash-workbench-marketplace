@@ -38,10 +38,11 @@ review-routing 0.6.0 used a Python router with nine modules, a Python hook of 82
 ## Pros and cons
 
 - Pros: the plugin works on each host that runs Claude Code, with no Python and no allow rules.
-- Cons: in `bypassPermissions` mode, only the instruction stops a reviewer that runs a command that writes.
 - Pros: there is no script, so there is no script attack surface and no security check to keep.
 - Pros: one file holds the rules for the work and for its review, so the review and the builder agree.
 - Pros: plan mode gives a plan. Only read-only git runs.
+- Pros: a team can extend the behavior in its own project, with no change to the plugin. It adds review standards, rules in its instruction files, or its own hooks and CI jobs. The plugin reads the project's text, so the team controls the review.
+- Cons: in `bypassPermissions` mode, only the instruction stops a reviewer that runs a command that writes.
 - Cons: the selection of standards is a judgment of the model. Two reviews of the same change can select different standards. A project that needs the same result each time adds a rule to `CLAUDE.md`, or its own hook or CI job.
 - Cons: no record tells whether a review passed a commit. The reviewer answers during a review, and at other times the skill asks the user.
 - Cons: a project that uses review-routing must run `migrate` once, and each user runs `/plugin install mash-review@mash-workbench-marketplace` once.

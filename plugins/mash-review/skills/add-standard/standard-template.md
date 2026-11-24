@@ -7,7 +7,7 @@ description: Use when reviewing a change that <what the change does, in words: a
 
 <For a companion: Load the `<builder skill name>` skill and check the change against it. For a standalone standard: one sentence on what this covers and why a mistake here is expensive.>
 
-Model: sonnet
+<!-- Model: the review runs this standard on sonnet. Only when its checks need deep reasoning across files, add a body line "Model: opus" (or "fable") here; the review skill reads it. It is not frontmatter: the frontmatter holds only name and description (this plugin's convention). Delete this comment. -->
 
 ## Project checks
 

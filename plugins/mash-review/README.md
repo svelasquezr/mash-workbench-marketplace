@@ -2,6 +2,8 @@
 
 A Claude Code plugin that reviews a change against your project's **review standards**, and turns the bugs a review passed (**escapes**) into new checks. It is made of instructions only: skills and one read-only reviewer agent. It has no hook, no script and no config file, so it needs no Python and asks for no allow rules.
 
+**Claude Code only, for now.** Support for GitHub Copilot CLI is planned and untested: the marketplace is mirrored in `.github/plugin/marketplace.json`, and Copilot CLI reads the project's review standards from its skills folders (`.github/skills/`, `.agents/skills/`, `.claude/skills/`), but the plugin's agent and its subagent starts are in Claude Code's format.
+
 Ask for it by name: "mash review", or `/mash-review:review`. "Code review" alone can match other installed plugins.
 
 The design, with diagrams of every flow, is in [docs/specs/mash-review.md](../../docs/specs/mash-review.md). The reasons are in [ADR 0007](../../docs/decisions/0007-instructions-first.md).
@@ -36,9 +38,9 @@ A review standard is a skill whose `description` says when a review applies it. 
 - a companion skill `.claude/skills/review-<topic>/SKILL.md` that cites a builder skill, for example one from another plugin;
 - a standalone skill `.claude/skills/review-<topic>/SKILL.md` for a domain such as payments or auth.
 
-The `review` skill selects standards by what the diff does, not by folder. With no standard selected, one reviewer applies the general checklist. `add-standard` writes them from `skills/add-standard/standard-template.md`. Claude Code and GitHub Copilot CLI both read `.claude/skills/`.
+The `review` skill selects standards by what the diff does, not by folder. With no standard selected, one reviewer applies the general checklist. `add-standard` writes them from `skills/add-standard/standard-template.md`. Claude Code and GitHub Copilot CLI both read `.claude/skills/`; standards already in `.github/skills/` or `.agents/skills/` are read too.
 
-**Need the same standards every time?** Selection is the model's judgment. Add a rule to your `CLAUDE.md` or `AGENTS.md`, for example "A change under `src/payments/` always gets the `review-payments` standard"; the `review` skill always applies such rules and names them in the summary. For a guarantee that does not depend on a model, add your own hook, test or CI job.
+**Need the same standards every time?** Selection is the model's judgment. Add a rule to your instruction file (`CLAUDE.md`, `AGENTS.md` or `.github/copilot-instructions.md`), for example "A change under `src/payments/` always gets the `review-payments` standard"; the `review` skill always applies such rules and names them in the summary. For a guarantee that does not depend on a model, add your own hook, test or CI job.
 
 ## What it writes
 
@@ -47,8 +49,8 @@ Only with a user present: a person who can answer in the conversation, in any pe
 - `record-escape`: a checklist line in a standard of your project, for an escape;
 - an escape file in `<main worktree>/.mash-review/escapes/<date>-<slug>.md` (the folder where the repository was cloned, because a linked worktree is often deleted after its branch is pushed). The folder is meant to be committed so the team shares its misses; no skill commits it. Add `.mash-review/` to `.git/info/exclude` to keep it private;
 - `add-standard`: a new standard, or a "Review checklist" section and a new description in a builder skill of your project; it moves the escape files it used to `.mash-review/escapes/processed/`;
-- `inspect`: the approved rewrites in `CLAUDE.md`, `AGENTS.md`, `.claude/memory/`, plans and agent files; `review`: a `CLAUDE.md` line for the check commands;
-- `migrate`, item by item from the list you approve: new standards and escape lines or files; edits to `CLAUDE.md`, `AGENTS.md` and docs; it deletes `.claude/reviewers.toml`, the old reviewer agent files, `reviews.log` and its `.git/info/exclude` line, removes the review-routing keys from `.claude/mash-workbench/settings*` (the file and the `settings.local` exclude line go only when no key is left), and removes old allow rules and `env` entries from `.claude/settings*.json`.
+- `inspect`: the approved rewrites in `CLAUDE.md`, `AGENTS.md`, `.github/copilot-instructions.md`, `.claude/memory/`, plans and agent files; `review`: an instruction-file line for the check commands;
+- `migrate`, item by item from the list you approve: new standards and escape lines or files; edits to the instruction files and docs; it deletes `.claude/reviewers.toml`, the old reviewer agent files, `reviews.log` and its `.git/info/exclude` line, removes the review-routing keys from `.claude/mash-workbench/settings*` (the file and the `settings.local` exclude line go only when no key is left), and removes old allow rules and `env` entries from `.claude/settings*.json`.
 
 With no user present, escapes go into an **Escapes to record (confirm where)** block in the final report instead.
 

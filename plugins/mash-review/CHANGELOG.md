@@ -17,7 +17,9 @@ The plugin `review-routing` is now `mash-review`, made of instructions only: no 
 - Skills: `review-changes` is now `review`, `add-reviewer` is now `add-standard`; `migrate` is new. Agent: `change-reviewer` is now `reviewer`.
 - Reviews select **review standards** (skills whose description says when they apply) by what the change does. `.claude/reviewers.toml` and path routing are gone; to force a standard, add a rule to `CLAUDE.md` or `AGENTS.md`.
 - The review changes no code: it never fixes, commits, stashes or pushes. Ask for fixes after the summary. Uncommitted changes can be reviewed (working-tree mode). Plan mode writes the review plan only. A red check asks "stop here, or review anyway?".
-- The reviewer runs read-only git itself, and the diff is no longer pasted into prompts.
+- The reviewer runs read-only git itself, and the diff is no longer pasted into prompts. It does not open data files that hold secret values (`.env`, keys), and reports a secret by place, never by value.
+- Severity: **Minor** is now only what a linter would catch (typos, formatting, unused code); stale docs that state a wrong fact are **Important**.
+- Standards are read from `.claude/skills/`, `.github/skills/` and `.agents/skills/`; new ones go to `.claude/skills/`. Instruction files include `.github/copilot-instructions.md`.
 - Escapes become checklist lines in the standard that covers them, or files in `<main worktree>/.mash-review/escapes/` with a `topic`. When a new escape file brings a topic to exactly three files (or five), `record-escape` offers a new standard. With no user present, nothing is written: the final report lists the escapes to record.
 
 **Removed.** The `reviewer-guard` hook, the Python router (`reviewers-for-change.py`, `route --check`), `escape-add.sh`, `escapes-report.sh`, `escapes-path.sh`, `escape-migrate.sh`, `review-log.sh`, `find-checks.sh`, `permission-rules.sh`, `scripts/python.sh`, `scripts/mash-settings.sh`, `scripts/plugin-current.sh`, `escape-fields.awk`, `reviewers.example.toml`, `reviewer-template.md`, the `escapes`, `escapes.threshold` and `declined.*` settings, `REVIEW_ROUTING_ESCAPES` and `MASH_PYTHON` for this plugin.
