@@ -32,7 +32,6 @@ assert_eq "$captured_exit_code" "0"
 assert_eq "$(sed -n 1,2p "$scratch/log" | tr '\n' ' ')" "plugin eval "
 assert_contains "$(cat "$scratch/log")" "--scaffold"
 assert_contains "$(cat "$scratch/log")" "01-*"
-assert_contains "$(cat "$scratch/log")" "Bash(git ls-files:*)"
 # The copy holds the plugin and the case, not the old results.
 assert_contains "$(cat "$scratch/log.files")" "./skills/review/SKILL.md"
 assert_contains "$(cat "$scratch/log.files")" "./evals/01-case/case.yaml"

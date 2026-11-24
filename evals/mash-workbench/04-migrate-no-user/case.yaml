@@ -20,7 +20,6 @@ execution:
     - "Bash(git status:*)"
     - "Bash(git rev-parse:*)"
     - "Bash(git worktree list:*)"
-    - "Bash(git ls-files:*)"
     - "Bash(git show:*)"
 runs: 1
 expected_outcome: "A proposal only: remove the backlog-add.sh allow rule first, turn backlog=docs/tooling/backlog.md into a Tooling backlog line in an instruction file, keep the escapes key for mash-review, and nothing written."

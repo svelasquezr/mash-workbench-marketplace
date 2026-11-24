@@ -29,7 +29,7 @@ status=0
 claude plugin eval "$work/$name" --scaffold --runs 1 --ablation none --no-publish --trust-plugin --judge-model sonnet \
   --allow-tools Write Edit "Bash(git diff:*)" "Bash(git log:*)" "Bash(git status:*)" "Bash(git merge-base:*)" \
   "Bash(git rev-parse:*)" "Bash(git worktree list:*)" "Bash(git blame:*)" "Bash(git show:*)" "Bash(git branch:*)" \
-  "Bash(git ls-files:*)" "Bash(bash check.sh)" "$@" || status=$?
+  "Bash(bash check.sh)" "$@" || status=$?
 
 if [[ -d "$work/$name/evals/results" ]]; then
   mkdir -p "$cases/results"

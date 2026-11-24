@@ -17,9 +17,9 @@ Tooling candidates to record:
 ## Steps
 
 1. **Form.** Pick the most deterministic form that fits what the project would build: **hook** (a rule that must always hold: block, format, validate), **script** (a procedure with no judgment), **skill** (judgment is needed), **agent** (a review that needs a separate context), **mcp** (access to an external system), or `unsure`. This ladder is for the project's own tooling; the plugin itself is instructions only.
-2. **Where.** The main worktree is the first `worktree` line of `git worktree list --porcelain` (outside git: the project folder). Find the location line `Tooling backlog: <path>` or `Tooling backlog: off` in `CLAUDE.md`, else `AGENTS.md`, else `.github/copilot-instructions.md`, at the top of the main worktree. Paths are relative to that top.
+2. **Where.** Everything is in the main worktree ("Main worktree" in `reference.md` next to this file), also from a linked worktree. Find the location line `Tooling backlog: <path>` or `Tooling backlog: off` in `CLAUDE.md`, else `AGENTS.md`, else `.github/copilot-instructions.md`, at its top. Paths are relative to that top.
    - `off`: say nothing and continue the task.
-   - No line, and the project still has 0.x files: write nothing, and do what "0.x files" in `reference.md` next to this file says.
+   - No line, and the project still has 0.x files: do what "0.x files" in the reference says.
    - No line: the file is `docs/mash/tooling-backlog.md`. When it does not exist, follow "First time" in the reference.
 3. **Check the file** as "The file" in the reference says. If one answer is no, write nothing, tell the user why in one line, and continue.
 4. **Write.** Read the open entries (`- [ ]`). A new or empty file first gets `# Tooling backlog` and a blank line. Append one line:

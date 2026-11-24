@@ -20,7 +20,6 @@ execution:
     - "Bash(git status:*)"
     - "Bash(git rev-parse:*)"
     - "Bash(git worktree list:*)"
-    - "Bash(git ls-files:*)"
     - "Bash(git show:*)"
 runs: 1
 expected_outcome: "The table has a review standard row for the discount-tax topic (built with mash-review add-standard, or a project review skill without it), no row for angular-subscriptions, and nothing is built."

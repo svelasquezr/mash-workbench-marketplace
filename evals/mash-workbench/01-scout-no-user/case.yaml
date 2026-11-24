@@ -20,7 +20,6 @@ execution:
     - "Bash(git status:*)"
     - "Bash(git rev-parse:*)"
     - "Bash(git worktree list:*)"
-    - "Bash(git ls-files:*)"
     - "Bash(git show:*)"
 runs: 1
 expected_outcome: 'Nothing is written; the final report holds a "Tooling candidates to record:" block with one line for the release procedure, with a form and a why.'

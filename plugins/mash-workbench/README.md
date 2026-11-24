@@ -13,7 +13,7 @@ It is made of instructions only: three skills. It has no hook, no script and no 
 
 To try it without installing: `claude --plugin-dir <path-to>/plugins/mash-workbench`.
 
-**Coming from 0.x?** Run `/mash-workbench:migrate` in each project that used it, and remove the old allow rule: the 1.0.0 entry of [CHANGELOG.md](CHANGELOG.md) says how. Until you do, `scout` writes nothing in that project and points to `migrate`.
+**Coming from 0.x?** Run `/mash-workbench:migrate` in each project that used it, and remove the old allow rule: the 1.0.0 entry of [CHANGELOG.md](CHANGELOG.md) says how. Until you do, `scout` writes nothing in that project, `forge` reads no backlog there, and both point to `migrate`.
 
 ## The loop
 
@@ -31,7 +31,7 @@ With no user present (`claude -p`, a background session) or in plan mode, `scout
 
 ## Where the backlog is
 
-`docs/mash/tooling-backlog.md` in the main worktree, unless an instruction file names another one with a line:
+`docs/mash/tooling-backlog.md` in the main worktree, unless an instruction file of the main worktree names another one with a line:
 
 ```markdown
 Tooling backlog: docs/tooling/backlog.md
