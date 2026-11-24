@@ -42,7 +42,7 @@ The `review` skill selects standards by what the diff does, not by folder. With 
 
 ## What it writes
 
-Only with a user present, never in auto mode, `claude -p` or background sessions. Escape lines and escape files are written without a question (the review or you said a review passed the bug); everything else only on your yes.
+Only with a user present: a person who can answer in the conversation, in any permission mode. Never in a session that started from one prompt with no conversation (`claude -p`, background or scheduled sessions). Escape lines and escape files are written without a question (the review or you said a review passed the bug); everything else only on your yes.
 
 - `record-escape`: a checklist line in a standard of your project, for an escape;
 - an escape file in `<main worktree>/.mash-review/escapes/<date>-<slug>.md` (the folder where the repository was cloned, because a linked worktree is often deleted after its branch is pushed). The folder is meant to be committed so the team shares its misses; no skill commits it. Add `.mash-review/` to `.git/info/exclude` to keep it private;

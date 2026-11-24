@@ -9,11 +9,12 @@ This skill changes no code. It never fixes, commits, stashes, pushes, opens a pu
 
 **Plan mode:** do steps 1–4 by reading only, then write the review plan (range, intent, standards and why, reviewers and models, checks to run) and stop. Run no check, start no reviewer, write no file.
 
-**User present** means a person can answer now. Auto mode, `claude -p` and background sessions have none.
+**User present:** a person can answer in this conversation, in any permission mode. A session started from one prompt (`claude -p`, background, scheduled), or whose prompt says nobody can answer, has none: ask nothing, take each step's default, and say so in the report.
 
 ## Steps
 
 1. **Range.** Base: `git merge-base <default branch> HEAD` (`origin/HEAD`, else `origin/main` or `origin/master`, else local `main` or `master`, else ask), or the base the user names. Note the commit id (`git rev-parse HEAD`) and the untracked files. Changes outside `.mash-review/` and `.claude/worktrees/` that are uncommitted or untracked: ask _review everything, commit first, or only the commits?_; with no user present, use everything and say so in the report. Everything is **working-tree mode** (its section in `reference.md`).
+   No commits and no uncommitted changes: say there is nothing to review, and stop.
 2. **Intent.** From the commit messages (`git log <base>..HEAD`), the PR description, or the user. One commit: put its message in the intent.
 3. **A fixed escape?** If the change fixes a bug that a review passed, run the `record-escape` skill for it.
 4. **Standards.** List the skills whose `description` covers what this diff does ("Selecting standards" in the reference). Add every standard the project's `CLAUDE.md` or `AGENTS.md` requires for this change. Group them into reviewers and give each group a model ("Grouping"). With none selected: one reviewer with the general checklist only.

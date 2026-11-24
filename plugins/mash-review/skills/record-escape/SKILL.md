@@ -9,7 +9,7 @@ An escape is a behavior bug in code that a review passed. Recording it makes the
 
 **Plan mode:** say where each escape would go, and write nothing.
 
-**No user present** (auto mode, `claude -p`, a background session): write nothing. Put this block in the final report, one item per escape, then go back to the skill that called this one (or stop, when none did):
+**No user present** (a session that started from one prompt with no conversation, such as `claude -p` or a background session, or whose prompt says nobody can answer; an interactive session in auto mode has a user): write nothing. Put this block in the final report, one item per escape, then go back to the skill that called this one (or stop, when none did):
 
 ```text
 Escapes to record (confirm where):

@@ -13,6 +13,8 @@ Read the `git diff --stat <base>...HEAD` (or `git diff --stat <base>` in working
 
 Then read the project's `CLAUDE.md` and `AGENTS.md` (and the nested ones in the touched folders) for rules that require a standard, for example "A change under `src/payments/` always gets the `review-payments` standard". Apply each such rule, and name it in the summary. This is how a project makes selection deterministic; the plugin has no config of its own.
 
+**A change that edits its own rules.** When the diff changes a selected standard, a builder skill it cites, `CLAUDE.md` or `AGENTS.md`, also apply the version at the base (`git show <base>:<path>`): select and require standards from both versions, tell the reviewer that the standard changed in this diff, and name the change in the summary. A change must not weaken the rules that review it.
+
 A builder skill with no "Review checklist" section is not a standard. When the change is mostly that kind of code, add an offer to the summary: "Create a review standard for <kind> (add-standard)?".
 
 ## Grouping
@@ -23,7 +25,7 @@ A builder skill with no "Review checklist" section is not a standard. When the c
 
 ## Working-tree mode
 
-The change is the base against the working tree: the reviewer runs `git diff --function-context <base> -- . ':(top,exclude).mash-review' ':(top,exclude).claude/worktrees'`. List the untracked files for the prompt with `git status --porcelain --untracked-files=all`, leaving out `.mash-review/` and `.claude/worktrees/`. Write no snapshot, stash or temporary file: with no user present, Claude Code refuses commands that write (`git stash create`, a redirect to a file), and read-only git runs.
+The change is the base against the working tree: the reviewer runs `git diff --no-ext-diff --no-textconv --function-context <base> -- ':(top)' ':(top,exclude).mash-review' ':(top,exclude).claude/worktrees'`. List the untracked files for the prompt with `git status --porcelain --untracked-files=all`, leaving out `.mash-review/` and `.claude/worktrees/`, as paths from the top folder of the repository (`git rev-parse --show-toplevel`). Write no snapshot, stash or temporary file: with no user present, Claude Code refuses commands that write (`git stash create`, a redirect to a file), and read-only git runs.
 
 ## Check commands
 
@@ -36,7 +38,7 @@ The change is the base against the working tree: the reviewer runs `git diff --f
 
 In this order:
 
-1. The range `<base>...HEAD`; or "working-tree mode, base `<base>`: run `git diff --function-context <base> -- . ':(top,exclude).mash-review' ':(top,exclude).claude/worktrees'`"; or, for a re-review, the diff command from "Re-review".
+1. The range `<base>...HEAD`; or "working-tree mode, base `<base>`: run `git diff --no-ext-diff --no-textconv --function-context <base> -- ':(top)' ':(top,exclude).mash-review' ':(top,exclude).claude/worktrees'`"; or, for a re-review, the diff command from "Re-review".
 2. The base, and "two or more commits: read `git log <base>..HEAD`" when that is so.
 3. The intent, in one to three sentences.
 4. The check results, "no automated checks ran", or **Checks red** with the failures.
@@ -50,8 +52,8 @@ Do not paste the diff: each reviewer runs `git diff` itself, and pasted text cos
 
 Only on request, after a fix. Start only the reviewers that found something, with the same standards, the same models, and their earlier findings.
 
-- The fix is committed: the diff is `git diff --function-context <noted commit id> HEAD -- . ':(top,exclude).mash-review' ':(top,exclude).claude/worktrees'`.
-- The fix is not committed: `git diff --function-context <noted commit id> -- . ':(top,exclude).mash-review' ':(top,exclude).claude/worktrees'`, plus untracked files: in working-tree mode every untracked file again (with the same exclusions), because the first change can hold untracked files the fix edited; in "only the commits" mode only the ones that are not on the list noted in step 1.
+- The fix is committed: the diff is `git diff --no-ext-diff --no-textconv --function-context <noted commit id> HEAD -- ':(top)' ':(top,exclude).mash-review' ':(top,exclude).claude/worktrees'`.
+- The fix is not committed: `git diff --no-ext-diff --no-textconv --function-context <noted commit id> -- ':(top)' ':(top,exclude).mash-review' ':(top,exclude).claude/worktrees'`, plus untracked files: in working-tree mode every untracked file again (with the same exclusions), because the first change can hold untracked files the fix edited; in "only the commits" mode only the ones that are not on the list noted in step 1.
 
 The diff can hold more than the fix: the first change in working-tree mode, the first change committed together with the fix, or uncommitted work the user left out in "only the commits" mode. Tell the reviewer to check its earlier findings first, and to report only on the fix and those findings.
 
@@ -61,13 +63,13 @@ A finding you think is wrong: answer it with evidence in that reviewer's re-revi
 
 In the terminal only. With no user present, the same content goes in the final report.
 
-1. The mode: the range, or working-tree mode (and why, when no user was present). Each reviewer: its verdict, its standards and its model. A reviewer with **no verdict** makes the result `NOT SAFE`.
+1. The mode: the range, or working-tree mode (and why, when no user was present); the base and the noted commit id, so a later session can build the re-review diff. Each reviewer: its verdict, its standards and its model. A reviewer with **no verdict** makes the result `NOT SAFE`.
 2. The findings: Critical, Important and Minor, each with `path:line` and its standard.
 3. The checks line: the results, **Unchecked**, or **Checks red**. In "only the commits" mode with uncommitted changes, add that the checks ran on the working tree.
 4. Pre-existing findings, ready to file as issues. File nothing.
 5. Escapes: the ones recorded and where; the waiting escape files in `<main worktree>/.mash-review/escapes/` by topic (count the `.md` files, not `processed/`); with no user present, the block **Escapes to record (confirm where)** that `record-escape` gave.
 6. Offers, each done only on a yes: a review standard (add-standard) for a kind of code with no standard; a `CLAUDE.md` line for the check commands. Topics with three or more waiting files are in the escapes list of item 5 as a reminder; the offer itself comes from `record-escape` when a write brings a topic to exactly 3 or 5.
-7. Migration hint: when `.claude/reviewers.toml` or `.claude/mash-workbench/escapes/` exists, "This project still has review-routing files. Run `/mash-review:migrate`."
+7. Migration hint: when `.claude/reviewers.toml` exists, or `.claude/mash-workbench/escapes/` exists in the main worktree, "This project still has review-routing files. Run `/mash-review:migrate`."
 8. The fix path: when the user asked for fixes, say which builder skill each finding's standard names.
 
 ## Common mistakes

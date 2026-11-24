@@ -4,12 +4,12 @@ Status: accepted. It supersedes [0004](0004-escape-storage-and-settings.md) and 
 
 ## Context
 
-review-routing 0.6.0 used a Python router with nine modules, a Python hook of 828 lines and approximately 1,100 lines of bash. The router and the hook need Python 3.11 or a later version, because they read TOML with `tomllib`. These problems occurred:
+review-routing 0.6.0 used a Python router with nine modules, a Python hook of 829 lines and 2,148 lines of bash. The router and the hook need Python 3.11 or a later version, because they read TOML with `tomllib`. These problems occurred:
 
 1. **Python version.** Users reported this problem. A host had Python 3.9. The router stopped with exit code 3, and the review used only the default reviewer. The `reviewer-guard` hook ran `python.sh --missing-ok` and did no check. The expected result is a full review on each host.
 2. **Operating systems.** On Windows, `python3` is often the Microsoft Store alias, and each call fails. The scripts that write have no test on Windows, so `permission-rules.sh` offers no rule there, and each write asks the user. The expected result is the same behavior on each operating system.
 3. **Security.** The audit of 0006 found eight classes of security bugs in the scripts. The corrections added approximately 30 checks, and each new script must have the same checks. Each allow rule is a new risk. The expected result is a plugin that has no script that an allow rule can approve.
-4. **Plan mode.** In plan mode, the skills ran the router, and they tried to write escape files, settings and the review log. The session ran tools when it must only make a plan. The expected result is a review plan, with no tool runs and no writes.
+4. **Plan mode.** In plan mode, the skills ran the router, and they tried to write escape files, settings and the review log. The session ran tools when it must only make a plan. The expected result is a review plan, with no check, no reviewer and no write.
 5. **Adoption.** No step made `.claude/reviewers.toml`, and no step proposed it. An escape needed a setup question, a settings file and allow rules before the first file. Users reported that the plugin did not record escapes. The expected result is that the first review and the first escape work with no setup.
 6. **Too much control.** `review-changes` fixed the findings, made commits and started fix rounds. It did not use a builder skill for the fix. The expected result is that the review only reviews, and the user decides about fixes.
 
@@ -41,7 +41,7 @@ review-routing 0.6.0 used a Python router with nine modules, a Python hook of 82
 - Cons: in `bypassPermissions` mode, only the instruction stops a reviewer that runs a command that writes.
 - Pros: there is no script, so there is no script attack surface and no security check to keep.
 - Pros: one file holds the rules for the work and for its review, so the review and the builder agree.
-- Pros: plan mode gives a plan, and nothing runs.
+- Pros: plan mode gives a plan. Only read-only git runs.
 - Cons: the selection of standards is a judgment of the model. Two reviews of the same change can select different standards. A project that needs the same result each time adds a rule to `CLAUDE.md`, or its own hook or CI job.
 - Cons: no record tells whether a review passed a commit. The reviewer answers during a review, and at other times the skill asks the user.
 - Cons: a project that uses review-routing must run `migrate` once, and each user runs `/plugin install mash-review@mash-workbench-marketplace` once.
