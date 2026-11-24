@@ -1,6 +1,6 @@
 # 0006: the scripts do not trust a committed file, an argument or an old copy
 
-Status: accepted for mash-workbench. For review-routing, superseded by [0007](0007-instructions-first.md): mash-review has no scripts.
+Status: superseded. [0007](0007-instructions-first.md) supersedes it for review-routing, and [0008](0008-mash-workbench-instructions-only.md) supersedes it for mash-workbench. No plugin has scripts now.
 
 ## Context
 

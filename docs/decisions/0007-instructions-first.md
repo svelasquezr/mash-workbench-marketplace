@@ -1,6 +1,6 @@
 # 0007: mash-review is made of instructions only
 
-Status: accepted. It supersedes [0004](0004-escape-storage-and-settings.md) and [0005](0005-exact-path-allow-rules.md), and it supersedes [0006](0006-scripts-trust-no-input.md) for review-routing. 0006 continues to apply to the scripts of mash-workbench.
+Status: accepted. It supersedes [0004](0004-escape-storage-and-settings.md) and [0005](0005-exact-path-allow-rules.md), and it supersedes [0006](0006-scripts-trust-no-input.md) for review-routing. [0008](0008-mash-workbench-instructions-only.md) supersedes 0006 for mash-workbench.
 
 ## Context
 
