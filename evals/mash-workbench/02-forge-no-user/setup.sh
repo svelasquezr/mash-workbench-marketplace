@@ -4,8 +4,8 @@ git init -q -b main .
 # The fresh entries are dated a few days before the run, so they never become stale (GNU date; the eval sandbox is Linux).
 recent1=$(date -d '-4 days' +%F)
 recent2=$(date -d '-3 days' +%F)
-mkdir -p docs/mash
-cat > docs/mash/tooling-backlog.md <<B
+mkdir -p .mash-workbench
+cat > .mash-workbench/tooling-backlog.md <<B
 # Tooling backlog
 
 - [ ] $recent1 · script · Check the lockfile matches the CI Python version — CI failed twice on an unpinned version

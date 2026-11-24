@@ -24,7 +24,7 @@ Status: design of mash-workbench 1.0.0, which replaces the scripts of 0.x with i
 ### Backlog
 
 - **D1. Instructions only.** The model writes the backlog line with its own edit tool; no script and no allow rule exist. In the default permission mode Claude Code asks for the write. In `acceptEdits`, auto or `bypassPermissions` mode, or with an edit allow rule, it does not: then the D4 checks rest on the model alone.
-- **D2. Location.** Default `docs/mash/tooling-backlog.md` in the main worktree. A location line in an instruction file of the main worktree overrides it; `CLAUDE.md` wins over `AGENTS.md`, which wins over `.github/copilot-instructions.md`. No settings file, no environment variable.
+- **D2. Location.** Default `.mash-workbench/tooling-backlog.md` in the main worktree: the plugin's own folder, as mash-review uses `.mash-review/`. It is not `.claude/mash-workbench/`, the 0.x settings folder. A location line in an instruction file of the main worktree overrides it; `CLAUDE.md` wins over `AGENTS.md`, which wins over `.github/copilot-instructions.md`. No settings file, no environment variable.
 - **D3. First time.** With no backlog file and no location line, `scout` asks once: the default (recommended), another file, or off. The answer for another file or off becomes a location line, written only on a yes: in `CLAUDE.md`, else in an existing `AGENTS.md` (a new `CLAUDE.md` would hide it from Claude Code), else in a new `CLAUDE.md`. The default needs no line. A no to the line: the answer holds for this session only, and a later session asks again.
 - **D4. Which file it writes.** A path inside the repository that ends in `.md`, and is new, empty, or starts with `# Tooling backlog`. Not a symbolic link, and no symbolic link on its path (checked with `ls -la` on each part, because git does not show an untracked link or a path under a linked folder). Anything else: write nothing and tell the user why. These were the checks of `backlog-add.sh`; they are now instructions, and the permission prompt is the guard.
 - **D5. Entry.** One line, the format in Terms. A new or empty file first gets `# Tooling backlog` and a blank line. Before the write, `scout` reads the open entries; a near duplicate gets "(similar to <title>)" in its one-line note, and `forge` merges the two.
@@ -39,8 +39,8 @@ Status: design of mash-workbench 1.0.0, which replaces the scripts of 0.x with i
 
 ### Migration
 
-- **D11. migrate.** User-started. One proposal from what 0.x left: the 0.x choice (`MASH_WORKBENCH_BACKLOG` in an `env` block, else the `backlog=` key of `.claude/mash-workbench/settings*`) becomes a location line (a path outside the repository: the file moves into it); an old `docs/tooling-backlog.md` moves or gets a location line; the `backlog-add.sh` allow rules and the `MASH_WORKBENCH_BACKLOG` and `MASH_PYTHON` entries go first; the settings files and their `info/exclude` line go when no key is left. mash-review's own keys are left to mash-review's `migrate`. Every change is in the main worktree. Plan mode or no user present: the proposal only.
-- **D12. 0.x files.** With no location line, 0.x files are a `backlog` key in `.claude/mash-workbench/settings*` of the main worktree, `MASH_WORKBENCH_BACKLOG` in an `env` block of its `.claude/settings*.json`, or a `docs/tooling-backlog.md` (tracked or not). A location line wins over them. A 0.x choice of `off` counts as `off`. Otherwise, while one exists, `scout` writes nothing: it lists the candidate as with no user present, so it never creates a second backlog; `forge` reads no backlog and says why. `scout` and `forge` add one line to their output: "This project has mash-workbench 0.x files; run `/mash-workbench:migrate`". They do not stop the task for it. The hint and `migrate` go in a later major version.
+- **D11. migrate.** User-started. One proposal from what 0.x left: the 0.x choice (`MASH_WORKBENCH_BACKLOG` in an `env` block, else the `backlog=` key of `.claude/mash-workbench/settings*`) becomes a location line (a path outside the repository: the file moves into it); an old backlog at a 0.x default (`docs/mash/tooling-backlog.md`, `docs/tooling-backlog.md`) moves to `.mash-workbench/tooling-backlog.md` or gets a location line; the `backlog-add.sh` allow rules and the `MASH_WORKBENCH_BACKLOG` and `MASH_PYTHON` entries go first; the settings files and their `info/exclude` line go when no key is left. mash-review's own keys are left to mash-review's `migrate`. Every change is in the main worktree. Plan mode or no user present: the proposal only.
+- **D12. 0.x files.** With no location line, 0.x files are a `backlog` key in `.claude/mash-workbench/settings*` of the main worktree, `MASH_WORKBENCH_BACKLOG` in an `env` block of its `.claude/settings*.json`, or a backlog at a 0.x default, `docs/mash/tooling-backlog.md` or `docs/tooling-backlog.md` (tracked or not). A location line wins over them. A 0.x choice of `off` counts as `off`. Otherwise, while one exists, `scout` writes nothing: it lists the candidate as with no user present, so it never creates a second backlog; `forge` reads no backlog and says why. `scout` and `forge` add one line to their output: "This project has mash-workbench 0.x files; run `/mash-workbench:migrate`". They do not stop the task for it. The hint and `migrate` go in a later major version.
 
 ## Diagrams
 
@@ -53,7 +53,7 @@ flowchart TB
     backlog["Tooling backlog file"]
     escapes[".mash-review/escapes/: escape files by topic"]
     built["Built tooling: hooks, scripts, skills, agents"]
-    old0["0.x files: settings backlog key, docs/tooling-backlog.md"]
+    old0["0.x files: settings backlog key, env variable, backlog at a 0.x default path"]
   end
 
   subgraph plugin["mash-workbench: instructions only"]

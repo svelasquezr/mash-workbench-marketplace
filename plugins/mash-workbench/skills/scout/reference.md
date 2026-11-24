@@ -8,9 +8,9 @@ The first `worktree` line of `git worktree list --porcelain`. When the line afte
 
 ## First time
 
-There is no location line and no `docs/mash/tooling-backlog.md`. Ask the user once, in one question, with a recommendation:
+There is no location line and no `.mash-workbench/tooling-backlog.md`. Ask the user once, in one question, with a recommendation:
 
-- `docs/mash/tooling-backlog.md`, committed (recommended: the whole team's candidates add up, and the reasons are reviewable). It needs no line: go on with "The file".
+- `.mash-workbench/tooling-backlog.md`, committed (recommended: the plugin's own folder, like `.mash-review/` of the mash-review plugin; the whole team's candidates add up, and the reasons are reviewable). It needs no line: go on with "The file".
 - Another file in the repository. Propose the line `Tooling backlog: <path>` ("Where the line goes" below, in the main worktree), and write it only on a yes.
 - None. Propose the line `Tooling backlog: off`, and write it only on a yes. Then write nothing.
 
@@ -41,6 +41,6 @@ Only when there is no location line. Look in the main worktree for:
 
 - a `backlog=` line in `.claude/mash-workbench/settings` or `.claude/mash-workbench/settings.local`;
 - `MASH_WORKBENCH_BACKLOG` in the `env` block of `.claude/settings.json` or `.claude/settings.local.json`;
-- `docs/tooling-backlog.md`, tracked or not.
+- `docs/mash/tooling-backlog.md` or `docs/tooling-backlog.md` (the 0.x defaults), tracked or not.
 
 Any one means the project has not moved from mash-workbench 0.x. When the 0.x choice is `off` (the variable, else the last `backlog=` line of `settings.local`, else of `settings`), treat it as `off`: say nothing. Otherwise write nothing, so the project does not get a second backlog: list the candidate, and add the line "This project has mash-workbench 0.x files; run `/mash-workbench:migrate`". Do not run the migration yourself. Do not read a 0.x path as a location: only `migrate`, with the user, turns it into a location line.

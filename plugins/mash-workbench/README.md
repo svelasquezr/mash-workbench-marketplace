@@ -31,7 +31,7 @@ With no user present (`claude -p`, a background session) or in plan mode, `scout
 
 ## Where the backlog is
 
-`docs/mash/tooling-backlog.md` in the main worktree, unless an instruction file of the main worktree names another one with a line:
+`.mash-workbench/tooling-backlog.md` in the main worktree (the plugin's own folder, as mash-review uses `.mash-review/`), unless an instruction file of the main worktree names another one with a line:
 
 ```markdown
 Tooling backlog: docs/tooling/backlog.md

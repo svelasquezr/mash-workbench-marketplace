@@ -1,5 +1,5 @@
 ---
 type: file_exists
-path: "docs/mash/**"
+path: ".mash-workbench/**"
 exists: false
 ---
