@@ -15,7 +15,6 @@ Plugin marketplace (brand MASH: Memories, Agents, Skills, Hooks) of general-purp
 
 ## Working on this repo
 
-- The tests' in-place edits use GNU sed (on macOS: `brew install gnu-sed`); the shipped scripts don't need it.
 - Run `pre-commit install` once: it installs the commit-message hook (Conventional Commits) that CI also checks.
 - `pre-commit` can run as `uvx pre-commit run --all-files`.
 - `tests/test_no_network.sh` keeps its accepted lines in `tests/no_network_allowed.txt`, by file and line number: after you edit a file that has entries, run `NO_NETWORK_LIST=1 bash tests/test_no_network.sh` and update them.

@@ -7,19 +7,3 @@ assert_file() { [[ -f "$1" ]] || { echo "  missing file: $1"; exit 1; }; }
 # shellcheck disable=SC2034
 run_capturing() { set +e; captured_output=$("$@" 2>&1); captured_exit_code=$?; set -e; }
 assert_not_contains() { if [[ "$1" == *"$2"* ]]; then printf '  expected NOT to contain: %s\n  in: %s\n' "$2" "$1"; exit 1; fi; }
-
-# gnu_sed <arguments...>: the tests' in-place edits use GNU sed (sed -i, `1i text`, \n in a replacement). The shipped
-# scripts avoid it; contributors on macOS install it (brew install gnu-sed, which provides gsed).
-gnu_sed() {
-  if sed --version >/dev/null 2>&1; then sed "$@"
-  elif command -v gsed >/dev/null 2>&1; then gsed "$@"
-  else echo "this test needs GNU sed: on macOS, brew install gnu-sed" >&2; return 1
-  fi
-}
-
-# in_root_script: run as `bash "$in_root_script" <script> <arguments...>` to run the script from inside its <repo-root>
-# (the first argument that is an absolute path to a folder), as a session in that repository does. The writing scripts
-# refuse a <repo-root> of another repository than the current folder's. A script, not a function: it also works after
-# an `env NAME=value` prefix.
-# shellcheck disable=SC2034  # used by the test files that source this one
-in_root_script="$PWD/tests/in_root.sh"

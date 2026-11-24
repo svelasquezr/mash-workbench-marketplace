@@ -40,18 +40,17 @@ jobs:
           echo "checking $range"
           uvx --from commitizen==4.19.3 cz check --rev-range "$range"
       - run: uvx pre-commit@4.6.2 run --all-files --show-diff-on-failure
-  # The path and link checks must hold on macOS too: its /bin/bash 3.2, BSD tools, and a file system that ignores case.
+  # The repository tests must also run on macOS: its /bin/bash 3.2 and BSD tools, for contributors on a Mac.
   test-macos:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v7.0.1
-      - run: brew install gnu-sed python@3.12
       - name: Tests with macOS bash 3.2
         run: |
           bin="$RUNNER_TEMP/bash32"
           mkdir -p "$bin"
           ln -s /bin/bash "$bin/bash"
-          export PATH="$bin:$(brew --prefix python@3.12)/libexec/bin:$PATH"
+          export PATH="$bin:$PATH"
           bash --version | head -1
           python3 --version
           bash tests/run.sh
