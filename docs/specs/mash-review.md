@@ -84,7 +84,7 @@ Each skill's `description` names "mash review" as a trigger, so a user can ask f
 - **D8. Review only.** The skill never fixes, commits, stashes or pushes, and it says "This skill changes no code." It notes the commit id of `HEAD` (`git rev-parse HEAD`) before the review. A re-review on request goes only to the reviewers that found something, with the same standards and models and their earlier findings. A committed fix is reviewed as `git diff <noted HEAD> HEAD`. Re-review diffs use the same exclusions as working-tree mode. An uncommitted fix is reviewed as `git diff <noted HEAD>` plus the untracked files (in working-tree mode all of them again; in "only the commits" mode the new ones); in working-tree mode that diff also holds the first change again, because no snapshot is written.
 - **D9. A change that edits its own rules.** When the diff changes a selected standard, a builder skill it cites, `CLAUDE.md` or `AGENTS.md`, the skill also applies the version at the base (`git show <base>:<path>`), tells the reviewer which standard changed, and names the change in the summary. The reviewer reports a removed or weakened check as Important.
 - **D10. Plan mode.** The skill writes the review plan (range, intent, standards and why, reviewers and models, checks to run) It reads and runs read-only git only: it runs no check, starts no reviewer and writes no file.
-- **D11. Uncommitted changes.** When files outside `.mash-review/` and `.claude/worktrees/` are changed or untracked, the skill asks: "review everything, commit first, or only the commits?". With no user present, it uses working-tree mode and says so in the final report. Working-tree mode reviews `git diff --no-ext-diff --function-context <base>` (the base against the working tree) and the untracked files that `git status --porcelain --untracked-files=all` lists, except `.mash-review/` and `.claude/worktrees/`. It writes no snapshot: in `claude -p` default mode, `git stash create` and a redirect to a file were refused in our test, and read-only git was not (see Verification).
+- **D11. Uncommitted changes.** When files outside `.mash-review/` and `.claude/worktrees/` are changed or untracked, the skill does not ask first: it reviews everything in working-tree mode, and the summary starts with "Reviewed the commits plus the uncommitted files. Reply _only the commits_ or _commit first_ to review again." A mode the user named in the request wins. Asking first stopped `claude -p` sessions at the question with no review (eval case 07); reviewing first never blocks, and costs one review when the user wanted another mode. Working-tree mode reviews `git diff --no-ext-diff --function-context <base>` (the base against the working tree) and the untracked files that `git status --porcelain --untracked-files=all` lists, except `.mash-review/` and `.claude/worktrees/`. It writes no snapshot: in `claude -p` default mode, `git stash create` and a redirect to a file were refused in our test, and read-only git was not (see Verification).
 - **D12. Check commands.** From `CLAUDE.md` or `AGENTS.md`. With none, the skill reads the project files (`package.json`, `Makefile`, `pyproject.toml` and similar), proposes commands, runs only those the user confirms, and offers a `CLAUDE.md` line (D15). With nothing to run, reviewers are told "no automated checks ran" and the summary says **Unchecked**.
 - **D13. Red checks.** The skill always asks: "stop here, or review anyway?". "Review anyway" gives the red results to the reviewers and marks the summary **Checks red**. With no user present, the skill stops and lists the failures in the final report.
 - **D14. No round limit.** Each review runs once for each request. A caller that loops (review, fix, review) sets its own limit.
@@ -162,12 +162,10 @@ flowchart TD
   start(["Review requested"]) --> mode{"Plan mode?"}
   mode -->|yes| planonly["Write the review plan: range, intent, standards and why, reviewers and models, checks to run. Read only: no check, no reviewer, no write."]
   mode -->|no| dirty{"Uncommitted changes outside .mash-review/ and .claude/worktrees/?"}
-  dirty -->|yes| ask{"Ask: review everything, commit first, or only the commits?"}
-  ask -->|"everything, or no user"| wt["Working-tree mode: base vs the working tree, plus untracked files"]
-  ask -->|"commit first"| waitc["Wait for the user's commit"]
-  ask -->|"only the commits"| fixbug
+  dirty -->|yes| named{"Did the request name a mode?"}
+  named -->|no| wt["Working-tree mode: base vs the working tree, plus untracked files; the summary offers only the commits or commit first"]
+  named -->|"only the commits"| fixbug
   wt --> fixbug
-  waitc --> fixbug
   dirty -->|no| fixbug{"Does the change fix a bug a review passed?"}
   fixbug -->|yes| rec0["record-escape"]
   fixbug -->|no| range["Range: base...HEAD, or base vs the working tree. Note HEAD. Intent: commits, PR text or the user"]
