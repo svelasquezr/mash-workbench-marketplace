@@ -279,7 +279,7 @@ assert_eq "$(cd "$repo" && find . -type f -not -path './.git/*' -exec cksum {} +
 # searched: a missing one would make grep fail and hide every match.
 shipped_folders=()
 for folder in plugins/*/skills plugins/*/scripts; do [[ -d "$folder" ]] && shipped_folders+=("$folder"); done
-wildcard_offers=$(grep -rn 'Bash(bash \*' "${shipped_folders[@]}" | grep -v 'permission-rules.sh' | grep -v 'mash-review/skills/migrate/' || true)
+wildcard_offers=$(grep -rn 'Bash(bash \*' "${shipped_folders[@]}" | grep -v 'permission-rules.sh' | grep -v 'mash-review/skills/migrate/.*escape-add.sh\*)' || true)
 if [[ -n "$wildcard_offers" ]]; then
   echo "$wildcard_offers"
   echo "  a shipped file still shows an allow rule that starts with a wildcard"

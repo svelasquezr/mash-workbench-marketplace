@@ -11,7 +11,7 @@ Each section below is one migration path. Use the one that matches what you find
 
 ## From review-routing 0.x
 
-1. **Inventory.** In the main worktree (the first `worktree` line of `git worktree list --porcelain`), list what "Inventory" in `reference.md` next to this file names: the routes and reviewer agents, the old escapes, the review-routing settings keys and log, old allow rules and `env` entries, and text that names the old plugin.
+1. **Inventory.** In the current worktree for tracked files, and in the main worktree (the first `worktree` line of `git worktree list --porcelain`) for untracked ones, list what "Inventory" in `reference.md` next to this file names: the routes and reviewer agents, the old escapes, the review-routing settings keys and log, old allow rules and `env` entries, and text that names the old plugin.
 2. **The proposal**, one list with one item each, built as "Proposal" in `reference.md` says: reviewer agents and routes become standards, old escapes become lines or files, old allow rules and `env` entries go first, the review-routing settings keys and old files go, and old names in project text are rewritten.
 3. **Ask** once, with the whole list. The user can drop items.
 4. **Apply** the approved items in this order: the old allow rules first, then new standards, escape lines and files, text, then the other deletions. Tracked files (the routes file, agent files, standards, `CLAUDE.md` and docs) change in the current worktree, so they land on the user's branch. Untracked files (`settings.local`, `reviews.log`, `.git/info/exclude`, untracked old escapes, `.claude/settings.local.json`) change in the main worktree. Edit settings files with the edit tool, so Claude Code asks the user to approve the write.

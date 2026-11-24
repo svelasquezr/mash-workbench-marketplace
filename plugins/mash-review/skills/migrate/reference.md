@@ -2,7 +2,7 @@
 
 ## Inventory
 
-From review-routing 0.x, in the main worktree:
+From review-routing 0.x. Read tracked files in the current worktree, and untracked files (`settings.local`, `reviews.log`, untracked escapes, `.claude/settings.local.json`) in the main worktree:
 
 - `.claude/reviewers.toml`: `default_reviewer`, `default_model`, `allow_default`, and each table: `[[routes]]` and `[[fallbacks]]` (`pattern`, `reviewers`, `reason`), `[[changed_lines]]` (`path_pattern`, `line_pattern`, `reviewers`), `[[mirrors]]`, `[[model_rules]]` (`reviewer`, `model`, and its conditions), `[[import_guards]]`. `[[expect]]` entries are routing tests: they go with the file;
 - `.claude/agents/*.md` that a route names: each reviewer's checklist;

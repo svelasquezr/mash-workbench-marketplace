@@ -16,7 +16,7 @@ Escapes to record (confirm where):
 - <one-line summary> | source: <link or none> | proposed: <standard skill name, or .mash-review/escapes/ topic <topic>>
 ```
 
-A later session in which the user confirms the block records each item with the steps below.
+A later session in which the user confirms the block records each item with the steps below; a prompt that carries the user's confirmation of named items counts as a user present for those items. If a write is refused, record nothing more and list the item in the block.
 
 ## Steps
 
