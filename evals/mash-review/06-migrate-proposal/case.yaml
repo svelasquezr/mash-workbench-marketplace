@@ -1,0 +1,29 @@
+schema_version: "1.1"
+name: 06-migrate-proposal
+description: "With no user present, migrate gives a proposal from a review-routing project and writes nothing; it keeps the mash-workbench backlog key and puts the old wildcard allow rule first."
+tags: [mash-review]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: "Migrate this project from review-routing to mash-review. Nobody is available to answer questions."
+  max_turns: 40
+  timeout_seconds: 900
+  allowed_tools:
+    - "Skill"
+    - "Read"
+    - "Glob"
+    - "Grep"
+    - "Agent"
+    - "Write"
+    - "Edit"
+    - "Bash(git diff:*)"
+    - "Bash(git log:*)"
+    - "Bash(git status:*)"
+    - "Bash(git merge-base:*)"
+    - "Bash(git rev-parse:*)"
+    - "Bash(git worktree list:*)"
+    - "Bash(git blame:*)"
+    - "Bash(git show:*)"
+    - "Bash(git branch:*)"
+runs: 1
+expected_outcome: "A proposal: billing-reviewer becomes a review standard on opus (from model_rules), the changed_lines and fallbacks routes are handled, the escape file becomes a checklist line or a .mash-review escape file, the wildcard allow rule is removed first, reviewers.toml, reviews.log and the escapes key go, the backlog key stays; nothing is written."

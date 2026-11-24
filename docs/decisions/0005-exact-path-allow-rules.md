@@ -1,5 +1,7 @@
 # 0005: allow rules name one exact script path
 
+Status: superseded by [0007](0007-instructions-first.md). mash-review has no scripts, so it offers no allow rules.
+
 ## Context
 
 Decision 7 of [0004](0004-escape-storage-and-settings.md) lets setup offer Claude Code allow rules. With the rules, a session with no user (`claude -p` in a linked worktree) can record an escape without a prompt.

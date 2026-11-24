@@ -5,15 +5,13 @@
 set -euo pipefail
 source tests/lib.sh
 source tests/git_fixtures.sh
-# The same file ships in each MASH plugin.
-assert_eq "$(cmp plugins/review-routing/scripts/plugin-current.sh plugins/mash-workbench/scripts/plugin-current.sh && echo same)" "same"
 # The path checks refuse /tmp, so the fixture lives under $HOME.
 fixture=$(mktemp -d "$HOME/.plugin-current-test.XXXXXX"); trap 'rm -rf "$fixture"' EXIT
 case "$(cd "$fixture" && pwd -P)" in /tmp/* | /var/tmp/*) echo "  HOME is under /tmp: the fixture cannot hold a non-temporary repository"; exit 1 ;; esac
 fixture=$(cd "$fixture" && pwd -P)
 temporary_directory="$fixture"
 isolate_git_config
-unset REVIEW_ROUTING_ESCAPES MASH_WORKBENCH_BACKLOG
+unset MASH_WORKBENCH_BACKLOG
 
 # install <config folder> <marketplace> <plugin> <version>: a copy of the plugin where Claude Code keeps one; prints it.
 install() {
@@ -36,11 +34,11 @@ registry() {
   } > "$file"
 }
 config="$fixture/config"
-old=$(install "$config" m review-routing 0.5.1)
-new=$(install "$config" m review-routing 0.6.0)
+old=$(install "$config" m mash-workbench 0.5.1)
+new=$(install "$config" m mash-workbench 0.6.0)
 
 # 1. Not in a plugin cache (a clone, --plugin-dir): nothing to compare, the copy runs.
-run_capturing bash plugins/review-routing/scripts/plugin-current.sh
+run_capturing bash plugins/mash-workbench/scripts/plugin-current.sh
 assert_eq "$captured_exit_code" "0"
 assert_eq "$captured_output" ""
 # A folder of the cache shape with no installed_plugins.json next to it is not Claude Code's cache.
@@ -53,14 +51,14 @@ run_capturing bash "$new/scripts/plugin-current.sh"
 assert_eq "$captured_exit_code" "0"
 run_capturing bash "$old/scripts/plugin-current.sh"
 assert_eq "$captured_exit_code" "6"
-assert_contains "$captured_output" "review-routing 0.5.1"
+assert_contains "$captured_output" "mash-workbench 0.5.1"
 assert_contains "$captured_output" "not the installed version"
 
 # 3. Project entries. A registry lists old versions for many old projects, so an entry with a projectPath counts only
 #    for that project: the current folder, a folder above it, or the main worktree of the current folder's repository.
 # project_registry <installPath> <projectPath>: the new version for the user, and one project entry.
 project_registry() {
-  printf '{"version": 2, "plugins": {"review-routing@m": [{"scope": "user", "installPath": "%s", "version": "0.6.0"}, {"projectPath": "%s", "scope": "project", "version": "0.5.1", "installPath": "%s"}]}}\n' \
+  printf '{"version": 2, "plugins": {"mash-workbench@m": [{"scope": "user", "installPath": "%s", "version": "0.6.0"}, {"projectPath": "%s", "scope": "project", "version": "0.5.1", "installPath": "%s"}]}}\n' \
     "$new" "$2" "$1" > "$config/plugins/installed_plugins.json"
 }
 project="$fixture/project"; git init --quiet "$project"; git -C "$project" commit --quiet --allow-empty -m "chore: base"
@@ -103,13 +101,13 @@ run_in "$fixture/other-project" "$new/scripts/plugin-current.sh"
 assert_eq "$captured_exit_code" "0"
 
 # 4. Windows spells the path with escaped backslashes and a drive letter; only the end of the path is compared.
-registry "$config" 'C:\\Users\\me\\.claude\\plugins\\cache\\M\\review-routing\\0.6.0'
+registry "$config" 'C:\\Users\\me\\.claude\\plugins\\cache\\M\\mash-workbench\\0.6.0'
 run_capturing bash "$new/scripts/plugin-current.sh"
 assert_eq "$captured_exit_code" "0"
 run_capturing bash "$old/scripts/plugin-current.sh"
 assert_eq "$captured_exit_code" "6"
 # Another marketplace's plugin of the same name and version is another copy.
-registry "$config" "$config/plugins/cache/other/review-routing/0.5.1" "$config/plugins/cache/m/review-routing/0.5.10"
+registry "$config" "$config/plugins/cache/other/mash-workbench/0.5.1" "$config/plugins/cache/m/mash-workbench/0.5.10"
 run_capturing bash "$old/scripts/plugin-current.sh"
 assert_eq "$captured_exit_code" "6"
 
@@ -134,7 +132,7 @@ assert_eq "$captured_exit_code" "0"
 assert_eq "$(printf '%s\n' "$captured_output" | wc -l | tr -d ' ')" "1"
 assert_contains "$captured_output" "cannot tell"
 # A copy outside every cache folder stays silent.
-run_capturing bash plugins/review-routing/scripts/plugin-current.sh
+run_capturing bash plugins/mash-workbench/scripts/plugin-current.sh
 assert_eq "$captured_output" ""
 # null, true, false and numbers are values: "projectPath": null is a user entry, and the key after it is a key.
 printf '{"version": 2, "plugins": {"x@m": [{"projectPath": null, "enabled": true, "size": 12.5, "installPath": "%s"}]}}\n' "$new" > "$config/plugins/installed_plugins.json"
@@ -168,26 +166,12 @@ assert_eq "$captured_exit_code" "6"
 registry "$config" "$new"
 repo="$fixture/repo"; git init --quiet "$repo"; git -C "$repo" commit --quiet --allow-empty -m "chore: base"
 printf 'a\n' > "$repo/a"; git -C "$repo" add a; git -C "$repo" commit --quiet -m "feat: a"
-mash_old=$(install "$config" m mash-workbench 0.2.5)
-mash_new=$(install "$config" m mash-workbench 0.3.0)
-registry "$config" "$new" "$mash_new"
 before=$(find "$repo" -path "$repo/.git" -prune -o -print | sort)
-for command in "$old/skills/add-reviewer/escape-add.sh $repo src/a wrong-result slug --body text" \
-  "$old/skills/add-reviewer/escape-add.sh --list $repo src/a" \
-  "$old/skills/review-changes/review-log.sh add $repo HEAD~1 HEAD" \
-  "$old/skills/review-changes/review-log.sh reviewed $repo HEAD" \
-  "$mash_old/skills/scout/backlog-add.sh $repo script title why"; do
-  # shellcheck disable=SC2086  # the words are split on purpose
-  run_capturing env REVIEW_ROUTING_ESCAPES=.claude/mash-workbench/escapes MASH_WORKBENCH_BACKLOG=docs/backlog.md bash $command
-  assert_eq "$captured_exit_code" "6"
-  assert_contains "$captured_output" "not the installed version"
-done
+run_capturing env MASH_WORKBENCH_BACKLOG=docs/backlog.md bash "$old/skills/scout"/backlog-add.sh "$repo" script title why
+assert_eq "$captured_exit_code" "6"
+assert_contains "$captured_output" "not the installed version"
 assert_eq "$(find "$repo" -path "$repo/.git" -prune -o -print | sort)" "$before"
-# The installed copies run.
-run_capturing env REVIEW_ROUTING_ESCAPES=.claude/mash-workbench/escapes bash "$in_root_script" "$new/skills/add-reviewer/escape-add.sh" "$repo" src/a wrong-result slug --body "When X, Y."
-assert_eq "$captured_exit_code" "0"
-run_capturing bash "$in_root_script" "$new/skills/review-changes/review-log.sh" add "$repo" HEAD~1 HEAD
-assert_eq "$captured_exit_code" "0"
-run_capturing env MASH_WORKBENCH_BACKLOG=docs/backlog.md bash "$in_root_script" "$mash_new/skills/scout/backlog-add.sh" "$repo" script title why
+# The installed copy runs.
+run_capturing env MASH_WORKBENCH_BACKLOG=docs/backlog.md bash "$in_root_script" "$new/skills/scout/backlog-add.sh" "$repo" script title why
 assert_eq "$captured_exit_code" "0"
 echo "plugin current: ok"

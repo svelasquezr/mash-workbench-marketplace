@@ -1,5 +1,7 @@
 # 0003: review-routing needs only git
 
+Status: accepted. It continues to apply: the plugin is now mash-review ([0007](0007-instructions-first.md)), and it needs only git.
+
 ## Context
 
 `review-pr` opened pull requests, posted comments, filed issues and squash-merged, all through `gh`. Claude Code is used with many git hosts, and in teams people, CODEOWNERS and branch protection own the pull request.

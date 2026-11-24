@@ -1,0 +1,29 @@
+schema_version: "1.1"
+name: 01-general-review
+description: "A project with no review standards gets one reviewer with the general checklist, and the review changes no file."
+tags: [mash-review]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: "mash review my branch. Nobody is available to answer questions."
+  max_turns: 40
+  timeout_seconds: 900
+  allowed_tools:
+    - "Skill"
+    - "Read"
+    - "Glob"
+    - "Grep"
+    - "Agent"
+    - "Write"
+    - "Edit"
+    - "Bash(git diff:*)"
+    - "Bash(git log:*)"
+    - "Bash(git status:*)"
+    - "Bash(git merge-base:*)"
+    - "Bash(git rev-parse:*)"
+    - "Bash(git worktree list:*)"
+    - "Bash(git blame:*)"
+    - "Bash(git show:*)"
+    - "Bash(git branch:*)"
+runs: 1
+expected_outcome: "One mash-review:reviewer reviews the branch with the general checklist and finds that the discount is added instead of subtracted; the summary says NOT SAFE and nothing is fixed or written."

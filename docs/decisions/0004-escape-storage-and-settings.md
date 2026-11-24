@@ -1,5 +1,7 @@
 # 0004: one home folder for settings and escapes
 
+Status: superseded by [0007](0007-instructions-first.md). mash-review has no settings file, and it keeps escapes in `.mash-review/escapes/` in the main worktree.
+
 ## Context
 
 The review-escape ledger and its setting were found relative to the current worktree. The setting was in `.claude/settings.local.json`, and git does not track that file. A new linked worktree in `.claude/worktrees/<name>` does not have the file. Thus a background session in that worktree asked the user again, or it wrote a second ledger. Entries got lost.

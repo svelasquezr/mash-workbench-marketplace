@@ -1,6 +1,6 @@
 # shellcheck shell=bash
-# Convention: every agent the plugins ship (and the reviewer template) declares its model and effort,
-# and a reviewer (an agent file named *reviewer*, or whose file contains the SAFE TO LAND verdict line) is read-only and not on haiku. This test only bans Edit/Write; a reviewer keeps Bash, and the review-routing reviewer-guard hook (tests/test_reviewer_guard.sh) refuses its non-read git and GitHub-writing gh commands (not a security boundary; gaps in the hook's docstring). A skill or command declares neither (CLAUDE.md says why).
+# Convention: every agent the plugins ship declares its model and effort,
+# and a reviewer (an agent file named *reviewer*, or whose file contains the SAFE TO LAND verdict line) is read-only and not on haiku. This test only bans Edit/Write and requires a tools: line; the mash-review reviewer keeps Bash for read-only git only, enforced by its instructions and Claude Code's permission check (no hook; ADR 0007). A skill or command declares neither (AGENTS.md says why).
 set -euo pipefail
 source tests/lib.sh
 temporary_directory=$(mktemp -d); trap 'rm -rf "$temporary_directory"' EXIT
@@ -79,9 +79,9 @@ done
 printf -- '---\nname: x-helper\nmodel: sonnet\neffort: low\n---\n' > "$temporary_directory/x-helper.md"
 assert_eq "$(agent_problems "$temporary_directory/x-helper.md")" ""
 
-# Every shipped agent and the reviewer template follow it.
+# Every shipped agent follows it.
 shopt -s nullglob
-agent_files=(plugins/*/agents/*.md plugins/review-routing/skills/add-reviewer/reviewer-template.md)
+agent_files=(plugins/*/agents/*.md)
 problems=""
 for agent_file in "${agent_files[@]}"; do problems+=$(agent_problems "$agent_file"); done
 assert_eq "$problems" ""

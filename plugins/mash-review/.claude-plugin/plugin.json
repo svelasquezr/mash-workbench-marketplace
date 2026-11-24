@@ -1,0 +1,11 @@
+{
+  "name": "mash-review",
+  "description": "Review changes against your project's review standards (skills), record the bugs a review passed, and turn them into new standards. Instructions only: no Python, no hooks, no scripts. Say \"mash review\" to pick it.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Sergio Velasquez"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/svelasquezr/mash-workbench-marketplace",
+  "repository": "https://github.com/svelasquezr/mash-workbench-marketplace"
+}

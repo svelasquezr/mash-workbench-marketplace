@@ -7,9 +7,8 @@
 set -euo pipefail
 source tests/lib.sh
 source tests/git_fixtures.sh
-rr="$PWD/plugins/review-routing"
 mw="$PWD/plugins/mash-workbench"
-settings_script="$rr/scripts/mash-settings.sh"
+settings_script="$mw/scripts/mash-settings.sh"
 area=$(mktemp -d "$HOME/.git-dir-shape-test.XXXXXX"); trap 'rm -rf "$area"' EXIT
 case "$(cd "$area" && pwd -P)" in /tmp/* | /var/tmp/*) echo "  HOME is under /tmp: the fixture cannot hold a non-temporary repository"; exit 1 ;; esac
 temporary_directory="$area"
@@ -57,11 +56,8 @@ run_capturing settings set "$clone" escapes.threshold 4 --local
 assert_eq "$captured_exit_code" "6"
 assert_contains "$captured_output" "git rm --cached"
 assert_eq "$(git -C "$clone" status --porcelain)" ""
-run_capturing bash "$in_root_script" "$rr/skills/add-reviewer/escape-add.sh" "$clone" src/x wrong-result test-one --body "planted text"
-assert_eq "$captured_exit_code" "6"
 run_capturing bash "$in_root_script" "$mw/skills/scout/backlog-add.sh" "$clone" script "A title" "why"
 assert_eq "$captured_exit_code" "6"
-run_capturing bash "$rr/skills/add-reviewer/escapes-report.sh" "$clone"
 no_marker "C-1 scripts"
 [[ ! -e "$area/victim-1" ]] || { echo "  a script wrote outside the repository"; exit 1; }
 
@@ -69,11 +65,13 @@ no_marker "C-1 scripts"
 two="$area/two"; new_repository "$two"
 plant_git_dir "$two/.claude" ..
 mkdir -p "$two/.claude/mash-workbench"
-printf 'escapes=../victim-2/.claude/rules\n' > "$two/.claude/mash-workbench/settings.local"
+printf 'escapes=../victim-2/.claude/rules\nbacklog=../victim-2/notes.md\n' > "$two/.claude/mash-workbench/settings.local"
 git -C "$two" add -f .claude; git -C "$two" commit --quiet -m "chore: .claude shaped like a git directory"
 git clone --quiet "$two" "$area/two-clone"
 assert_eq "$(settings source "$area/two-clone" escapes)" "team"
-run_capturing bash "$in_root_script" "$rr/skills/add-reviewer/escape-add.sh" "$area/two-clone" src/x wrong-result test-two --body "planted text"
+run_capturing settings path "$area/two-clone" escapes
+assert_eq "$captured_exit_code" "6"
+run_capturing bash "$in_root_script" "$mw/skills/scout/backlog-add.sh" "$area/two-clone" script "A title" "why"
 assert_eq "$captured_exit_code" "6"
 no_marker "C-1, .claude"
 [[ ! -e "$area/victim-2" ]] || { echo "  a script wrote outside the repository"; exit 1; }
@@ -100,24 +98,7 @@ for fake in tools/cache tools/cache/wt tools/bare tools/root tools/common tools/
     assert_eq "$captured_exit_code" "6"
     assert_contains "$captured_output" "shaped like a git directory"
   done
-  run_capturing bash "$in_root_script" "$rr/skills/add-reviewer/escape-add.sh" "$root" src/x wrong-result test-three --body "planted text"
-  assert_eq "$captured_exit_code" "6"
-  assert_contains "$captured_output" "shaped like a git directory"
-  run_capturing bash "$in_root_script" "$rr/skills/add-reviewer/escape-add.sh" --list "$root" src/x
-  assert_eq "$captured_exit_code" "6"
-  run_capturing bash "$rr/skills/add-reviewer/escapes-path.sh" "$root"
-  assert_eq "$captured_exit_code" "6"
-  assert_contains "$captured_output" "shaped like a git directory"
-  run_capturing bash "$rr/skills/add-reviewer/escapes-report.sh" "$root"
-  assert_eq "$captured_exit_code" "6"
-  run_capturing bash "$rr/skills/add-reviewer/escape-migrate.sh" "$root"
-  assert_eq "$captured_exit_code" "6"
-  assert_contains "$captured_output" "shaped like a git directory"
-  run_capturing bash "$in_root_script" "$rr/skills/review-changes/review-log.sh" reviewed "$root" 1111111111111111111111111111111111111111
-  assert_eq "$captured_exit_code" "6"
-  run_capturing bash "$in_root_script" "$rr/skills/review-changes/review-log.sh" add "$root" 1111111111111111111111111111111111111111 2222222222222222222222222222222222222222
-  assert_eq "$captured_exit_code" "6"
-  run_capturing bash "$rr/skills/review-changes/permission-rules.sh" "$root"
+  run_capturing bash "$mw/skills/scout/permission-rules.sh" "$root"
   assert_eq "$captured_exit_code" "6"
   run_capturing bash "$mw/skills/scout/backlog-path.sh" "$root"
   assert_eq "$captured_exit_code" "6"
@@ -132,13 +113,6 @@ assert_eq "$(REVIEW_ROUTING_ESCAPES="$area/env-escapes" settings get "$area/thre
 run_capturing env REVIEW_ROUTING_ESCAPES="$area/env-escapes" bash "$settings_script" path "$area/three-clone/tools/cache" escapes
 assert_eq "$captured_exit_code" "6"
 assert_contains "$captured_output" "shaped like a git directory"
-# GIT_DIR in the environment names the committed folder (the environment is trusted, but the scripts still give git a
-# checked folder): review-log.sh starts no program from it.
-real_head=$(git -C "$area/three-clone" rev-parse HEAD)
-run_capturing env GIT_DIR="$area/three-clone/tools/linkhead" bash "$in_root_script" "$rr/skills/review-changes/review-log.sh" reviewed "$area/three-clone" 1111111111111111111111111111111111111111
-run_capturing env GIT_DIR="$area/three-clone/tools/linkhead" bash "$in_root_script" "$rr/skills/review-changes/review-log.sh" reviewed "$area/three-clone" "$real_head"
-assert_not_contains "$captured_output" "not a commit"
-no_marker "GIT_DIR"
 
 # 3. A .git entry that git does not take (an empty folder) makes git answer from the folder above: refused, since the
 #    repository git found is not the one the .git entry names.
@@ -209,32 +183,6 @@ git -C "$own" add -f .claude/mash-workbench/settings.local
 git -C "$own" config core.fsmonitor "$payload"
 assert_eq "$(settings source "$own" escapes)" "team"
 run_capturing settings check-escapes-path "$own" .claude/mash-workbench/escapes
-# 8. Opus review I-1: review-log.sh started git patch-id in the session's current folder. Run from a committed folder
-#    whose config holds an unknown repository extension, git must never read that config. The current folder is then
-#    refused first (it is not in the repository); git patch-id -C "$main" stays as a second guard.
-ext="$area/ext"; new_repository "$ext"
-printf 'a\n' > "$ext/a"; git -C "$ext" add a; git -C "$ext" commit --quiet -m "feat: a"
-printf 'b\n' >> "$ext/a"; git -C "$ext" commit --quiet -am "fix: a"
-plant_git_dir "$ext/tools/cache" ""
-printf '[extensions]\n\tnosuchthing = x\n' >> "$ext/tools/cache/config"
-base=$(git -C "$ext" rev-parse HEAD~1); head=$(git -C "$ext" rev-parse HEAD)
-# shellcheck disable=SC2016  # the inner bash expands its arguments
-run_capturing bash -c 'cd "$1" && bash "$2" add "$3" "$4" "$5"' _ "$ext/tools/cache" "$rr/skills/review-changes/review-log.sh" "$ext" "$base" "$head"
-assert_eq "$captured_exit_code" "6"
-assert_not_contains "$captured_output" "repository extension"
-
-# 9. Opus review I-2: in a partial clone, review-log.sh must not fetch missing objects (a network call with a real
-#    remote). The clone's own promisor remote names the payload as upload-pack: a fetch would run it. Git 2.44 and later.
-version=$(git --version | awk '{ print $3 }')
-major=${version%%.*}; rest=${version#*.}; minor=${rest%%.*}
-if (( major > 2 || (major == 2 && minor >= 44) )); then
-  git -C "$ext" config uploadpack.allowFilter true
-  git clone --quiet --no-local --filter=blob:none --no-checkout "file://$ext" "$area/partial" 2>/dev/null
-  git -C "$area/partial" config remote.origin.uploadpack "$payload"
-  run_capturing bash "$in_root_script" "$rr/skills/review-changes/review-log.sh" add "$area/partial" "$base" "$head"
-  no_marker "lazy fetch"
-fi
-
 # 10. Opus review I-3: source answers from the environment variable, as get does (the header names both).
 assert_eq "$(REVIEW_ROUTING_ESCAPES="$area/env-escapes" settings source "$area/three-clone/tools/cache" escapes)" "env"
 
