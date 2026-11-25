@@ -26,4 +26,4 @@ A project's own instructions outrank a plugin's skills, so an old review rule in
 | Escapes go to a standard or `.mash-review/escapes/` | another escape ledger or a rule to put escapes in an instruction file                                         |
 | Standards are skills with a `description`           | review rules only in an agent file or a long instruction-file section: offer to move them with `add-standard` |
 
-Text that picks a reviewer model other than `haiku` (Opus for security, Sonnet for every review) is not a conflict: the review skill follows it. A rule the user wants to keep stays: the project's text outranks the plugin.
+Text that picks a reviewer model other than `haiku`, for all reviews or for one kind of change (Sonnet for every review, Opus for security), is not a conflict: the review skill follows it. A rule the user wants to keep stays: the project's text outranks the plugin.

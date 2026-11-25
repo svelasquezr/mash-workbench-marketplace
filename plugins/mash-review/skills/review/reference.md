@@ -13,7 +13,7 @@ Read the `git diff --stat <base>...HEAD` (or `git diff --stat <base>` in working
 
 Then read the project's instruction files (`CLAUDE.md`, `AGENTS.md`, `.github/copilot-instructions.md`), and the nested ones in the touched folders, for rules that require a standard, for example "A change under `src/payments/` always gets the `review-payments` standard". Apply each such rule, and name it in the summary. This is how a project makes selection deterministic; the plugin has no config of its own.
 
-**A change that edits its own rules.** When the diff changes a selected standard, a builder skill it cites, or an instruction file, also apply the version at the base (`git show <base>:<path>`): select and require standards from both versions, tell the reviewer that the standard changed in this diff, and name the change in the summary. A change must not weaken the rules that review it.
+**A change that edits its own rules.** When the diff changes a selected standard, a builder skill it cites, or an instruction file, also apply the version at the base (`git show <base>:<path>`): select and require standards from both versions, give each reviewer the stronger model of the two versions (a `Model:` line or an instruction-file model line), tell the reviewer that the standard changed in this diff, and name the change in the summary. A change must not weaken the rules that review it.
 
 A builder skill with no "Review checklist" section is not a standard. When the change is mostly that kind of code, add an offer to the summary: "Create a review standard for <kind> (add-standard)?".
 
@@ -29,7 +29,7 @@ Every mash-review skill uses this definition.
 
 - One reviewer for each group of standards that fit together in one review, by size of the diff and by model. A small change: one reviewer with every standard, on the strongest of their models. A large change with unrelated standards (UI and database): one reviewer for each.
 - Read the body of each selected standard for a `Model:` line (in a builder skill, inside its "Review checklist" section). A standard's model is the one on that line, else `opus`. The model of a group is the strongest of its standards' models (`fable` over `opus` over `sonnet`), so a group runs on `sonnet` only when every standard in it says `Model: sonnet`. A reviewer with no standard runs on `opus`.
-- A model the user names in the request ("review with sonnet"), else one that a project instruction file names for reviews ("mash reviews run on sonnet"), wins for every reviewer; name it and where it came from in the summary.
+- A model the user names in the request ("review with sonnet") wins for every reviewer. Else a model that a project instruction file names for all reviews ("mash reviews run on sonnet") wins for every reviewer; one it names for a kind of change ("opus for security reviews") sets the groups that hold that kind of change. Name the model and where it came from in the summary.
 - Never `haiku`, even on request: use `sonnet` and say so in the summary. A blind test had a Haiku reviewer accept a false claim and answer `SAFE TO LAND`.
 - Every reviewer also applies the general checklist of the agent.
 
