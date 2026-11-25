@@ -22,14 +22,14 @@ A builder skill with no "Review checklist" section is not a standard. When the c
 Every mash-review skill uses this definition.
 
 - The main worktree is the first `worktree` entry of `git worktree list --porcelain`: where the repository was cloned. Escape files go there because a linked worktree is often deleted after its branch is pushed.
-- In a bare repository a `bare` line follows that entry, and it names the git directory. Use the top folder of the current worktree (`git rev-parse --show-toplevel`). Each worktree then has its own `.mash-review/escapes/`: when you write an escape file there, say that it must be committed before the worktree is removed.
+- In a bare repository a `bare` line follows that entry, and it names the git directory. Use the top folder of the current worktree (`git rev-parse --show-toplevel`). Each worktree then has its own `.mash-review/escapes/`: when you write an escape file there, say that it must be committed before the worktree is removed. `git worktree remove` deletes a `.mash-review/` that `info/exclude` lists without a warning.
 - `.git/info/exclude` means the `info/exclude` file in the folder that `git rev-parse --git-common-dir` names.
 
 ## Grouping
 
-- One reviewer for each group of standards that fit together in one review, by size of the diff and by model. A small change: one reviewer with every standard. A large change with unrelated standards (UI and database): one reviewer for each.
+- One reviewer for each group of standards that fit together in one review, by size of the diff and by model. A small change: one reviewer with every standard, on the strongest of their models. A large change with unrelated standards (UI and database): one reviewer for each.
 - Read the body of each selected standard for a `Model:` line (in a builder skill, inside its "Review checklist" section). A standard's model is the one on that line, else `opus`. The model of a group is the strongest of its standards' models (`fable` over `opus` over `sonnet`), so a group runs on `sonnet` only when every standard in it says `Model: sonnet`. A reviewer with no standard runs on `opus`.
-- A model the user names in the request ("review with sonnet") wins for every reviewer; name it in the summary.
+- A model the user names in the request ("review with sonnet"), else one that a project instruction file names for reviews ("mash reviews run on sonnet"), wins for every reviewer; name it and where it came from in the summary.
 - Never `haiku`, even on request: use `sonnet` and say so in the summary. A blind test had a Haiku reviewer accept a false claim and answer `SAFE TO LAND`.
 - Every reviewer also applies the general checklist of the agent.
 

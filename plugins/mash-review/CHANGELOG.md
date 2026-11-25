@@ -6,11 +6,11 @@ Newest first.
 
 **Changed.**
 
-- Reviewers run on `opus` by default, not `sonnet`: it finds more problems, and a missed problem costs more later than the extra review tokens. A standard without a `Model:` line counts as `opus`. A new `Model: sonnet` line lowers a standard; a group runs on `sonnet` only when every standard in it says so. A model you name in the request ("mash review with sonnet") wins for every reviewer. Reviewers still never run on `haiku`.
-- To keep the cost of 1.0.0, ask for `sonnet` in the request, or add `Model: sonnet` to your standards. A review that selects no standard runs on `opus` unless you ask for `sonnet`.
-- `migrate` now writes the model of each old reviewer as a `Model:` line, `sonnet` included, so a reviewer that ran on `sonnet` keeps it.
+- Reviewers run on `opus` by default, not `sonnet`: it finds more problems, and a missed problem costs more later than the extra review tokens. A standard without a `Model:` line counts as `opus`. A new `Model: sonnet` line lowers a standard; a group runs on `sonnet` only when every standard in it says so. A model you name in the request ("mash review with sonnet"), else one your `CLAUDE.md` or `AGENTS.md` names for reviews, wins for every reviewer. Reviewers still never run on `haiku`.
+- To keep the cost of 1.0.0, add a line such as "mash reviews run on sonnet" to your instruction file, ask for `sonnet` in the request, or add `Model: sonnet` to your standards. A review that selects no standard runs on `opus` unless you ask for `sonnet`.
+- `migrate` now writes the model of each old reviewer as a `Model:` line, `sonnet` included, in the 0.x order (`model_rules`, then `default_model`, then the agent file), so a reviewer that ran on `sonnet` keeps it.
 - The main-worktree rule is now in one place, the review `reference.md`, and every skill points to it.
-- `migrate` no longer keeps the mash-workbench `backlog` key or its `backlog-add.sh` allow rule: mash-workbench 1.0.0 has its own `migrate` for them.
+- `migrate` leaves the mash-workbench `backlog` key, its `backlog-add.sh` allow rule and `MASH_WORKBENCH_BACKLOG` to `/mash-workbench:migrate` (mash-workbench 1.0.0), and no longer tells you to keep that rule.
 
 **Fixed.**
 

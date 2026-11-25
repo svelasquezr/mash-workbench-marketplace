@@ -23,7 +23,7 @@ In Claude Code:
 /plugin install mash-review@mash-workbench-marketplace
 ```
 
-`review-routing` was renamed **and rebuilt** as `mash-review`: the scripts, hook and config file are gone, and the plugin is made of instructions only. The marketplace renames it in your settings. Run the `mash-review` install line once, then `/mash-review:migrate` in each project that used it, and remove the old allow rules that the 1.0.0 entry of [plugins/mash-review/CHANGELOG.md](plugins/mash-review/CHANGELOG.md) lists.
+`review-routing` was renamed **and rebuilt** as `mash-review`: the scripts, hook and config file are gone, and the plugin is made of instructions only. The marketplace renames it in your settings. Run the `mash-review` install line once, then `/mash-review:migrate` in each project that used it, and remove the old allow rules that the 1.0.0 entry of [plugins/mash-review/CHANGELOG.md](plugins/mash-review/CHANGELOG.md) lists. Also run `/mash-workbench:migrate` where mash-workbench 0.x was used: it removes the `backlog-add.sh` rule that entry said to keep.
 
 ## Other tools
 
