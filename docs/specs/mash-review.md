@@ -1,6 +1,6 @@
 # mash-review
 
-Status: design of mash-review 1.0.0, which replaces review-routing 0.x. Reasons and rejected options: [ADR 0007](../decisions/0007-instructions-first.md). A behavior change updates the diagrams here in the same PR; the skills hold the step-by-step detail.
+Status: design of mash-review 1.1.0 (1.0.0 replaced review-routing 0.x). Reasons and rejected options: [ADR 0007](../decisions/0007-instructions-first.md). A behavior change updates the diagrams here in the same PR; the skills hold the step-by-step detail.
 
 ## At a glance
 
@@ -48,7 +48,7 @@ Status: design of mash-review 1.0.0, which replaces review-routing 0.x. Reasons 
 
 ### Escapes
 
-- **D14. Where.** A checklist line `<check> (escape: <link>, <date>)` in the project standard that covers the bug. With none: `<main worktree>/.mash-review/escapes/<date>-<slug>.md` with `date`, `topic`, `source`, so it survives a deleted worktree. The folder is meant to be committed; no skill commits it.
+- **D14. Where.** A checklist line `<check> (escape: <link>, <date>)` in the project standard that covers the bug. With none: `<main worktree>/.mash-review/escapes/<date>-<slug>.md` with `date`, `topic`, `source`, so it survives a deleted worktree; in a bare repository each worktree has its own folder, and the skill says to commit the file before the worktree is removed. The folder is meant to be committed; no skill commits it.
 - **D15. Who decides.** The reviewer's `escape: yes` answers "did a review pass this code?"; else the user. With no user present nothing is written; the report lists **Escapes to record (confirm where)**.
 - **D16. Reminders.** Each summary lists waiting files by topic. A write that brings a topic to exactly 3 or 5 files offers `add-standard`; the files become its first checks and move to `processed/`.
 

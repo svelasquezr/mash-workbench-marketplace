@@ -17,6 +17,14 @@ Then read the project's instruction files (`CLAUDE.md`, `AGENTS.md`, `.github/co
 
 A builder skill with no "Review checklist" section is not a standard. When the change is mostly that kind of code, add an offer to the summary: "Create a review standard for <kind> (add-standard)?".
 
+## Main worktree
+
+Every mash-review skill uses this definition.
+
+- The main worktree is the first `worktree` entry of `git worktree list --porcelain`: where the repository was cloned. Escape files go there because a linked worktree is often deleted after its branch is pushed.
+- In a bare repository a `bare` line follows that entry, and it names the git directory. Use the top folder of the current worktree (`git rev-parse --show-toplevel`). Each worktree then has its own `.mash-review/escapes/`: when you write an escape file there, say that it must be committed before the worktree is removed.
+- `.git/info/exclude` means the `info/exclude` file in the folder that `git rev-parse --git-common-dir` names.
+
 ## Grouping
 
 - One reviewer for each group of standards that fit together in one review, by size of the diff and by model. A small change: one reviewer with every standard. A large change with unrelated standards (UI and database): one reviewer for each.
@@ -69,7 +77,7 @@ In the terminal only. With no user present, the same content goes in the final r
 2. The findings: Critical, Important and Minor, each with `path:line` and its standard.
 3. The checks line: the results, **Unchecked**, or **Checks red**. In "only the commits" mode with uncommitted changes, add that the checks ran on the working tree.
 4. Pre-existing findings, ready to file as issues. File nothing.
-5. Escapes: the ones recorded and where; the waiting escape files in `<main worktree>/.mash-review/escapes/` by topic (count the `.md` files, not `processed/`); with no user present, the block **Escapes to record (confirm where)** that `record-escape` gave.
+5. Escapes: the ones recorded and where; the waiting escape files in `<main worktree>/.mash-review/escapes/` ("Main worktree") by topic (count the `.md` files, not `processed/`); with no user present, the block **Escapes to record (confirm where)** that `record-escape` gave.
 6. Offers, each done only on a yes: a review standard (add-standard) for a kind of code with no standard; an instruction-file line for the check commands. Topics with three or more waiting files are in the escapes list of item 5 as a reminder; the offer itself comes from `record-escape` when a write brings a topic to exactly 3 or 5.
 7. Migration hint: when `.claude/reviewers.toml` exists in the current worktree, or untracked old escape files exist in `.claude/mash-workbench/escapes/` of the main worktree, "This project still has review-routing files. Run `/mash-review:migrate`."
 8. The fix path: when the user asked for fixes, say which builder skill each finding's standard names.
