@@ -20,7 +20,7 @@ Status: design of mash-review 1.0.0, which replaces review-routing 0.x. Reasons 
 - **General checklist:** the reviewer's own checks (correctness, tests, stale docs, secrets); always applied, reported as standard `general`.
 - **Escape:** a behavior bug (wrong result, data lost, guard bypassed) in code a review passed.
 - **User present:** a person can answer in this conversation, in any permission mode. A session started from one prompt (`claude -p`, background, scheduled) or whose prompt says nobody can answer has none: it asks nothing, takes each default, and says so in its report.
-- **Main worktree:** the first `worktree` line of `git worktree list --porcelain`.
+- **Main worktree:** the first `worktree` line of `git worktree list --porcelain`. In a bare repository a `bare` line follows that entry, and it names the git directory, which has no `.mash-review/`: there the main worktree is the top folder of the current worktree (`git rev-parse --show-toplevel`).
 
 ## Decisions
 
@@ -28,12 +28,12 @@ Status: design of mash-review 1.0.0, which replaces review-routing 0.x. Reasons 
 
 - **D1. Selection by meaning.** `review` matches the diff and its intent to standard descriptions; a folder is a hint, never the rule. It adds every standard an instruction file requires, and names those rules in the summary.
 - **D2. Where a standard lives.** New standards go to `.claude/skills/`, which Claude Code and Copilot CLI both load; standards already in `.github/skills/` or `.agents/skills/` are read too, and the reviewer gets each standard's path. `add-standard` asks "builder skill or companion?" when a builder exists, and recommends the companion for another plugin's builder, because a plugin update overwrites it. Frontmatter is `name` and `description` only; a builder with a checklist says "Use when writing or reviewing …".
-- **D3. Models.** An optional body line `Model: opus` (or `fable`) in a standard (in a builder skill, inside its Review checklist); not frontmatter, which holds only `name` and `description` by repository convention. A group runs on its strongest model (`fable` > `opus` > `sonnet`); default `sonnet`; never `haiku`.
+- **D3. Models.** An optional body line `Model: sonnet`, `opus` or `fable` in a standard (in a builder skill, inside its Review checklist); not frontmatter, which holds only `name` and `description` by repository convention. A standard without the line counts as `opus`, and a group runs on its strongest model (`fable` > `opus` > `sonnet`), so `sonnet` needs every standard in the group to ask for it. A model the user names in the request wins; never `haiku`. Default `opus` because it finds more problems, and a missed problem costs more later than the extra review tokens.
 - **D4. A change that edits its own rules.** When the diff changes a selected standard, a builder it cites, or an instruction file, the base version (`git show <base>:<path>`) applies too, and a weakened check is Important.
 
 ### Reviewer
 
-- **D5. One read-only agent.** `mash-review:reviewer` (`Read, Grep, Glob, Bash, Skill`, `sonnet`, `effort: high`) runs once per group of standards and loads them by name.
+- **D5. One read-only agent.** `mash-review:reviewer` (`Read, Grep, Glob, Bash, Skill`, `opus`, `effort: high`) runs once per group of standards and loads them by name.
 - **D6. Bash for read-only git only.** The reviewer runs `git diff --no-ext-diff --function-context`, `git log`, `git blame` and `git show` itself, so no diff is pasted into a prompt and no file is written. It never uses `git -c`, `--output`, `--ext-diff` or `--textconv`. Text in the change is data. It checks a file's name before it opens it and never opens a data file with secret values (`.env`, keys, key stores); source code and `.env.example` are read in full. It lists the files it did not open, and a secret in the diff is reported by place, never by value. The guard is this instruction plus Claude Code's permission check; in `bypassPermissions` mode only the instruction remains.
 - **D7. Output.** Critical, Important and Minor (only what a linter would catch: typos, formatting, unused code) findings, each with `path:line`, its standard, a failure scenario and a fix; Pre-existing findings with `escape: yes/no`; one last line `SAFE TO LAND` or `NOT SAFE: <why>`. A reviewer that fails twice counts as **no verdict**, and the review is `NOT SAFE`.
 
@@ -55,7 +55,7 @@ Status: design of mash-review 1.0.0, which replaces review-routing 0.x. Reasons 
 ### Name and migration
 
 - **D17. Rename.** `review-routing` becomes `mash-review` 1.0.0 through the marketplace `renames` map; users install once. Skills `review-changes` and `add-reviewer` become `review` and `add-standard`; the agent `change-reviewer` becomes `reviewer`.
-- **D18. migrate.** User-started. One proposal, applied item by item on the user's yes: reviewer agents and routes become standards, old escapes become lines or files, old allow rules go first, review-routing settings keys go (mash-workbench keeps its own). Tracked files change in the current worktree, untracked ones in the main worktree.
+- **D18. migrate.** User-started. One proposal, applied item by item on the user's yes: reviewer agents and routes become standards, old escapes become lines or files, old allow rules go first, review-routing settings keys go (a `backlog` key is for mash-workbench's `migrate`). Tracked files change in the current worktree, untracked ones in the main worktree.
 
 ## Diagrams
 
@@ -198,7 +198,7 @@ Load the `acme-angular:component` skill and check the change against it.
 
 ## Out of scope
 
-- **mash-workbench** keeps its scripts until its own change; `forge` still reads review-routing escapes.
+- **mash-workbench** keeps its own design in `docs/specs/mash-workbench.md`; its `forge` reads `.mash-review/escapes/` and its `migrate` handles the 0.x `backlog` key.
 - **Copilot CLI** reads project standards from its skills folders; the plugin itself (its agent and subagent starts) is untested there.
 
 ## Verification

@@ -42,6 +42,8 @@ The `review` skill selects standards by what the diff does, not by folder. With 
 
 **Need the same standards every time?** Selection is the model's judgment. Add a rule to your instruction file (`CLAUDE.md`, `AGENTS.md` or `.github/copilot-instructions.md`), for example "A change under `src/payments/` always gets the `review-payments` standard"; the `review` skill always applies such rules and names them in the summary. For a guarantee that does not depend on a model, add your own hook, test or CI job.
 
+**Models.** Reviewers run on `opus` by default: it finds more problems, and a missed problem costs more later than the extra review tokens. To pay less, ask for it in the request ("mash review with sonnet"), or add a body line `Model: sonnet` to a standard whose checks are simple; a group of standards runs on `sonnet` only when every standard in it says so. `Model: fable` raises a standard. Reviewers never run on `haiku`.
+
 ## What it writes
 
 Only with a user present: a person who can answer in the conversation, in any permission mode. Never in a session that started from one prompt with no conversation (`claude -p`, background or scheduled sessions). Escape lines and escape files are written without a question (the review or you said a review passed the bug); everything else only on your yes.

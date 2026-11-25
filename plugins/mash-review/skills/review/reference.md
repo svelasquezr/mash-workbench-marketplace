@@ -20,7 +20,9 @@ A builder skill with no "Review checklist" section is not a standard. When the c
 ## Grouping
 
 - One reviewer for each group of standards that fit together in one review, by size of the diff and by model. A small change: one reviewer with every standard. A large change with unrelated standards (UI and database): one reviewer for each.
-- Read the body of each selected standard for a `Model:` line (in a builder skill, inside its "Review checklist" section). The model of a group is the strongest that any of its standards names on such a line (`fable` over `opus` over `sonnet`). The default is `sonnet`. Never `haiku`: a blind test had a Haiku reviewer accept a false claim and answer `SAFE TO LAND`.
+- Read the body of each selected standard for a `Model:` line (in a builder skill, inside its "Review checklist" section). A standard's model is the one on that line, else `opus`. The model of a group is the strongest of its standards' models (`fable` over `opus` over `sonnet`), so a group runs on `sonnet` only when every standard in it says `Model: sonnet`. A reviewer with no standard runs on `opus`.
+- A model the user names in the request ("review with sonnet") wins for every reviewer; name it in the summary.
+- Never `haiku`, even on request: use `sonnet` and say so in the summary. A blind test had a Haiku reviewer accept a false claim and answer `SAFE TO LAND`.
 - Every reviewer also applies the general checklist of the agent.
 
 ## Working-tree mode

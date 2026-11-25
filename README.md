@@ -4,10 +4,10 @@ A plugin marketplace for Claude Code (support for GitHub Copilot CLI and other c
 
 ## Plugins
 
-| Plugin                                     | What it does                                                                                                                                                                        |
-| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`mash-workbench`](plugins/mash-workbench) | notes repeated work as tooling candidates during a session (`scout`), then turns the approved ones into hooks, scripts, skills, agents or MCP servers (`/forge`); instructions only |
-| [`mash-review`](plugins/mash-review)       | reviews a change against your project's review standards (skills), records the bugs a review passed, and turns them into new standards; instructions only (was `review-routing`)    |
+| Plugin                                     | What it does                                                                                                                                                                                    |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`mash-workbench`](plugins/mash-workbench) | notes repeated work as tooling candidates during a session (`scout`), then turns the approved ones into hooks, scripts, skills, agents or MCP servers (`/forge`); instructions only             |
+| [`mash-review`](plugins/mash-review)       | reviews a change against your project's review standards (skills), records the bugs a review passed, and turns them into new standards; instructions only; `review-routing` renamed and rebuilt |
 
 ## Requirements
 
@@ -23,7 +23,7 @@ In Claude Code:
 /plugin install mash-review@mash-workbench-marketplace
 ```
 
-`review-routing` is now `mash-review`: the marketplace renames it in your settings. Run the `mash-review` install line once, then `/mash-review:migrate` in each project that used it, and remove the old allow rules that the 1.0.0 entry of [plugins/mash-review/CHANGELOG.md](plugins/mash-review/CHANGELOG.md) lists.
+`review-routing` was renamed **and rebuilt** as `mash-review`: the scripts, hook and config file are gone, and the plugin is made of instructions only. The marketplace renames it in your settings. Run the `mash-review` install line once, then `/mash-review:migrate` in each project that used it, and remove the old allow rules that the 1.0.0 entry of [plugins/mash-review/CHANGELOG.md](plugins/mash-review/CHANGELOG.md) lists.
 
 ## Other tools
 

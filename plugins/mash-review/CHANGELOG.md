@@ -2,6 +2,20 @@
 
 Newest first.
 
+## 1.1.0 - 2026-11-25
+
+**Changed.**
+
+- Reviewers run on `opus` by default, not `sonnet`: it finds more problems, and a missed problem costs more later than the extra review tokens. A standard without a `Model:` line counts as `opus`. A new `Model: sonnet` line lowers a standard; a group runs on `sonnet` only when every standard in it says so. A model you name in the request ("mash review with sonnet") wins for every reviewer. Reviewers still never run on `haiku`.
+- To keep the cost of 1.0.0, ask for `sonnet` in the request, or add `Model: sonnet` to your standards.
+- `migrate` no longer keeps the mash-workbench `backlog` key or its `backlog-add.sh` allow rule: mash-workbench 1.0.0 has its own `migrate` for them.
+
+**Fixed.**
+
+- Conditions: a bare repository with linked worktrees. Incorrect result: `record-escape` took the first entry of `git worktree list --porcelain`, which is the bare git directory, and wrote escape files into `<repo>.git/.mash-review/escapes/`. Later reviews in a worktree did not find them. `migrate` looked for untracked files in the same wrong place. Expected result: when a `bare` line follows the first entry, the skills use the top folder of the current worktree.
+
+**Resolved.** The 1.0.0 "Known effect": mash-workbench 1.0.0 `forge` reads `.mash-review/escapes/`.
+
 ## 1.0.0 - 2026-11-23
 
 The plugin `review-routing` is now `mash-review`, made of instructions only: no Python, no hook, no scripts, no config file, no allow rules. The design is in `docs/specs/mash-review.md` in the marketplace repository, and the reasons in `docs/decisions/0007-instructions-first.md`.
