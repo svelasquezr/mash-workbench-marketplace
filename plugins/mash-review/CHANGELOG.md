@@ -2,6 +2,23 @@
 
 Newest first.
 
+## 1.1.0 - 2026-11-25
+
+**Changed.**
+
+- Reviewers run on `opus` by default, not `sonnet`: it finds more problems, and a missed problem costs more later than the extra review tokens. A standard without a `Model:` line counts as `opus`. A new `Model: sonnet` line lowers a standard; a group runs on `sonnet` only when every standard in it says so. A model you name in the request ("mash review with sonnet"), else one your `CLAUDE.md` or `AGENTS.md` names for reviews, wins for every reviewer. Reviewers still never run on `haiku`.
+- To keep the cost of 1.0.0, add a line such as "mash reviews run on sonnet" to your instruction file, ask for `sonnet` in the request, or add `Model: sonnet` to your standards. A review that selects no standard runs on `opus` unless the request or an instruction file names `sonnet`.
+- A change that edits a `Model:` line or an instruction-file model line is reviewed on the stronger model of the base and the change, so a branch cannot lower the model of its own review.
+- `migrate` now writes the model of each old reviewer as a `Model:` line, `sonnet` included, in the 0.x order (`model_rules`, then `default_model`, then the agent file), so a reviewer that ran on `sonnet` keeps it.
+- The main-worktree rule is now in one place, the review `reference.md`, and every skill points to it.
+- `migrate` leaves the mash-workbench `backlog` key, its `backlog-add.sh` allow rule and `MASH_WORKBENCH_BACKLOG` to `/mash-workbench:migrate` (mash-workbench 1.0.0), and no longer tells you to keep that rule.
+
+**Fixed.**
+
+- Conditions: a bare repository with linked worktrees. Incorrect result: `record-escape` took the first entry of `git worktree list --porcelain`, which is the bare git directory, and wrote escape files into `<repo>.git/.mash-review/escapes/`. Later reviews in a worktree did not find them. `migrate` looked for untracked files in the same wrong place. Expected result: when a `bare` line follows the first entry, the skills use the top folder of the current worktree, and say to commit escape files before that worktree is removed. `.git/info/exclude` is now found with `git rev-parse --git-common-dir`.
+
+**Resolved.** The 1.0.0 "Known effect": mash-workbench 1.0.0 `forge` reads `.mash-review/escapes/`.
+
 ## 1.0.0 - 2026-11-23
 
 The plugin `review-routing` is now `mash-review`, made of instructions only: no Python, no hook, no scripts, no config file, no allow rules. The design is in `docs/specs/mash-review.md` in the marketplace repository, and the reasons in `docs/decisions/0007-instructions-first.md`.

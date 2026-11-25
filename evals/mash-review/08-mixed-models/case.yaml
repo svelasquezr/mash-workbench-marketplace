@@ -1,0 +1,29 @@
+schema_version: "1.1"
+name: 08-mixed-models
+description: "Two selected standards, one with Model: sonnet and one with no Model: line, share one reviewer, which runs on opus."
+tags: [mash-review]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: "mash review my branch. Nobody is available to answer questions."
+  max_turns: 40
+  timeout_seconds: 900
+  allowed_tools:
+    - "Skill"
+    - "Read"
+    - "Glob"
+    - "Grep"
+    - "Agent"
+    - "Write"
+    - "Edit"
+    - "Bash(git diff:*)"
+    - "Bash(git log:*)"
+    - "Bash(git status:*)"
+    - "Bash(git merge-base:*)"
+    - "Bash(git rev-parse:*)"
+    - "Bash(git worktree list:*)"
+    - "Bash(git blame:*)"
+    - "Bash(git show:*)"
+    - "Bash(git branch:*)"
+runs: 1
+expected_outcome: "The review selects review-billing (Model: sonnet) and review-money (no Model: line), and the reviewer runs on opus, because a standard without a Model: line counts as opus."

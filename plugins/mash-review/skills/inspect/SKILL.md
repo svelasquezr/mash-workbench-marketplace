@@ -9,7 +9,7 @@ A project's own instructions outrank a plugin's skills, so an old review rule in
 
 ## Steps
 
-1. **Old plugin.** `.claude/reviewers.toml` in the current worktree, or untracked old escape files in `.claude/mash-workbench/escapes/` of the main worktree: say "Run `/mash-review:migrate` first", and stop. Instructions that tell a session to use `review-changes` or `add-reviewer` are conflicts for step 2; history (changelogs, ADRs) is not.
+1. **Old plugin.** `.claude/reviewers.toml` in the current worktree, or untracked old escape files in `.claude/mash-workbench/escapes/` of the main worktree (`../review/reference.md` "Main worktree"): tell the user to run `/mash-review:migrate` first, and stop. Instructions that tell a session to use `review-changes` or `add-reviewer` are conflicts for step 2; history (changelogs, ADRs) is not.
 2. **Conflicts.** Read `CLAUDE.md`, `AGENTS.md` and `.github/copilot-instructions.md` (the first two nested ones too) and, where they exist, `.claude/memory/`, `.claude/plans/`, plan and spec docs, and `.claude/agents/`. For each instruction that breaks a rule below: `file:line`, the rule, the text, and a proposed rewrite. Show every proposal at once; apply only the approved ones.
 3. **Gaps.** No test, lint or format command named: propose the line from the project files. No line that names the review skill: propose "For code reviews, use the mash-review plugin's `review` skill" in `CLAUDE.md`, because Claude Code loads `AGENTS.md` only where there is no `CLAUDE.md`; also in `AGENTS.md` when the project uses Copilot CLI (it keeps other code-review plugins from answering).
 4. **Standards to offer.** List the areas the project briefs reviewers on by hand ("Review focus" sections, design-review briefs, reviewer agents) and the builder skills with no "Review checklist". Each is an `add-standard` candidate: offer it, create none.
@@ -26,4 +26,4 @@ A project's own instructions outrank a plugin's skills, so an old review rule in
 | Escapes go to a standard or `.mash-review/escapes/` | another escape ledger or a rule to put escapes in an instruction file                                         |
 | Standards are skills with a `description`           | review rules only in an agent file or a long instruction-file section: offer to move them with `add-standard` |
 
-Text that sizes a model up (Opus for security) is not a conflict. A rule the user wants to keep stays: the project's text outranks the plugin.
+Text that picks a reviewer model other than `haiku`, for all reviews or for one kind of change (Sonnet for every review, Opus for security), is not a conflict: the review skill follows it. A rule the user wants to keep stays: the project's text outranks the plugin.

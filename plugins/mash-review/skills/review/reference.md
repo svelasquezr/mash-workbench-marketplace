@@ -13,14 +13,24 @@ Read the `git diff --stat <base>...HEAD` (or `git diff --stat <base>` in working
 
 Then read the project's instruction files (`CLAUDE.md`, `AGENTS.md`, `.github/copilot-instructions.md`), and the nested ones in the touched folders, for rules that require a standard, for example "A change under `src/payments/` always gets the `review-payments` standard". Apply each such rule, and name it in the summary. This is how a project makes selection deterministic; the plugin has no config of its own.
 
-**A change that edits its own rules.** When the diff changes a selected standard, a builder skill it cites, or an instruction file, also apply the version at the base (`git show <base>:<path>`): select and require standards from both versions, tell the reviewer that the standard changed in this diff, and name the change in the summary. A change must not weaken the rules that review it.
+**A change that edits its own rules.** When the diff changes a selected standard, a builder skill it cites, or an instruction file, also apply the version at the base (`git show <base>:<path>`): select and require standards from both versions, give each reviewer the stronger model of the two versions (a `Model:` line or an instruction-file model line), tell the reviewer that the standard changed in this diff, and name the change in the summary. A change must not weaken the rules that review it.
 
 A builder skill with no "Review checklist" section is not a standard. When the change is mostly that kind of code, add an offer to the summary: "Create a review standard for <kind> (add-standard)?".
 
+## Main worktree
+
+Every mash-review skill uses this definition.
+
+- The main worktree is the first `worktree` entry of `git worktree list --porcelain`: where the repository was cloned. Escape files go there because a linked worktree is often deleted after its branch is pushed.
+- In a bare repository a `bare` line follows that entry, and it names the git directory. Use the top folder of the current worktree (`git rev-parse --show-toplevel`). Each worktree then has its own `.mash-review/escapes/`: when you write an escape file there, say that it must be committed before the worktree is removed. `git worktree remove` deletes a `.mash-review/` that `info/exclude` lists without a warning.
+- `.git/info/exclude` means the `info/exclude` file in the folder that `git rev-parse --git-common-dir` names.
+
 ## Grouping
 
-- One reviewer for each group of standards that fit together in one review, by size of the diff and by model. A small change: one reviewer with every standard. A large change with unrelated standards (UI and database): one reviewer for each.
-- Read the body of each selected standard for a `Model:` line (in a builder skill, inside its "Review checklist" section). The model of a group is the strongest that any of its standards names on such a line (`fable` over `opus` over `sonnet`). The default is `sonnet`. Never `haiku`: a blind test had a Haiku reviewer accept a false claim and answer `SAFE TO LAND`.
+- One reviewer for each group of standards that fit together in one review, by size of the diff and by model. A small change: one reviewer with every standard, on the strongest of their models. A large change with unrelated standards (UI and database): one reviewer for each.
+- Read the body of each selected standard for a `Model:` line (in a builder skill, inside its "Review checklist" section). A standard's model is the one on that line, else `opus`. The model of a group is the strongest of its standards' models (`fable` over `opus` over `sonnet`), so a group runs on `sonnet` only when every standard in it says `Model: sonnet`. A reviewer with no standard runs on `opus`.
+- A model the user names in the request ("review with sonnet") wins for every reviewer. Else a model that a project instruction file names for all reviews ("mash reviews run on sonnet") wins for every reviewer; one it names for a kind of change ("opus for security reviews") sets the groups that hold that kind of change. Name the model and where it came from in the summary.
+- Never `haiku`, even on request: use `sonnet` and say so in the summary. A blind test had a Haiku reviewer accept a false claim and answer `SAFE TO LAND`.
 - Every reviewer also applies the general checklist of the agent.
 
 ## Working-tree mode
@@ -67,7 +77,7 @@ In the terminal only. With no user present, the same content goes in the final r
 2. The findings: Critical, Important and Minor, each with `path:line` and its standard.
 3. The checks line: the results, **Unchecked**, or **Checks red**. In "only the commits" mode with uncommitted changes, add that the checks ran on the working tree.
 4. Pre-existing findings, ready to file as issues. File nothing.
-5. Escapes: the ones recorded and where; the waiting escape files in `<main worktree>/.mash-review/escapes/` by topic (count the `.md` files, not `processed/`); with no user present, the block **Escapes to record (confirm where)** that `record-escape` gave.
+5. Escapes: the ones recorded and where; the waiting escape files in `<main worktree>/.mash-review/escapes/` ("Main worktree") by topic (count the `.md` files, not `processed/`); with no user present, the block **Escapes to record (confirm where)** that `record-escape` gave.
 6. Offers, each done only on a yes: a review standard (add-standard) for a kind of code with no standard; an instruction-file line for the check commands. Topics with three or more waiting files are in the escapes list of item 5 as a reminder; the offer itself comes from `record-escape` when a write brings a topic to exactly 3 or 5.
 7. Migration hint: when `.claude/reviewers.toml` exists in the current worktree, or untracked old escape files exist in `.claude/mash-workbench/escapes/` of the main worktree, "This project still has review-routing files. Run `/mash-review:migrate`."
 8. The fix path: when the user asked for fixes, say which builder skill each finding's standard names.

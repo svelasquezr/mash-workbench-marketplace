@@ -1,7 +1,7 @@
 {
   "name": "mash-review",
   "description": "Review changes against your project's review standards (skills), record the bugs a review passed, and turn them into new standards. Instructions only: no Python, no hooks, no scripts. Say \"mash review\" to pick it.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": {
     "name": "Sergio Velasquez"
   },

@@ -2,7 +2,7 @@
 name: reviewer
 description: "Read-only change reviewer for the mash-review plugin's review skill: applies the review standards (skills) it is given by name, plus a general checklist (correctness, tests for new branches, stale docs, claims the code does not make true, secrets). Started by the review skill, once for each group of standards."
 tools: Read, Grep, Glob, Bash, Skill
-model: sonnet
+model: opus
 effort: high
 ---
 

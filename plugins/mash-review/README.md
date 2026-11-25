@@ -17,7 +17,7 @@ The design, with diagrams of every flow, is in [docs/specs/mash-review.md](../..
 
 To try it without installing: `claude --plugin-dir <path-to>/plugins/mash-review`.
 
-**Coming from review-routing?** The marketplace maps `review-routing` to `mash-review`, so Claude Code renames the plugin in your settings and shows a notice. Run `/plugin install mash-review@mash-workbench-marketplace` once, then `/mash-review:migrate` in each project that used review-routing, and remove the old allow rules: the 1.0.0 entry of [CHANGELOG.md](CHANGELOG.md) lists them.
+**Coming from review-routing?** The marketplace maps `review-routing` to `mash-review`, so Claude Code renames the plugin in your settings and shows a notice. Run `/plugin install mash-review@mash-workbench-marketplace` once, then `/mash-review:migrate` in each project that used review-routing, and remove the old allow rules: the 1.0.0 entry of [CHANGELOG.md](CHANGELOG.md) lists them. Its advice to keep the `backlog-add.sh` rule is outdated: `/mash-workbench:migrate` removes that rule.
 
 ## What it contains
 
@@ -42,12 +42,14 @@ The `review` skill selects standards by what the diff does, not by folder. With 
 
 **Need the same standards every time?** Selection is the model's judgment. Add a rule to your instruction file (`CLAUDE.md`, `AGENTS.md` or `.github/copilot-instructions.md`), for example "A change under `src/payments/` always gets the `review-payments` standard"; the `review` skill always applies such rules and names them in the summary. For a guarantee that does not depend on a model, add your own hook, test or CI job.
 
+**Models.** Reviewers run on `opus` by default: it finds more problems, and a missed problem costs more later than the extra review tokens. To pay less, add a line such as "mash reviews run on sonnet" to `CLAUDE.md` or `AGENTS.md`, ask for `sonnet` in the request ("mash review with sonnet"), or add a body line `Model: sonnet` to a standard whose checks are simple; a group of standards runs on `sonnet` only when every standard in it says so. `Model: fable` raises a standard. Reviewers never run on `haiku`.
+
 ## What it writes
 
 Only with a user present: a person who can answer in the conversation, in any permission mode. Never in a session that started from one prompt with no conversation (`claude -p`, background or scheduled sessions). Escape lines and escape files are written without a question (the review or you said a review passed the bug); everything else only on your yes.
 
 - `record-escape`: a checklist line in a standard of your project, for an escape;
-- an escape file in `<main worktree>/.mash-review/escapes/<date>-<slug>.md` (the folder where the repository was cloned, because a linked worktree is often deleted after its branch is pushed). The folder is meant to be committed so the team shares its misses; no skill commits it. Add `.mash-review/` to `.git/info/exclude` to keep it private;
+- an escape file in `<main worktree>/.mash-review/escapes/<date>-<slug>.md` (the folder where the repository was cloned, because a linked worktree is often deleted after its branch is pushed; in a bare repository, the current worktree, so commit the file before you remove that worktree; there, `git worktree remove` deletes an excluded `.mash-review/` without a warning). The folder is meant to be committed so the team shares its misses; no skill commits it. Add `.mash-review/` to `.git/info/exclude` to keep it private;
 - `add-standard`: a new standard, or a "Review checklist" section and a new description in a builder skill of your project; it moves the escape files it used to `.mash-review/escapes/processed/`;
 - `inspect`: the approved rewrites in `CLAUDE.md`, `AGENTS.md`, `.github/copilot-instructions.md`, `.claude/memory/`, plans and agent files; `review`: an instruction-file line for the check commands;
 - `migrate`, item by item from the list you approve: new standards and escape lines or files; edits to the instruction files and docs; it deletes `.claude/reviewers.toml`, the old reviewer agent files, `reviews.log` and its `.git/info/exclude` line, removes the review-routing keys from `.claude/mash-workbench/settings*` (the file and the `settings.local` exclude line go only when no key is left), and removes old allow rules and `env` entries from `.claude/settings*.json`.
